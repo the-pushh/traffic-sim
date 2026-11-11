@@ -1,0 +1,226 @@
+:root {
+  --color-background: #101318;
+  --color-surface: #1b2028;
+  --color-text: #f4f6fa;
+  --color-text-muted: #adb7c5;
+  --color-accent: #8eb8ff;
+  --color-on-accent: #101318;
+  --color-error: #ff9d9d;
+  --color-border: #3a4352;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --radius: 8px;
+  --control-height: 40px;
+  --font-body: 14px;
+  --font-meta: 12px;
+  --font-title: 20px;
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: var(--color-background);
+  color: var(--color-text);
+  font: var(--font-body) / 1.4 system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+
+#app {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  height: 100%;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-4);
+  background: var(--color-surface);
+}
+
+.toolbar h1 {
+  margin: 0;
+  font-size: var(--font-title);
+  font-weight: 600;
+}
+
+.toolbar .hint {
+  color: var(--color-text-muted);
+  font-size: var(--font-meta);
+}
+
+.viewport {
+  position: relative;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.viewport canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+}
+
+.viewport canvas {
+  cursor: default;
+}
+
+.viewport canvas[data-space-held] {
+  cursor: grab;
+}
+
+.viewport canvas[data-dragging] {
+  cursor: grabbing;
+}
+
+.camera-controls .joystick {
+  --joystick-size: 88px;
+  --knob-size: 32px;
+  position: relative;
+  align-self: center;
+  width: var(--joystick-size);
+  height: var(--joystick-size);
+  border: 1px solid var(--color-border);
+  border-radius: 50%;
+  background:
+    radial-gradient(circle, transparent 38%, color-mix(in srgb, var(--color-border) 50%, transparent) 39% 40%, transparent 41%),
+    var(--color-background);
+  touch-action: none;
+  cursor: grab;
+}
+
+.joystick::before,
+.joystick::after {
+  /* Direction ticks: orbit on the horizontal axis, tilt on the vertical. */
+  content: '';
+  position: absolute;
+  inset: 50% var(--space-2) auto;
+  height: 1px;
+  background: var(--color-border);
+}
+
+.joystick::after {
+  inset: var(--space-2) auto var(--space-2) 50%;
+  width: 1px;
+  height: auto;
+}
+
+.joystick-knob {
+  position: absolute;
+  z-index: 1;
+  top: calc(50% - var(--knob-size) / 2);
+  left: calc(50% - var(--knob-size) / 2);
+  width: var(--knob-size);
+  height: var(--knob-size);
+  border-radius: 50%;
+  background: var(--color-accent);
+  pointer-events: none;
+  transition: transform 120ms ease-out;
+}
+
+.joystick[data-active] .joystick-knob {
+  transition: none;
+}
+
+.joystick[data-active] {
+  cursor: grabbing;
+}
+
+.joystick:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.joystick[aria-disabled='true'] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .joystick-knob {
+    transition: none;
+  }
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.camera-controls {
+  position: absolute;
+  top: var(--space-4);
+  right: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  background: color-mix(in srgb, var(--color-surface) 92%, transparent);
+  border-radius: var(--radius);
+}
+
+button {
+  height: var(--control-height);
+  min-width: var(--control-height);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+button:hover:not(:disabled) {
+  border-color: var(--color-accent);
+}
+
+button:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+button.primary {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: var(--color-on-accent);
+  font-weight: 600;
+}
+
+.status {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  gap: var(--space-3);
+  justify-items: center;
+  text-align: center;
+  background: var(--color-background);
+}
+
+.status[hidden] {
+  display: none;
+}
+
+.status.error p {
+  color: var(--color-error);
+}

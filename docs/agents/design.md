@@ -76,17 +76,17 @@ Show the scene, traffic load, and duration alongside each run’s results. Let p
 
 ## 3D presentation
 
-Frame the whole network at the start. Use soft, even lighting so lane markings, junction controls, vehicles, and changes in elevation are easy to read. Preserve the supplied materials and textures where they serve the scene. Use outlines, markings, and labels alongside color to distinguish selections, entry and exit points, and disconnected links.
+Frame the whole network at the start. *Confirmed 2026-11-11:* each scene sits on a **1:1 square ground board with rounded corners and visible thickness** (16 × 16 road tiles = 64 units, 0.8-unit edge), sized to hold every starter scene. Roads and vehicles lie on its top face. Use soft, even lighting so lane markings, junction controls, vehicles, and changes in elevation are easy to read. Preserve the supplied materials and textures where they serve the scene. Use outlines, markings, and labels alongside color to distinguish selections, entry and exit points, and disconnected links.
 
 Keep optional motion restrained, respect reduced-motion preferences for interface animation, and leave automatic camera rotation off. Follow the asset units, axes, and origin conventions in `3d-project.json`. Inspect imported models and textures before converting or rescaling them.
 
 ## Observer camera
 
-Start with the network framed from above at a slight tilt. Keep camera controls available while editing, paused, or running.
+Start with the network framed from above at a slight tilt. *Confirmed 2026-11-11:* the starting view looks along the **cube diagonal** (equal angles to X, Y and Z; 35.26° below horizontal, 45° around), framed so the whole board fills the view. Keep camera controls available while editing, paused, or running.
 
-- **On-screen joystick** — Left and right orbit around the area in view. Up and down tilt between overhead and angled views.
+- **On-screen joystick** — Left and right orbit around the area in view. Up and down tilt between overhead and angled views. This is the primary orbit/tilt control: drag the knob, or focus it and hold the arrow keys. Up tilts toward overhead.
 - **Scroll wheel** — Zoom while the pointer is over the viewport. Provide labeled zoom buttons as an alternative.
-- **Drag to pan** — Move across the map using a gesture distinct from dragging road pieces.
+- **Drag to pan** — Move across the map using a gesture distinct from dragging road pieces. *Confirmed 2026-11-11:* with the pointer over the map, hold **Space** and drag to pan (this works even when a camera control has focus; elsewhere Space keeps its normal meaning). A plain drag is reserved for road pieces. Left- or right-drag must not be the primary camera control, because laptop trackpads make right-drag awkward. Right-drag remains an optional orbit/tilt shortcut.
 - **Reset View** — Restore the selected scene’s starting camera position and angle while preserving the road layout, traffic settings, vehicles, and simulation clock.
 
 Make camera gestures discoverable and keep ordinary page scrolling available outside the viewport.

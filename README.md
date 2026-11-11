@@ -1,1 +1,42 @@
 # Traffic Simulator
+
+A desktop web traffic simulation game built with Three.js. Players will pick a road network, set traffic demand, run short simulations, change the network or junction controls, and compare runs. See `docs/agents/START_HERE.md` and `docs/agents/design.md`.
+
+**Current state:** first runnable version — one starter scene on a 64-unit square ground board with rounded corners, viewed along the cube diagonal, with a supplied Kenney sedan on a short straight road built from supplied road pieces, beside a strip using a supplied road texture. Observer camera with Space + drag pan, an on-screen orbit/tilt joystick, zoom, and **Reset View**. No traffic simulation yet.
+
+## Run the app
+
+Requires Node.js 24 (verified with 24.20.0) and npm 11.
+
+```sh
+npm install
+npm run dev
+```
+
+Then open <http://localhost:5173/> in a desktop browser.
+
+### Camera controls
+
+| Input | Action |
+| --- | --- |
+| With the pointer over the map, hold **Space** and drag | Pan across the map. Works with a trackpad click-drag. A plain drag is reserved for editing road pieces later. Elsewhere on the page Space keeps its normal meaning |
+| On-screen **joystick** (drag the knob, or focus it and hold the arrow keys) | Left/right orbits; up tilts toward overhead, down toward an angled view |
+| Right-drag on the scene (optional shortcut) | Orbit and tilt |
+| Scroll wheel or two-finger trackpad scroll over the scene | Zoom |
+| **+** / **−** buttons | Zoom in / out |
+| **Reset View** | Return to the starting overhead view |
+
+## Commands
+
+| Command | Purpose |
+| --- | --- |
+| `npm run dev` | Development server at <http://localhost:5173/> |
+| `npm test` | Unit tests (Vitest) |
+| `npm run build` | Type-check and build to `dist/` |
+| `npm run preview` | Serve the production build at <http://localhost:4173/> |
+| `npm run verify:browser` | With the dev server running: open the app in installed Google Chrome (headless), check console errors and asset requests, check a plain drag leaves the view alone, exercise Space + drag pan, the joystick (pointer and arrow keys), right-drag, zoom and Reset View, check the asset-failure/Retry state, and save screenshots to `artifacts/3d/previews/`. Another URL: `node scripts/verify-browser.mjs <url>`. |
+| `npm run verify:browser:headed` | Same check in a visible Chrome window. |
+
+## Assets
+
+3D models and textures are from Kenney's Car Kit, City Kit Roads, and Road Textures (CC0, www.kenney.nl). See `assets/3d/ASSETS.md` for the inventory and how the original archives are extracted.
