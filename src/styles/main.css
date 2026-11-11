@@ -17,7 +17,9 @@
   --font-body: 14px;
   --font-meta: 12px;
   --font-title: 20px;
-  --dock-shadow: 0 8px 24px rgb(0 0 0 / 0.35);
+  --radius-lg: 16px;
+  --radius-pill: 999px;
+  --shadow-floating: 0 8px 24px rgb(0 0 0 / 0.35);
   color-scheme: dark;
 }
 
@@ -231,9 +233,9 @@ button.primary {
   gap: var(--space-3);
   padding: var(--space-2) var(--space-3);
   border: 1px solid var(--color-border);
-  border-radius: 16px;
+  border-radius: var(--radius-lg);
   background: color-mix(in srgb, var(--color-surface) 94%, transparent);
-  box-shadow: var(--dock-shadow);
+  box-shadow: var(--shadow-floating);
 }
 
 .dock-section {
@@ -309,19 +311,29 @@ button.primary {
 
 .duration {
   display: flex;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius);
-  overflow: hidden;
 }
 
 .duration .segment {
-  border: 0;
-  border-radius: 0;
   min-width: 52px;
+  border-radius: 0;
+}
+
+/* Focus rings stay visible: no overflow clipping; raise the focused segment above its neighbours. */
+.duration .segment:focus-visible {
+  position: relative;
+  z-index: 1;
 }
 
 .duration .segment + .segment {
-  border-left: 1px solid var(--color-border);
+  margin-left: -1px;
+}
+
+.duration .segment:first-child {
+  border-radius: var(--radius) 0 0 var(--radius);
+}
+
+.duration .segment:last-child {
+  border-radius: 0 var(--radius) var(--radius) 0;
 }
 
 .duration .segment[aria-pressed='true'] {
@@ -330,15 +342,19 @@ button.primary {
   font-weight: 600;
 }
 
-/* Disabled settings during a run: greyed out. */
+/* Disabled settings during a run: greyed out, still readable. */
 .intensity input:disabled,
 .dock button:disabled {
-  opacity: 0.4;
+  opacity: 0.55;
   cursor: not-allowed;
 }
 
-.intensity:has(input:disabled) .dock-label {
-  opacity: 0.5;
+.lock-hint {
+  color: var(--color-text-muted);
+}
+
+.intensity:has(input:disabled) .dock-label strong {
+  color: var(--color-text-muted);
 }
 
 .scene-pill {
@@ -347,9 +363,9 @@ button.primary {
   gap: var(--space-1);
   padding: var(--space-1);
   border: 1px solid var(--color-border);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: color-mix(in srgb, var(--color-surface) 94%, transparent);
-  box-shadow: var(--dock-shadow);
+  box-shadow: var(--shadow-floating);
 }
 
 .scene-name {
@@ -361,7 +377,7 @@ button.primary {
   height: 32px;
   min-width: 32px;
   padding: 0;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   font-size: 18px;
   line-height: 1;
 }
@@ -373,7 +389,7 @@ button.primary {
   border: 1px solid var(--color-accent);
   border-radius: var(--radius);
   background: var(--color-surface);
-  box-shadow: var(--dock-shadow);
+  box-shadow: var(--shadow-floating);
 }
 
 .first-visit-tip p {

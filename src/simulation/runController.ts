@@ -57,18 +57,35 @@ export class RunController {
     if (this.state === 'running') this.state = 'paused';
   }
 
-  /** Returns false (and changes nothing) while the run's settings are locked. */
+  /**
+   * Returns false (and changes nothing) while the run's settings are locked. Changing it
+   * after a run ended goes back to Ready, so the next Play starts fresh.
+   */
   setDuration(duration: RunDuration): boolean {
+    return this.changeSetting(() => {
+      if (duration === this.duration) return false;
+      this.duration = duration;
+      return true;
+    });
+  }
+
+  /** Same rules as `setDuration`; a new intensity also needs a new warm-up. */
+  setIntensity(intensity: Intensity): boolean {
+    return this.changeSetting(() => {
+      if (intensity === this.intensity) return false;
+      this.intensity = intensity;
+      return true;
+    });
+  }
+
+  private changeSetting(apply: () => boolean): boolean {
     if (this.settingsLocked) return false;
-    this.duration = duration;
+    if (apply() && this.state === 'ended') this.restart();
     return true;
   }
 
-  /** Returns false (and changes nothing) while the run's settings are locked. */
-  setIntensity(intensity: Intensity): boolean {
-    if (this.settingsLocked) return false;
-    this.intensity = intensity;
-    return true;
+  private get totalSteps() {
+    return this.duration * STEPS_PER_SECOND;
   }
 
   /**
@@ -76,14 +93,13 @@ export class RunController {
    * this frame; never runs past the end of the run.
    */
   tick(seconds: number): number {
-    if (this.state !== 'running') return 0;
+    if (this.state !== 'running' || !Number.isFinite(seconds) || seconds <= 0) return 0;
     this.pendingSeconds += seconds;
     const due = Math.floor(this.pendingSeconds * STEPS_PER_SECOND + 1e-9);
     this.pendingSeconds -= due / STEPS_PER_SECOND;
-    const remaining = this.duration * STEPS_PER_SECOND - this.stepsDone;
-    const steps = Math.min(due, remaining);
+    const steps = Math.min(due, this.totalSteps - this.stepsDone);
     this.stepsDone += steps;
-    if (this.stepsDone >= this.duration * STEPS_PER_SECOND) {
+    if (this.stepsDone >= this.totalSteps) {
       this.state = 'ended';
       this.pendingSeconds = 0;
     }

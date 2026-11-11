@@ -127,14 +127,26 @@ const dockState = () => runPage.locator('.dock').getAttribute('data-state');
 const clockText = () => runPage.locator('.clock').textContent();
 const settingsDisabled = () =>
   runPage.evaluate(() => {
-    const controls = [document.querySelector('.intensity input'), ...document.querySelectorAll('[data-duration]'), ...document.querySelectorAll('.pill-arrow')];
-    return controls.every((c) => c.disabled);
+    const controls = [document.querySelector('.intensity input'), ...document.querySelectorAll('[data-duration]')];
+    return controls.every((c) => c.disabled) && !document.querySelector('.lock-hint').hidden;
   });
 const settingsEnabled = () =>
   runPage.evaluate(() => [document.querySelector('.intensity input'), ...document.querySelectorAll('[data-duration]')].every((c) => !c.disabled));
 const runChecks = {};
+runChecks.noHeaderAndViewFillsWindow = await runPage.evaluate(() => {
+  const view = document.querySelector('.viewport').getBoundingClientRect();
+  return !document.querySelector('header') && view.top === 0 && view.height === innerHeight && view.width === innerWidth;
+});
+runChecks.dockFloatsAtBottomCentre = await runPage.evaluate(() => {
+  const dock = document.querySelector('.dock').getBoundingClientRect();
+  return Math.abs(dock.left + dock.width / 2 - innerWidth / 2) < 2 && innerHeight - dock.bottom < 40 && getComputedStyle(document.querySelector('.dock')).borderTopLeftRadius !== '0px';
+});
+runChecks.sceneArrowsInertUntilCarousel = await runPage.evaluate(() => [...document.querySelectorAll('.pill-arrow')].every((a) => a.disabled));
 runChecks.tipShownOnFirstVisit = await runPage.locator('.first-visit-tip').isVisible();
 runChecks.readyClock = (await clockText()) === '0:00 / 0:30' && (await dockState()) === 'ready' && (await settingsEnabled());
+await runPage.locator('.intensity input').fill('4');
+runChecks.intensityChangeShowsLabel = (await runPage.locator('.intensity-name').textContent()) === 'Congested';
+await runPage.locator('.intensity input').fill('2');
 await runPage.locator('.dock').screenshot({ path: `${outDir}/11-dock-ready.png` });
 await runPage.getByRole('button', { name: 'Play' }).click();
 runChecks.playRunsAndLocksSettings = (await dockState()) === 'running' && (await settingsDisabled());
@@ -149,12 +161,21 @@ await runPage.getByRole('button', { name: 'Play' }).click();
 await runPage.waitForFunction(() => document.querySelector('.dock')?.dataset.state === 'ended', null, { timeout: 15000 });
 runChecks.endsExactlyAtDuration = (await clockText()) === '0:30 / 0:30' && (await settingsEnabled());
 await runPage.locator('.dock').screenshot({ path: `${outDir}/13-dock-ended.png` });
-await runPage.getByRole('button', { name: 'Play' }).click();
-runChecks.playAfterEndContinuesFromZero = (await dockState()) === 'running' && (await clockText()).startsWith('0:0');
+// Click Play and read the clock in the same task, so the check doesn't depend on timing.
+runChecks.playAfterEndContinuesFromZero = await runPage.evaluate(() => {
+  document.querySelector('[data-action="play-pause"]').click();
+  return document.querySelector('.dock').dataset.state === 'running' && document.querySelector('.clock').textContent === '0:00 / 0:30';
+});
 await runPage.getByRole('button', { name: 'Restart run' }).click();
 runChecks.restartReturnsToReady = (await dockState()) === 'ready' && (await clockText()) === '0:00 / 0:30' && (await settingsEnabled());
 await runPage.getByRole('button', { name: '60 s' }).click();
 runChecks.durationChangeShown = (await clockText()) === '0:00 / 1:00';
+// A settings change after a run ends goes back to Ready (fresh start), not a half-full ended run.
+await runPage.getByRole('button', { name: '30 s' }).click();
+await runPage.getByRole('button', { name: 'Play' }).click();
+await runPage.waitForFunction(() => document.querySelector('.dock')?.dataset.state === 'ended', null, { timeout: 15000 });
+await runPage.getByRole('button', { name: '60 s' }).click();
+runChecks.settingChangeAfterEndReturnsToReady = (await dockState()) === 'ready' && (await clockText()) === '0:00 / 1:00';
 await runPage.reload();
 await runPage.waitForSelector('.status', { state: 'hidden', timeout: 30000 });
 runChecks.tipRememberedAfterReload = (await runPage.locator('.first-visit-tip').count()) === 0;

@@ -177,6 +177,14 @@
         "browser": "Google Chrome 157.0.8103.50 on macOS, headless and headed (visible window), 1440x900; WebGL via ANGLE Metal on Apple M1 Pro",
         "result": "pass: all camera checks, no console errors, 5/5 assets 200. Initial view along (1,1,1) shows the whole board as a diamond; edge visibly thinner.",
         "previews": "artifacts/3d/previews/ (git-ignored)"
+      },
+      {
+        "date": "2026-11-12",
+        "check": "T1 dock and run controls (#3)",
+        "command": "npm test (61); npm run build; npm run verify:browser and npm run verify:browser:headed on the dev server",
+        "browser": "Google Chrome 157.0.8103.50 on macOS, headless and headed (visible window), 1440x900; WebGL via ANGLE Metal on Apple M1 Pro",
+        "result": "pass: header removed and view fills the window; dock floats bottom-centre with rounded corners; Play locks intensity/duration with a visible lock hint while running and paused; pause holds the clock; run ends exactly at 0:30; Play after the end continues from 0:00; Restart returns to Ready; a settings change after the end returns to Ready; tip shown once and remembered; all camera checks still pass; board framed above the pill and dock. Fixed during review: textured strip depth-fighting at the new camera distance (lifted to road height).",
+        "previews": "artifacts/3d/previews/ (git-ignored)"
       }
     ]
   }

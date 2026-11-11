@@ -72,7 +72,8 @@ export async function createStarterScene(renderer: WebGLRenderer, baseUrl: strin
   );
   surface.name = 'road-surface-texture';
   surface.rotation.x = -Math.PI / 2;
-  surface.position.set(road.surfaceOffsetX, 0.005, 0);
+  // Same height as the road pieces' surface, well clear of the board to avoid depth fighting at a distance.
+  surface.position.set(road.surfaceOffsetX, ROAD_SURFACE_HEIGHT * road.tileSize, 0);
   surface.receiveShadow = true;
   scene.add(surface);
 

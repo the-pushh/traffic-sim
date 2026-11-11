@@ -103,4 +103,38 @@ describe('run controller', () => {
       expect(run.play()).toBe('start');
     }
   });
+
+  it('goes back to ready when intensity or duration changes after a run ends, so the next Play starts fresh', () => {
+    for (const change of [(r: RunController) => r.setIntensity('congested'), (r: RunController) => r.setDuration(60)]) {
+      const run = new RunController();
+      run.play();
+      run.tick(30);
+      expect(run.state).toBe('ended');
+
+      expect(change(run)).toBe(true);
+
+      expect(run.state).toBe('ready');
+      expect(run.clock).toBe(0);
+      expect(run.play()).toBe('start');
+    }
+  });
+
+  it('keeps an ended run as it is when the chosen setting is unchanged', () => {
+    const run = new RunController();
+    run.play();
+    run.tick(30);
+    run.setDuration(30);
+    run.setIntensity('medium');
+    expect(run.state).toBe('ended');
+    expect(run.clock).toBe(30);
+  });
+
+  it('ignores negative or non-finite frame times', () => {
+    const run = new RunController();
+    run.play();
+    run.tick(2);
+    for (const bad of [-5, Number.NaN, Number.POSITIVE_INFINITY]) expect(run.tick(bad)).toBe(0);
+    expect(run.clock).toBeCloseTo(2, 9);
+    expect(run.state).toBe('running');
+  });
 });

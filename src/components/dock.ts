@@ -4,7 +4,6 @@ import {
   type PlayKind,
   RUN_DURATIONS,
   type RunController,
-  type RunDuration,
 } from '../simulation/runController';
 
 const INTENSITY_LABELS: Record<Intensity, string> = {
@@ -26,9 +25,6 @@ const ICONS = {
 export interface DockCallbacks {
   /** Play was pressed; `kind` says whether the run starts, resumes, or continues. */
   onPlay?: (kind: PlayKind) => void;
-  onPause?: () => void;
-  onRestart?: () => void;
-  onIntensityChange?: (intensity: Intensity) => void;
 }
 
 export function formatClock(seconds: number) {
@@ -57,7 +53,7 @@ export function createDock(container: HTMLElement, run: RunController, callbacks
     <div class="dock-divider" aria-hidden="true"></div>
     <div class="dock-section">
       <label class="intensity">
-        <span class="dock-label">Intensity <strong class="intensity-name"></strong></span>
+        <span class="dock-label">Intensity <strong class="intensity-name"></strong><span class="lock-hint" id="dock-lock-hint" hidden> · locked during the run</span></span>
         <input type="range" min="0" max="${INTENSITIES.length - 1}" step="1" list="intensity-ticks" />
         <datalist id="intensity-ticks">${INTENSITIES.map((_, i) => `<option value="${i}"></option>`).join('')}</datalist>
       </label>
@@ -65,6 +61,7 @@ export function createDock(container: HTMLElement, run: RunController, callbacks
         ${RUN_DURATIONS.map((d) => `<button type="button" class="segment" data-duration="${d}">${d} s</button>`).join('')}
       </div>
     </div>
+
   `;
   container.append(dock);
 
@@ -80,7 +77,6 @@ export function createDock(container: HTMLElement, run: RunController, callbacks
   playPause.addEventListener('click', () => {
     if (run.state === 'running') {
       run.pause();
-      callbacks.onPause?.();
     } else {
       const kind = run.play();
       if (kind) callbacks.onPlay?.(kind);
@@ -89,26 +85,27 @@ export function createDock(container: HTMLElement, run: RunController, callbacks
   });
   restart.addEventListener('click', () => {
     run.restart();
-    callbacks.onRestart?.();
     sync();
   });
   intensityInput.addEventListener('input', () => {
     const intensity = INTENSITIES[Number(intensityInput.value)];
-    if (run.setIntensity(intensity)) callbacks.onIntensityChange?.(intensity);
+    if (intensity) run.setIntensity(intensity);
     sync();
   });
   for (const button of durationButtons) {
     button.addEventListener('click', () => {
-      run.setDuration(Number(button.dataset.duration) as RunDuration);
+      const duration = RUN_DURATIONS.find((d) => String(d) === button.dataset.duration);
+      if (duration) run.setDuration(duration);
       sync();
     });
   }
+  const lockHint = dock.querySelector<HTMLElement>('.lock-hint')!;
 
-  let shown = '';
+  let lastRendered = '';
   function sync() {
     const key = `${run.state}|${run.clock}|${run.duration}|${run.intensity}`;
-    if (key === shown) return;
-    shown = key;
+    if (key === lastRendered) return;
+    lastRendered = key;
 
     const running = run.state === 'running';
     playPause.innerHTML = running ? ICONS.pause : ICONS.play;
@@ -123,13 +120,18 @@ export function createDock(container: HTMLElement, run: RunController, callbacks
 
     const locked = run.settingsLocked;
     const lockedHint = locked ? 'Restart the run to change' : '';
+    lockHint.hidden = !locked;
     intensityInput.disabled = locked;
     intensityInput.value = String(INTENSITIES.indexOf(run.intensity));
     intensityInput.setAttribute('aria-valuetext', INTENSITY_LABELS[run.intensity]);
     intensityInput.title = lockedHint;
+    if (locked) intensityInput.setAttribute('aria-describedby', 'dock-lock-hint');
+    else intensityInput.removeAttribute('aria-describedby');
     intensityName.textContent = INTENSITY_LABELS[run.intensity];
     for (const button of durationButtons) {
       button.disabled = locked;
+      if (locked) button.setAttribute('aria-describedby', 'dock-lock-hint');
+      else button.removeAttribute('aria-describedby');
       button.title = lockedHint;
       button.setAttribute('aria-pressed', String(Number(button.dataset.duration) === run.duration));
     }

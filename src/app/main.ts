@@ -6,6 +6,7 @@ import { createScenePill } from '../components/scenePill';
 import { RunController } from '../simulation/runController';
 import '../styles/main.css';
 import { CameraJoystick } from '../three/controls/cameraJoystick';
+import { fitCameraToViewport } from '../three/controls/cameraViewport';
 import { ObserverCamera } from '../three/controls/observerCamera';
 import { attachViewportInput } from '../three/controls/viewportInput';
 import { AssetLoadError } from '../three/loaders/assetLoader';
@@ -13,8 +14,13 @@ import { createStarterScene } from '../three/scene/createStarterScene';
 
 const ZOOM_STEP = 0.8;
 
-/** Dev-only speed-up for browser checks, e.g. `?timeScale=10`. Ignored in production builds. */
-const TIME_SCALE = import.meta.env.DEV ? Number(new URLSearchParams(location.search).get('timeScale')) || 1 : 1;
+/** Dev-only speed-up for browser checks, e.g. `?timeScale=10` (1–100). Ignored in production builds. */
+function devTimeScale() {
+  if (!import.meta.env.DEV) return 1;
+  const value = Number(new URLSearchParams(location.search).get('timeScale'));
+  return Number.isFinite(value) && value >= 1 && value <= 100 ? value : 1;
+}
+const TIME_SCALE = devTimeScale();
 
 const app = document.querySelector<HTMLDivElement>('#app')!;
 app.innerHTML = `
@@ -50,8 +56,6 @@ bottomStack.inert = true;
 function syncRunUi() {
   dock.sync();
   tip.sync();
-  // Scene arrows follow the settings lock; the carousel (T11) will enable them.
-  if (run.settingsLocked) pill.setArrowsEnabled(false);
 }
 
 // Transparent canvas: the page's --color-background token shows behind the scene.
@@ -63,21 +67,15 @@ viewport.prepend(renderer.domElement);
 
 const camera = new PerspectiveCamera(45, 1, 0.1, 500);
 
-/**
- * Keep the scene centred in the clear area above the scene pill and dock: render the
- * bottom part of a taller virtual view so its centre sits above the panels. Camera
- * framing projects through this offset, so it fits the board into that area too.
- */
+/** Fraction of the screen height covered by the scene pill and dock (the tip is temporary and not counted). */
 let coveredBottom = 0;
 function resize() {
-  const { clientWidth: w, clientHeight: h } = viewport;
-  const panelGap = 16;
-  const covered = dock.element.offsetHeight + pill.element.offsetHeight + 3 * panelGap;
-  coveredBottom = covered / Math.max(h, 1);
-  renderer.setSize(w, h, false);
-  camera.aspect = w / Math.max(h, 1);
-  camera.setViewOffset(w, h + covered, 0, covered, w, h);
-  camera.updateProjectionMatrix();
+  const { clientWidth: width, clientHeight: height } = viewport;
+  renderer.setSize(width, height, false);
+  // Measure from the panels' real layout: everything from the top of the scene pill down.
+  const panelsTop = pill.element.getBoundingClientRect().top - viewport.getBoundingClientRect().top;
+  const covered = Math.max(0, height - panelsTop);
+  coveredBottom = fitCameraToViewport(camera, { width, height, covered });
 }
 new ResizeObserver(resize).observe(viewport);
 resize();
