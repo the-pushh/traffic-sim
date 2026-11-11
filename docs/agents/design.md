@@ -84,9 +84,9 @@ Keep optional motion restrained, respect reduced-motion preferences for interfac
 
 Start with the network framed from above at a slight tilt. Keep camera controls available while editing, paused, or running.
 
-- **On-screen joystick** — Left and right orbit around the area in view. Up and down tilt between overhead and angled views.
+- **On-screen joystick** — Left and right orbit around the area in view. Up and down tilt between overhead and angled views. This is the primary orbit/tilt control: drag the knob, or focus it and hold the arrow keys. Up tilts toward overhead.
 - **Scroll wheel** — Zoom while the pointer is over the viewport. Provide labeled zoom buttons as an alternative.
-- **Drag to pan** — Move across the map using a gesture distinct from dragging road pieces.
+- **Drag to pan** — Move across the map using a gesture distinct from dragging road pieces. *Confirmed 2026-11-11:* with the pointer over the map, hold **Space** and drag to pan (this works even when a camera control has focus; elsewhere Space keeps its normal meaning). A plain drag is reserved for road pieces. Left- or right-drag must not be the primary camera control, because laptop trackpads make right-drag awkward. Right-drag remains an optional orbit/tilt shortcut.
 - **Reset View** — Restore the selected scene’s starting camera position and angle while preserving the road layout, traffic settings, vehicles, and simulation clock.
 
 Make camera gestures discoverable and keep ordinary page scrolling available outside the viewport.

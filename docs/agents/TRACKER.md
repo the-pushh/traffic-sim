@@ -14,6 +14,7 @@ Scope: repo setup, asset inventory, one starter scene with a supplied vehicle on
 | 4 | Build one starter scene (vehicle, textured road, camera, Reset View) with TDD | done | Owner approved seams: camera controller, asset manifest, initial framing. Vitest tests written red→green one slice at a time (framing tilt, fit at 4 aspects, Reset View, pan directions, drag-pan follows pointer, tilt/zoom limits, asset deps); passing-first tests were mutation-checked and fail on mutants. Scene + mouse wiring built. Browser check found and fixed road tiles rotated 90° and a too-small ground plane. |
 | 5 | Verify in browser, update `README.md` and `3d-project.json` | done | Claude-in-Chrome extension not connected, so drove installed Google Chrome 157 via `playwright-core` (`npm run verify:browser`, headless and in a visible window, GPU WebGL on M1 Pro) on dev and production builds: 0 console errors, 5/5 assets HTTP 200, pan/orbit-tilt/zoom each change the view, Reset View frame pixel-identical to start; overhead + angled screenshots inspected; asset-failure state names the file with focused Retry, which recovers. `npm test` 18/18, `npm run build` ok. README run command and `3d-project.json` (`setupVerified: true`) updated. |
 | 6 | Review, commit, PR, hand off | done | `mattpocock-skills:code-review` ran Standards and Spec reviewers. Fixed: loaders moved to `src/three/loaders/` and deduplicated; raw colours replaced with tokens; pan pixel maths moved into `ObserverCamera.dragPan` (TDD); Retry no longer re-attaches listeners and keeps focus; camera buttons disabled while loading; grabbing-cursor CSS bug; clearer names. Remaining notes are in the follow-ups below. Commit `af09370` pushed on `feat/00-setup-starter-scene`; PR [#2](https://github.com/the-pushh/traffic-sim/pull/2) is open and **not merged**, because the owner authorized push + PR only. |
+| 7 | Laptop-friendly camera: Hold Space + drag on the map pans (plain drag reserved for the editor); on-screen joystick orbits/tilts as the primary control; right-drag stays an optional shortcut | done | Owner feedback on PR #2: left/right drag can't be the primary control on laptops; owner chose the joystick. TDD: `dragGesture` + `mapClaimsSpace` (8 tests), `CameraJoystick` (6 tests); 32/32 pass, build ok. Review (Standards + Spec) found Space ignored when a control had focus and Space-release pressing the focused button; fixed, middle-drag dropped as unagreed. Browser (headless, 3× visible Chrome, production): plain drag doesn't move the view; Space+drag pans incl. with joystick/Reset View focused; joystick drag + arrow keys orbit/tilt and stop on release; Reset View pixel-identical. DOM widget code is covered by the browser check, not unit tests (agreed seams). |
 
 ## Flags from task 1
 
@@ -28,8 +29,6 @@ Scope: repo setup, asset inventory, one starter scene with a supplied vehicle on
 ## Known limitations of this version
 
 - The road texture (`roadTexture_01.png`) is shown on a separate strip beside the road-piece road, which uses the City Kit's own `colormap.png`. The car drives only on the road-piece road. Choosing one road-surface approach is a follow-up decision.
-- An on-screen **joystick** (design.md) is not built. Right-drag stands in for orbit/tilt for now.
-- Pan uses plain left-drag, which will clash with dragging road pieces in the editor. The editor ticket must pick a different pan gesture.
 - The framing unit test uses a fixed box, not the computed scene bounds. Real-scene framing was checked only in screenshots.
 - Three.js makes the JS bundle 600+ KB (Vite chunk-size warning). No code splitting yet.
 
@@ -40,7 +39,7 @@ Scope: repo setup, asset inventory, one starter scene with a supplied vehicle on
 3. **Shared scene format and Traffic Lights preset:** scene picker that opens paused, with entry and exit markers.
 4. **Traffic engine:** vehicle agents follow routes, keep gaps, obey signals and yields.
 5. **Timed runs and results:** 30/60/90 s runs measured in simulation time; results for arrivals, average wait, longest queue.
-6. **Observer camera completion:** on-screen joystick and labelled controls; verify the camera keeps simulation state.
+6. **Observer camera completion:** verify the camera keeps simulation state once a simulation exists.
 7. **Drag-and-drop editor:** Parts drawer, translucent snapping preview, rotate, invalid-drop explanation, undo.
 8. **Reset and Save as new scene**, plus saved-scene storage.
 9. **Remaining presets:** Turnaround, Flyover, On-Ramp.

@@ -23,50 +23,99 @@ page.on('response', (r) => {
   if (/\.(glb|png)$/.test(path)) assetRequests.push(`${r.status()} ${path}`);
   if (r.status() >= 400) consoleErrors.push(`HTTP ${r.status()} ${path}`);
 });
-page.on('requestfailed', (r) => assetRequests.push(`FAILED ${r.url()}`));
+// Failed asset requests count; a broken app module would already stop the scene from loading.
+page.on('requestfailed', (r) => {
+  if (/\.(glb|png)$/.test(new URL(r.url()).pathname)) assetRequests.push(`FAILED ${r.url()}`);
+});
 
 await page.goto(url);
 await page.waitForSelector('.status', { state: 'hidden', timeout: 30000 });
 const settle = () => page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
 await settle();
 
+const canvas = await page.locator('canvas').boundingBox();
+const controls = await page.locator('.camera-controls').boundingBox();
+// Compare only the 3D scene, left of the camera controls, so control animations don't count as view changes.
+const sceneClip = { x: canvas.x, y: canvas.y, width: controls.x - canvas.x - 8, height: canvas.height };
+
+/** Saves a full-page screenshot and returns the scene-only pixels for comparison. */
 const shot = async (name) => {
   await settle();
-  const buf = await page.screenshot({ path: `${outDir}/${name}.png` });
-  return buf;
+  await page.screenshot({ path: `${outDir}/${name}.png` });
+  return page.screenshot({ clip: sceneClip });
 };
-
-const canvas = await page.locator('canvas').boundingBox();
 const cx = canvas.x + canvas.width / 2;
 const cy = canvas.y + canvas.height / 2;
 
 const initial = await shot('01-initial-overhead');
+const drag = async (from, to, button = 'left') => {
+  await page.mouse.move(from[0], from[1]);
+  await page.mouse.down({ button });
+  await page.mouse.move(to[0], to[1], { steps: 10 });
+  await page.mouse.up({ button });
+};
 
-// Left-drag pans.
-await page.mouse.move(cx, cy);
-await page.mouse.down({ button: 'left' });
-await page.mouse.move(cx + 200, cy + 80, { steps: 10 });
-await page.mouse.up({ button: 'left' });
-const panned = await shot('02-after-pan');
+// A plain drag is reserved for editing road pieces: the camera must not move.
+await drag([cx, cy], [cx + 200, cy + 80]);
+const plainDrag = await shot('02-after-plain-drag');
 
-// Right-drag orbits and tilts toward an angled view.
-await page.mouse.move(cx, cy);
-await page.mouse.down({ button: 'right' });
-await page.mouse.move(cx - 180, cy - 160, { steps: 10 });
-await page.mouse.up({ button: 'right' });
-const angled = await shot('03-after-orbit-tilt-angled');
+// Hold Space and drag to pan.
+await page.keyboard.down('Space');
+await drag([cx, cy], [cx + 200, cy + 80]);
+await page.keyboard.up('Space');
+const panned = await shot('03-after-space-drag-pan');
+
+// On-screen joystick: drag the knob toward the upper right and hold, then release.
+const stick = await page.locator('.joystick').boundingBox();
+const sx = stick.x + stick.width / 2;
+const sy = stick.y + stick.height / 2;
+await page.mouse.move(sx, sy);
+await page.mouse.down();
+await page.mouse.move(sx + stick.width / 2, sy + stick.height / 2, { steps: 5 });
+await page.waitForTimeout(500);
+await page.mouse.up();
+await page.waitForTimeout(400); // knob springs back over 120 ms; let in-flight frames land
+const joystickDragged = await shot('04-after-joystick-orbit-tilt-angled');
+await page.waitForTimeout(500);
+const afterRelease = await shot('05-joystick-released');
+
+// Keyboard on the focused joystick: hold the left arrow to orbit.
+await page.locator('.joystick').focus();
+await page.keyboard.down('ArrowLeft');
+await page.waitForTimeout(400);
+await page.keyboard.up('ArrowLeft');
+const keyboardJoystick = await shot('06-after-joystick-arrow-keys');
+
+// Space + drag still pans while the joystick has focus (pointer over the map).
+const spacePan = async () => {
+  await page.mouse.move(cx, cy);
+  await page.keyboard.down('Space');
+  await drag([cx, cy], [cx - 150, cy + 60]);
+  await page.keyboard.up('Space');
+};
+await spacePan();
+const panAfterJoystick = await shot('06b-space-pan-with-joystick-focused');
+const joystickFocusedDuringPan = await page.evaluate(() => document.activeElement?.classList.contains('joystick'));
+
+// Optional right-drag shortcut still orbits and tilts.
+await drag([cx, cy], [cx - 120, cy - 60], 'right');
+const rightDragged = await shot('07-after-right-drag');
 
 // Scroll wheel zooms in.
 await page.mouse.move(cx, cy);
 await page.mouse.wheel(0, -400);
-const zoomed = await shot('04-after-wheel-zoom');
+const zoomed = await shot('08-after-wheel-zoom');
 
-// Zoom buttons.
-await page.getByRole('button', { name: 'Zoom out' }).click();
-await shot('05-after-zoom-out-button');
-
+await page.getByRole('button', { name: 'Zoom in' }).click();
+const zoomButton = await shot('08b-after-zoom-in-button');
 await page.getByRole('button', { name: 'Reset View' }).click();
-const reset = await shot('06-after-reset-view');
+const reset = await shot('09-after-reset-view');
+
+// Reset View keeps focus; Space + drag over the map must pan, and releasing Space must not press Reset View.
+await spacePan();
+const panAfterReset = await shot('09b-space-pan-with-reset-focused');
+await page.waitForTimeout(200);
+const afterSpaceRelease = await shot('09c-after-space-release');
 
 const webglRenderer = await page.evaluate(() => {
   const gl = document.querySelector('canvas').getContext('webgl2');
@@ -83,7 +132,7 @@ await failPage.waitForSelector('.status.error', { timeout: 30000 });
 const failureMessage = (await failPage.locator('.status.error p').textContent())?.trim();
 const retryFocused = await failPage.evaluate(() => document.activeElement?.textContent === 'Retry');
 const resetDisabledDuringFailure = await failPage.getByRole('button', { name: 'Reset View' }).isDisabled();
-await failPage.screenshot({ path: `${outDir}/07-asset-failure.png` });
+await failPage.screenshot({ path: `${outDir}/10-asset-failure.png` });
 blockVehicle = false;
 await failPage.getByRole('button', { name: 'Retry' }).click();
 await failPage.waitForSelector('.status', { state: 'hidden', timeout: 30000 });
@@ -95,10 +144,18 @@ const result = {
   url,
   consoleErrors,
   assetRequests,
-  panChangedView: differs(initial, panned),
-  orbitTiltChangedView: differs(panned, angled),
-  zoomChangedView: differs(angled, zoomed),
+  plainDragLeftViewUnchanged: !differs(initial, plainDrag),
+  spaceDragPanChangedView: differs(plainDrag, panned),
+  joystickDragChangedView: differs(panned, joystickDragged),
+  joystickStopsOnRelease: !differs(joystickDragged, afterRelease),
+  joystickArrowKeysChangedView: differs(afterRelease, keyboardJoystick),
+  spacePanWorksWithJoystickFocused: joystickFocusedDuringPan && differs(keyboardJoystick, panAfterJoystick),
+  rightDragChangedView: differs(panAfterJoystick, rightDragged),
+  zoomChangedView: differs(rightDragged, zoomed),
+  zoomButtonChangedView: differs(zoomed, zoomButton),
   resetMatchesInitial: !differs(initial, reset),
+  spacePanWorksWithButtonFocused: differs(reset, panAfterReset),
+  spaceReleaseDidNotPressFocusedButton: !differs(panAfterReset, afterSpaceRelease) && differs(initial, afterSpaceRelease),
   headed,
   webglRenderer,
   failureMessage,
@@ -112,8 +169,16 @@ console.log(JSON.stringify(result, null, 2));
 const ok =
   consoleErrors.length === 0 &&
   !assetRequests.some((r) => !r.startsWith('200') && !r.startsWith('304')) &&
-  result.panChangedView &&
-  result.orbitTiltChangedView &&
+  result.plainDragLeftViewUnchanged &&
+  result.spaceDragPanChangedView &&
+  result.joystickDragChangedView &&
+  result.joystickStopsOnRelease &&
+  result.joystickArrowKeysChangedView &&
+  result.spacePanWorksWithJoystickFocused &&
+  result.rightDragChangedView &&
+  result.zoomButtonChangedView &&
+  result.spacePanWorksWithButtonFocused &&
+  result.spaceReleaseDidNotPressFocusedButton &&
   result.zoomChangedView &&
   result.resetMatchesInitial &&
   failureMessage === "Couldn't load models/vehicles/sedan.glb" &&

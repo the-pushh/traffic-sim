@@ -1,5 +1,7 @@
-import { PCFSoftShadowMap, PerspectiveCamera, WebGLRenderer } from 'three';
+import { PCFSoftShadowMap, PerspectiveCamera, Timer, WebGLRenderer } from 'three';
+import { attachJoystickControl, setJoystickEnabled } from '../components/joystickControl';
 import '../styles/main.css';
+import { CameraJoystick } from '../three/controls/cameraJoystick';
 import { ObserverCamera } from '../three/controls/observerCamera';
 import { attachViewportInput } from '../three/controls/viewportInput';
 import { AssetLoadError } from '../three/loaders/assetLoader';
@@ -11,10 +13,15 @@ const app = document.querySelector<HTMLDivElement>('#app')!;
 app.innerHTML = `
   <header class="toolbar">
     <h1>Traffic Simulator</h1>
-    <span class="hint">Drag to pan · Right-drag to orbit and tilt · Scroll to zoom</span>
+    <span class="hint" id="camera-hint">Over the map: hold Space and drag to pan, scroll to zoom · Joystick orbits and tilts (arrow keys when it’s focused)</span>
   </header>
   <main class="viewport" aria-label="3D traffic scene">
     <div class="camera-controls" role="group" aria-label="Camera">
+      <div class="joystick" tabindex="0" role="application" aria-roledescription="joystick"
+        aria-label="Orbit and tilt camera" aria-describedby="joystick-help" title="Drag or use arrow keys: left/right orbits, up/down tilts">
+        <div class="joystick-knob"></div>
+      </div>
+      <span id="joystick-help" class="visually-hidden">Drag the knob or hold arrow keys. Left and right orbit around the view; up tilts toward overhead, down toward an angled view.</span>
       <button type="button" data-action="zoom-in" disabled aria-label="Zoom in" title="Zoom in">+</button>
       <button type="button" data-action="zoom-out" disabled aria-label="Zoom out" title="Zoom out">−</button>
       <button type="button" data-action="reset-view" disabled class="primary">Reset View</button>
@@ -47,6 +54,8 @@ resize();
 const cameraControls = app.querySelector<HTMLElement>('.camera-controls')!;
 let observer: ObserverCamera | null = null;
 let detachInput: (() => void) | null = null;
+const joystickElement = app.querySelector<HTMLElement>('.joystick')!;
+const timer = new Timer();
 
 cameraControls.addEventListener('click', (e) => {
   const action = (e.target as HTMLElement).closest('button')?.dataset.action;
@@ -58,6 +67,7 @@ cameraControls.addEventListener('click', (e) => {
 
 function setCameraControlsEnabled(enabled: boolean) {
   for (const button of cameraControls.querySelectorAll('button')) button.disabled = !enabled;
+  setJoystickEnabled(joystickElement, enabled);
 }
 
 async function start() {
@@ -71,8 +81,19 @@ async function start() {
   try {
     const { scene, bounds } = await createStarterScene(renderer, import.meta.env.BASE_URL);
     observer = ObserverCamera.framing(camera, bounds);
-    detachInput = attachViewportInput(renderer.domElement, observer);
-    renderer.setAnimationLoop(() => renderer.render(scene, camera));
+    const joystick = new CameraJoystick(observer);
+    const detachViewport = attachViewportInput(renderer.domElement, observer);
+    const detachJoystick = attachJoystickControl(joystickElement, joystick);
+    detachInput = () => {
+      detachViewport();
+      detachJoystick();
+    };
+    timer.reset();
+    renderer.setAnimationLoop((time) => {
+      timer.update(time);
+      joystick.update(Math.min(timer.getDelta(), 0.1));
+      renderer.render(scene, camera);
+    });
     status.hidden = true;
     setCameraControlsEnabled(true);
   } catch (error) {

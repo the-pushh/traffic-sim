@@ -153,6 +153,14 @@
         ],
         "result": "pass: no console errors; 5/5 asset requests HTTP 200; pan, orbit/tilt, wheel zoom each changed the view; Reset View frame pixel-identical to initial frame; blocked sedan.glb shows 'Couldn't load models/vehicles/sedan.glb' with focused Retry and disabled camera buttons, and Retry recovers. Overhead, angled, zoomed, and failure screenshots inspected.",
         "previews": "artifacts/3d/previews/ (git-ignored)"
+      },
+      {
+        "date": "2026-11-11",
+        "check": "cameraControls (laptop-friendly: Space+drag pan, on-screen joystick)",
+        "command": "npm run verify:browser and npm run verify:browser:headed (3 consecutive headed passes) on the dev server; node scripts/verify-browser.mjs http://localhost:4173/ on the production preview",
+        "browser": "Google Chrome 157.0.8103.50 on macOS, headless and headed (visible window), 1440x900; WebGL via ANGLE Metal on Apple M1 Pro",
+        "result": "pass: plain drag leaves the view unchanged; Space+drag pans, including with the joystick or Reset View focused; releasing Space after a pan does not press the focused button; joystick drag and arrow keys orbit/tilt and stop on release; right-drag orbits; wheel and + button zoom; Reset View pixel-identical to start; no console errors; 5/5 assets 200. Found during review: Space ignored when a control had focus, and pointerenter-based hover was unreliable in a visible window; both fixed.",
+        "previews": "artifacts/3d/previews/ (git-ignored)"
       }
     ]
   }
