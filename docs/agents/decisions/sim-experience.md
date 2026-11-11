@@ -17,3 +17,21 @@ Running record of the planning interview (task 10, issue #1). Each line is an ow
 | 9 | Simulation model | Lane graph, gap-keeping car-following (IDM), fixed-time signals, fixed 1/30 s steps, seeded arrivals for comparable reruns. Owner will specify traffic behaviour in detail later. |
 | 10 | Traffic load | **Abstract 5-tick control** (low → congested), no numeric vehicle rates shown to the player. |
 | 11 | Results | Results card above the dock when a run ends: reached destination, average wait, longest queue, side by side with the previous run, labelled with scene, load, duration. |
+
+## Round 2 — 2026-11-11
+
+| # | Topic | Decision |
+| --- | --- | --- |
+| 1 | Scene switcher | A **pill above the dock**: `‹ Scene name ›`, arrows step through scenes. |
+| 2 | Switching mid-run | Stops and resets the run; the next scene loads paused with its own starting setup. |
+| 3 | Load ticks | **Almost empty · Low · Medium · High · Congested** (5 ticks). |
+| 4 | Load location | In the dock's run section, next to the duration select. |
+| 5 | Settings during a run | Settings are **disabled and greyed out** while the simulation runs. |
+| 6 | Restart vs Reset | Both: **Restart run** (dock) clears the run, keeps layout and settings; **Reset** restores the scene's starting layout, controls and load, and clears the run. |
+| 7 | End of run | Traffic freezes, timeline full, results card appears. **Play keeps its label** (no "Run again"). |
+| 8 | Results comparison | Latest run and the previous one, with ▲▼ deltas; dismissible. |
+| 9 | Scene line-up | Provisional: Traffic Lights (2×2 signalised grid), Flyover, On-Ramp, Turnaround; build order crossroads → Traffic Lights → Flyover → On-Ramp → Turnaround. **Owner is still designing the scenes.** |
+| 10 | Entry/exit markers | Every road end at the board edge is a labelled entry/exit (A, B, C…) with flow arrows; vehicles pick a random reachable exit for now. |
+| 11 | Vehicle mix | **Mix of every vehicle** in the Car Kit; same behaviour for now. |
+| 12 | Screen frame | Header bar removed; full-window 3D view with floating panels. |
+| 13 | First-visit hint | One-time tip above the dock: "Press Play to run 30 s of traffic", gone after first Play, remembered in the browser. |
