@@ -35,3 +35,16 @@ Running record of the planning interview (task 10, issue #1). Each line is an ow
 | 11 | Vehicle mix | **Mix of every vehicle** in the Car Kit; same behaviour for now. |
 | 12 | Screen frame | Header bar removed; full-window 3D view with floating panels. |
 | 13 | First-visit hint | One-time tip above the dock: "Press Play to run 30 s of traffic", gone after first Play, remembered in the browser. |
+
+## Round 3 — 2026-11-11
+
+| # | Topic | Decision |
+| --- | --- | --- |
+| 1 | Saving edits | No menu. A **Save** button appears after the scene title **only when the scene has been edited**. Switching scenes with unsaved edits shows a **warning modal** explaining that leaving resets the scene to its default. |
+| 2 | Settings while paused mid-run | Disabled for the whole run, playing or paused. |
+| 3 | Play after a run ends | Settings re-enable. Pressing Play **continues from the frozen traffic** if possible; a fresh start is acceptable otherwise. |
+| 4 | Scene arrows during a run | **Disabled** during a run (supersedes round 2 #2, "switching mid-run stops and resets"). |
+| 5 | Before Play | Not empty: the scene opens **paused with traffic already on the roads**, at the selected load. |
+| 6 | Dock layout | `[Play/Pause] [Restart] [clock + progress] │ [Load ticks] [30/60/90 s]`, parts section later; scene pill centred above. |
+| 7 | Vehicle mix | A **random permutation of every vehicle model** (shuffled and cycled so all appear evenly). |
+| 8 | Build order | Engine and dock start on a hidden test crossroads while the owner designs the four scenes as 16 × 16 tile sketches. |
