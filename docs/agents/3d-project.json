@@ -1,26 +1,46 @@
 {
   "configVersion": 1,
-  "status": "provisional",
+  "status": "setup-verified",
   "purpose": "Desktop web application for building road networks and running agent-based traffic simulations in Three.js",
   "toolchain": {
     "authoringTool": null,
     "runtime": "Three.js in the browser",
-    "versions": {},
-    "setupVerified": false
+    "versions": {
+      "node": "24.20.0",
+      "npm": "11.19.0",
+      "three": "0.187.0",
+      "vite": "8.3.8",
+      "vitest": "5.1.0",
+      "typescript": "7.0.2",
+      "@types/three": "0.187.0",
+      "playwright-core": "1.65.0",
+      "chrome": "157.0.8103.50",
+      "unzip": "UnZip 6.00 (macOS)"
+    },
+    "setupVerified": true,
+    "buildTool": "Vite",
+    "packageManager": "npm",
+    "testRunner": "Vitest",
+    "browserCheck": "playwright-core driving installed Google Chrome (headless)",
+    "conversionTools": []
   },
   "paths": {
     "incomingArchives": "assets/3d/incoming",
     "sourceAssets": "assets/3d/source",
     "exportedAssets": "public/models",
     "textures": "public/textures",
-    "previews": "artifacts/3d/previews"
+    "previews": "artifacts/3d/previews",
+    "servedRoot": "public",
+    "appSource": "src",
+    "vehicleModels": "public/models/vehicles",
+    "roadModels": "public/models/roads"
   },
   "coordinates": {
-    "unit": null,
-    "upAxis": null,
-    "forwardAxis": null,
-    "handedness": null,
-    "originPolicy": null,
+    "unit": "World unit = 1/4 road tile (one City Kit Roads tile scaled \u00d74 = 4 units). Real-world metres not yet assigned.",
+    "upAxis": "+Y (source GLBs and app)",
+    "forwardAxis": "+Z for vehicles (Car Kit front wheels at +Z). City Kit road-straight runs along X in source; rotated 90\u00b0 about Y to run along Z.",
+    "handedness": "right-handed (glTF / Three.js)",
+    "originPolicy": "Car Kit: origin at ground centre of vehicle. City Kit Roads: origin at tile centre, surface at y=0.02 (source units). App keeps source origins and places by transform.",
     "conversionPolicy": "Inspect source units and axes, confirm the application's conventions, and record conversions before applying them."
   },
   "assets": {
@@ -29,11 +49,44 @@
       "roadPieces": "assets/3d/incoming/kenney_city-kit-roads.zip",
       "roadTextures": "assets/3d/incoming/kenney_road-textures.zip"
     },
-    "sourceFormats": [],
-    "deliveryFormats": [],
+    "sourceFormats": [
+      "GLB",
+      "FBX",
+      "OBJ+MTL",
+      "PNG",
+      "SVG"
+    ],
+    "deliveryFormats": [
+      "GLB with external PNG texture (Textures/colormap.png beside each model)",
+      "PNG"
+    ],
     "preserveEditableSources": true,
-    "externalDependencies": [],
-    "licenseRecordsPath": "assets/3d/ASSETS.md"
+    "externalDependencies": [
+      "public/models/vehicles/Textures/colormap.png (Car Kit)",
+      "public/models/roads/Textures/colormap.png (City Kit Roads; different file, same name)"
+    ],
+    "licenseRecordsPath": "assets/3d/ASSETS.md",
+    "delivered": {
+      "vehicle": {
+        "source": "assets/3d/source/kenney_car-kit/Models/GLB format/sedan.glb",
+        "served": "public/models/vehicles/sedan.glb",
+        "appScale": 0.55,
+        "conversion": "none (copied)"
+      },
+      "roadPiece": {
+        "source": "assets/3d/source/kenney_city-kit-roads/Models/GLB format/road-straight.glb",
+        "served": "public/models/roads/road-straight.glb",
+        "appScale": 4,
+        "appRotationY": "90deg",
+        "conversion": "none (copied)"
+      },
+      "roadTexture": {
+        "source": "assets/3d/source/kenney_road-textures/PNG/Retina/roadTexture_01.png",
+        "served": "public/textures/roadTexture_01.png",
+        "conversion": "none (copied)"
+      }
+    },
+    "license": "CC0 1.0 (all three Kenney packs)"
   },
   "roadPieces": {
     "requiredMetadata": [
@@ -63,7 +116,15 @@
     "maxTextureDimension": null
   },
   "verification": {
-    "commands": {},
+    "commands": {
+      "install": "npm install",
+      "dev": "npm run dev  # http://localhost:5173/",
+      "test": "npm test",
+      "build": "npm run build",
+      "preview": "npm run preview  # http://localhost:4173/",
+      "browserCheck": "npm run verify:browser  # requires dev server; or node scripts/verify-browser.mjs <url>",
+      "browserCheckHeaded": "npm run verify:browser:headed  # same check in a visible Chrome window"
+    },
     "initialBrowserCheck": "Load one supplied vehicle on a short road section with a supplied road texture. Inspect the scene, browser errors, and asset requests before marking setup verified.",
     "requiredViews": [
       "overhead",
@@ -76,6 +137,23 @@
     "checkPlacementPreviewAndSnapping": true,
     "checkLaneConnectionsAndRampElevation": true,
     "checkCameraPreservesSimulationState": true,
-    "checkSceneSwitchCleanup": true
+    "checkSceneSwitchCleanup": true,
+    "results": [
+      {
+        "date": "2026-11-11",
+        "check": "initialBrowserCheck",
+        "command": "npm run dev, then npm run verify:browser and npm run verify:browser:headed; production build via npm run build && npm run preview, then node scripts/verify-browser.mjs http://localhost:4173/",
+        "browser": "Google Chrome 157.0.8103.50 on macOS, headless and headed (visible window), 1440x900; WebGL via ANGLE Metal on Apple M1 Pro",
+        "assets": [
+          "public/models/vehicles/sedan.glb",
+          "public/models/vehicles/Textures/colormap.png",
+          "public/models/roads/road-straight.glb",
+          "public/models/roads/Textures/colormap.png",
+          "public/textures/roadTexture_01.png"
+        ],
+        "result": "pass: no console errors; 5/5 asset requests HTTP 200; pan, orbit/tilt, wheel zoom each changed the view; Reset View frame pixel-identical to initial frame; blocked sedan.glb shows 'Couldn't load models/vehicles/sedan.glb' with focused Retry and disabled camera buttons, and Retry recovers. Overhead, angled, zoomed, and failure screenshots inspected.",
+        "previews": "artifacts/3d/previews/ (git-ignored)"
+      }
+    ]
   }
 }

@@ -17,6 +17,7 @@ All paths are relative to the repository root.
 | `docs/agents/design.md` | Before changing the player experience, maps, parts drawer, drag-and-drop preview, simulation controls, results, or observer camera. |
 | `docs/agents/REPO_STRUCTURE.md` | Before organizing project files or importing the three supplied Kenney archives. |
 | `docs/agents/3D_SETUP.md` and `docs/agents/3d-project.json` | Before importing, converting, placing, rendering, or verifying 3D assets. |
+| `docs/agents/TRACKER.md` | Tracker configuration and current plan. The tracker is GitHub Issues on `the-pushh/traffic-sim`; this file mirrors the plan issue. |
 
 ## Working process
 
