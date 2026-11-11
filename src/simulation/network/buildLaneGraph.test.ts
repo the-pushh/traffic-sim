@@ -284,3 +284,46 @@ describe('lane graph: lane counts and special pieces', () => {
     expect(graph.lanes[east.next[0]].piece).toBe(1);
   });
 });
+
+describe('lane graph: incompatible joints', () => {
+  const oneWayOut: PiecePlacement = { piece: 'straight', at: [7.5, 8.5], rotation: 0, flow: { w: 'in', e: 'out' } };
+
+  it('reports a one-way road meeting a two-way road instead of silently dropping a lane', () => {
+    const graph = buildLaneGraph([oneWayOut, straight(8.5, 8.5)]);
+
+    expect(graph.mismatches).toEqual([{ at: [8, 8.5], level: 0, reason: 'Lane directions don’t match: one-way meets two-way' }]);
+    for (const lane of graph.lanes) {
+      expect(lane.next.filter((n) => graph.lanes[n].piece !== lane.piece)).toEqual([]);
+    }
+    // The joint is a mismatch, not a free road end (only the far ends are open).
+    expect(graph.openEnds.map((e) => e.at)).toEqual([
+      [7, 8.5],
+      [9, 8.5],
+    ]);
+  });
+
+  it('reports two one-way roads pointing at each other', () => {
+    const facing: PiecePlacement = { piece: 'straight', at: [8.5, 8.5], rotation: 0, flow: { w: 'out', e: 'in' } };
+    const graph = buildLaneGraph([oneWayOut, facing]);
+    expect(graph.mismatches).toHaveLength(1);
+  });
+
+  it('reports a lay-by road end meeting a normal road end and keeps their lanes apart', () => {
+    const graph = buildLaneGraph([straight(7.5, 8.5), place('layby', 8.5, 8.5)]);
+
+    expect(graph.mismatches).toEqual([{ at: [8, 8.5], level: 0, reason: 'Lay-by road meets a road without a lay-by' }]);
+    const crossing = graph.lanes.filter((l) => l.next.some((n) => graph.lanes[n].piece !== l.piece));
+    expect(crossing).toEqual([]);
+    expect(graph.openEnds.map((e) => e.at)).toEqual([
+      [7, 8.5],
+      [9, 8.5],
+    ]);
+  });
+
+  it('still joins matching one-way roads and divided carriageways', () => {
+    const next: PiecePlacement = { piece: 'straight', at: [8.5, 8.5], rotation: 0, flow: { w: 'in', e: 'out' } };
+    const graph = buildLaneGraph([oneWayOut, next]);
+    expect(graph.mismatches).toEqual([]);
+    expect(graph.lanes.filter((l) => l.piece === 0).every((l) => l.next.length === 1)).toBe(true);
+  });
+});

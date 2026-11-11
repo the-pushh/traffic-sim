@@ -11,7 +11,7 @@ import { ObserverCamera } from '../three/controls/observerCamera';
 import { attachViewportInput } from '../three/controls/viewportInput';
 import { AssetLoadError } from '../three/loaders/assetLoader';
 import { testNetwork } from '../scenes/testNetwork';
-import { createSceneView } from '../three/scene/createSceneView';
+import { createSceneView, SceneDefinitionError } from '../three/scene/createSceneView';
 
 const ZOOM_STEP = 0.8;
 
@@ -133,7 +133,7 @@ async function start() {
     bottomStack.inert = false;
   } catch (error) {
     console.error(error);
-    const message = error instanceof AssetLoadError ? error.message : 'Couldn’t start the 3D scene.';
+    const message = error instanceof AssetLoadError || error instanceof SceneDefinitionError ? error.message : 'Couldn’t start the 3D scene.';
     status.className = 'status error';
     status.innerHTML = `<p></p><button type="button" class="primary">Retry</button>`;
     status.querySelector('p')!.textContent = message;

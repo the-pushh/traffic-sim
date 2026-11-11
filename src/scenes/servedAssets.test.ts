@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { CONTROL_MODELS, PIECES } from '../simulation/network/pieces';
+import { PIECES } from '../simulation/network/pieces';
+import { CONTROL_MODELS } from '../three/scene/controlModels';
 import { placeholderVehicle } from './vehicles';
 
 const publicDir = join(import.meta.dirname, '../../public');

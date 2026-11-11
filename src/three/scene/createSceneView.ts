@@ -29,9 +29,21 @@ import {
 import { boardToWorld, groundBoard, TILE_SIZE } from '../../scenes/board';
 import { placeholderVehicle } from '../../scenes/vehicles';
 import { buildLaneGraph, type LaneGraph, type Point3, portPose } from '../../simulation/network/buildLaneGraph';
-import { CONTROL_MODELS, PIECES } from '../../simulation/network/pieces';
-import type { SceneDefinition } from '../../simulation/network/scene';
+import { rightOf } from '../../simulation/network/geometry';
+import { PIECES } from '../../simulation/network/pieces';
+import { type SceneDefinition, validateScene } from '../../simulation/network/scene';
 import { createAssetLoader } from '../loaders/assetLoader';
+import { CONTROL_MODELS } from './controlModels';
+
+/** A scene definition that can't be loaded, with each problem in plain language. */
+export class SceneDefinitionError extends Error {
+  constructor(
+    readonly sceneName: string,
+    readonly problems: string[],
+  ) {
+    super(`Couldn't open ${sceneName}: ${problems[0]}${problems.length > 1 ? ` (and ${problems.length - 1} more)` : ''}`);
+  }
+}
 
 export interface SceneView {
   scene: Scene;
@@ -49,6 +61,7 @@ const LANE_COLOR = '#dfe9ff';
 const GATEWAY_COLOR = '#2f6fd6';
 const OPEN_END_COLOR = '#f2c14e';
 const ACCESS_COLOR = '#e07a5f';
+const MISMATCH_COLOR = '#d64545';
 
 const world = (p: Point3, lift = 0) => {
   const [x, y, z] = boardToWorld([p[0], p[1] + ROAD_SURFACE, p[2]]);
@@ -57,6 +70,8 @@ const world = (p: Point3, lift = 0) => {
 
 /** Build the 3D view of a scene from its definition: board, pieces, controls, and lane overlay. */
 export async function createSceneView(definition: SceneDefinition, baseUrl: string): Promise<SceneView> {
+  const problems = validateScene(definition);
+  if (problems.length) throw new SceneDefinitionError(definition.name, problems);
   const graph = buildLaneGraph(definition.pieces);
   const load = createAssetLoader(baseUrl);
   const modelNames = new Set([
@@ -92,7 +107,7 @@ export async function createSceneView(definition: SceneDefinition, baseUrl: stri
   for (const control of definition.controls) {
     const { centre, facing } = portPose(definition.pieces[control.piece], control.port);
     // Beside the approach, on the arriving traffic's right, facing that traffic.
-    const right: [number, number] = [facing[1], -facing[0]];
+    const right = rightOf([-facing[0], -facing[1]]);
     const sign = byName.get(CONTROL_MODELS[control.type])!.clone();
     sign.scale.setScalar(TILE_SIZE);
     sign.position.copy(world([centre[0] + right[0] * 0.55 - facing[0] * 0.05, centre[1] - ROAD_SURFACE, centre[2] + right[1] * 0.55 - facing[1] * 0.05]));
@@ -134,13 +149,13 @@ function createLaneOverlay(graph: LaneGraph) {
   const arrow = new ConeGeometry(0.16, 0.45, 3);
   arrow.rotateX(Math.PI / 2); // point along +z
   const arrows = new InstancedMesh(arrow, new MeshBasicMaterial({ color: LANE_COLOR }), graph.lanes.length);
-  const up = new Vector3(0, 0, 1);
+  const alongZ = new Vector3(0, 0, 1);
   graph.lanes.forEach((lane, i) => {
     const mid = Math.floor(lane.points.length / 2);
     const [a, b] = lane.points.length > 2 ? [lane.points[mid - 1], lane.points[mid]] : [lane.points[0], lane.points[1]];
     const at = lane.points.length > 2 ? world(b, lift) : world(a, lift).lerp(world(b, lift), 0.5);
     const direction = world(b).sub(world(a)).normalize();
-    arrows.setMatrixAt(i, new Matrix4().compose(at, new Quaternion().setFromUnitVectors(up, direction), new Vector3(1, 1, 1)));
+    arrows.setMatrixAt(i, new Matrix4().compose(at, new Quaternion().setFromUnitVectors(alongZ, direction), new Vector3(1, 1, 1)));
   });
   overlay.add(arrows);
 
@@ -149,26 +164,55 @@ function createLaneOverlay(graph: LaneGraph) {
     label.position.copy(world([gateway.at[0], 0, gateway.at[1]], 1.4));
     overlay.add(label);
   }
+  const ring = new RingGeometry(0.9, 1.15, 32);
+  const openEndMaterial = new MeshBasicMaterial({ color: OPEN_END_COLOR });
   for (const end of graph.openEnds) {
-    const ring = new Mesh(new RingGeometry(0.9, 1.15, 32), new MeshBasicMaterial({ color: OPEN_END_COLOR }));
-    ring.rotation.x = -Math.PI / 2;
-    ring.position.copy(world([end.at[0] + end.facing[0] * 0.35, end.level, end.at[1] + end.facing[1] * 0.35], lift));
-    overlay.add(ring);
+    const marker = new Mesh(ring, openEndMaterial);
+    marker.rotation.x = -Math.PI / 2;
+    marker.position.copy(world([end.at[0] + end.facing[0] * 0.35, end.level, end.at[1] + end.facing[1] * 0.35], lift));
+    overlay.add(marker);
     const plus = textSprite('+', OPEN_END_COLOR);
-    plus.position.copy(ring.position).add(new Vector3(0, 1.2, 0));
+    plus.position.copy(marker.position).add(new Vector3(0, 1.2, 0));
     overlay.add(plus);
   }
+  // Driveways: where local trips start and end. Labelled with a house, not colour alone.
+  const pad = new RingGeometry(0, 0.45, 4);
+  const padMaterial = new MeshBasicMaterial({ color: ACCESS_COLOR });
   for (const access of graph.accessPoints) {
-    const pad = new Mesh(new RingGeometry(0, 0.45, 4), new MeshBasicMaterial({ color: ACCESS_COLOR }));
-    pad.rotation.x = -Math.PI / 2;
-    pad.position.copy(world([access.at[0], 0, access.at[1]], lift));
-    overlay.add(pad);
+    const marker = new Mesh(pad, padMaterial);
+    marker.rotation.x = -Math.PI / 2;
+    marker.position.copy(world([access.at[0], 0, access.at[1]], lift));
+    overlay.add(marker);
+    const house = textSprite('⌂', ACCESS_COLOR);
+    house.position.copy(marker.position).add(new Vector3(0, 1.2, 0));
+    overlay.add(house);
+  }
+  // Road ends that meet but can't connect.
+  for (const mismatch of graph.mismatches) {
+    const warning = textSprite('!', MISMATCH_COLOR);
+    warning.position.copy(world([mismatch.at[0], mismatch.level, mismatch.at[1]], 1.4));
+    overlay.add(warning);
   }
   return overlay;
 }
 
-/** A round badge with a character, always facing the camera. */
+const badgeMaterials = new Map<string, SpriteMaterial>();
+
+/** A round badge with a character, always facing the camera. Badges with the same text and colour share one texture. */
 function textSprite(text: string, color: string) {
+  const key = `${text}|${color}`;
+  let material = badgeMaterials.get(key);
+  if (!material) {
+    material = new SpriteMaterial({ map: badgeTexture(text, color), depthTest: false });
+    badgeMaterials.set(key, material);
+  }
+  const sprite = new Sprite(material);
+  sprite.scale.setScalar(1.8);
+  sprite.renderOrder = 1;
+  return sprite;
+}
+
+function badgeTexture(text: string, color: string) {
   const size = 128;
   const canvas = document.createElement('canvas');
   canvas.width = canvas.height = size;
@@ -184,10 +228,7 @@ function textSprite(text: string, color: string) {
   ctx.fillText(text, size / 2, size / 2 + 4);
   const texture = new CanvasTexture(canvas);
   texture.colorSpace = SRGBColorSpace;
-  const sprite = new Sprite(new SpriteMaterial({ map: texture, depthTest: false }));
-  sprite.scale.setScalar(1.8);
-  sprite.renderOrder = 1;
-  return sprite;
+  return texture;
 }
 
 /** Square board with rounded corners and visible thickness; its top face is at y = 0. */

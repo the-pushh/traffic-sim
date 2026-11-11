@@ -1,4 +1,8 @@
+import { rotate } from './geometry';
 import { PIECES } from './pieces';
+
+/** The board is this many road tiles on each side. */
+export const BOARD_TILES = 16;
 
 /**
  * Shared scene format for presets and saved scenes. Board coordinates are in road
@@ -45,7 +49,6 @@ export interface SceneDefinition {
   demand: DemandPattern;
 }
 
-const BOARD = 16;
 const QUARTER_TURNS = [0, 90, 180, 270];
 
 /** Problems that would stop a scene from loading, in plain language; empty when valid. */
@@ -61,18 +64,27 @@ export function validateScene(scene: SceneDefinition): string[] {
       errors.push(`Piece ${i}: rotation must be 0, 90, 180 or 270`);
       return;
     }
-    const r = (placement.rotation * Math.PI) / 180;
-    const [c, s] = [Math.round(Math.cos(r)), Math.round(Math.sin(r))];
-    const points = [[0, 0], ...def.ports.map((p) => p.at)].map(([x, z]) => [placement.at[0] + x * c + z * s, placement.at[1] - x * s + z * c]);
-    if (points.some(([x, z]) => x < 0 || x > BOARD || z < 0 || z > BOARD)) {
-      errors.push(`Piece ${i}: ${placement.piece} at (${placement.at.join(', ')}) is off the ${BOARD} × ${BOARD} board`);
+    const { min, max } = def.footprint;
+    const corners = [min, [max[0], min[1]], max, [min[0], max[1]]] as [number, number][];
+    const onBoard = corners.every((corner) => {
+      const [x, z] = rotate(corner, placement.rotation);
+      const [bx, bz] = [placement.at[0] + x, placement.at[1] + z];
+      return bx >= -1e-9 && bz >= -1e-9 && bx <= BOARD_TILES + 1e-9 && bz <= BOARD_TILES + 1e-9;
+    });
+    if (!onBoard) errors.push(`Piece ${i}: ${placement.piece} at (${placement.at.join(', ')}) is off the ${BOARD_TILES} × ${BOARD_TILES} board`);
+    for (const id of Object.keys(placement.flow ?? {})) {
+      if (!def.ports.some((p) => p.id === id)) errors.push(`Piece ${i}: ${placement.piece} has no road end "${id}" for a one-way setting`);
     }
   });
   scene.controls.forEach((control, i) => {
     const placement = scene.pieces[control.piece];
     if (!placement) return errors.push(`Control ${i}: there is no piece ${control.piece}`);
     const def = PIECES[placement.piece];
-    if (def && !def.ports.some((p) => p.id === control.port)) errors.push(`Control ${i}: ${placement.piece} has no approach "${control.port}"`);
+    if (!def) return;
+    const port = def.ports.find((p) => p.id === control.port);
+    if (!port) return errors.push(`Control ${i}: ${placement.piece} has no approach "${control.port}"`);
+    const flow = placement.flow?.[port.id] ?? port.flow ?? 'two-way';
+    if (flow === 'out' || port.profile === 'access') errors.push(`Control ${i}: no traffic arrives through approach "${control.port}" of ${placement.piece}`);
   });
   return errors;
 }

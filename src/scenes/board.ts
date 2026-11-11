@@ -1,7 +1,9 @@
+import { BOARD_TILES } from '../simulation/network/scene';
+
+export { BOARD_TILES };
+
 /** World units per road tile (City Kit tiles are 1 × 1 in the source models). */
 export const TILE_SIZE = 4;
-/** The board is this many tiles on each side. */
-export const BOARD_TILES = 16;
 
 /**
  * The square board every scene sits on, centred on the origin. Its top face is y = 0.

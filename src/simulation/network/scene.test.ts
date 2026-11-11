@@ -39,4 +39,28 @@ describe('scene format', () => {
     const errors = validateScene({ ...base, pieces: [{ piece: 'straight', at: [7.5, 8.5], rotation: 45 as 0 }], controls: [] });
     expect(errors).toEqual(['Piece 0: rotation must be 0, 90, 180 or 270']);
   });
+
+  it('checks each piece’s whole footprint is on the board, not just its centre and road ends', () => {
+    const errors = validateScene({
+      ...base,
+      pieces: [
+        { piece: 'curve', at: [1, 0.5], rotation: 0 }, // 2 × 2 body reaches z = −0.5
+        { piece: 'straight', at: [0.5, 0], rotation: 0 }, // half the road off the north edge
+      ],
+      controls: [],
+    });
+    expect(errors).toEqual([
+      'Piece 0: curve at (1, 0.5) is off the 16 × 16 board',
+      'Piece 1: straight at (0.5, 0) is off the 16 × 16 board',
+    ]);
+  });
+
+  it('checks one-way overrides name real road ends and controls sit where traffic arrives', () => {
+    const errors = validateScene({
+      ...base,
+      pieces: [{ piece: 'straight', at: [7.5, 8.5], rotation: 0, flow: { w: 'in', e: 'out', x: 'in' } }],
+      controls: [{ type: 'signal', piece: 0, port: 'e' }],
+    });
+    expect(errors).toEqual(['Piece 0: straight has no road end "x" for a one-way setting', 'Control 0: no traffic arrives through approach "e" of straight']);
+  });
 });

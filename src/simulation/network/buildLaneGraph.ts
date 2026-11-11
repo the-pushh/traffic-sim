@@ -1,5 +1,6 @@
+import { rightOf, rotate } from './geometry';
 import { PIECES, type PortDef } from './pieces';
-import type { PiecePlacement } from './scene';
+import { BOARD_TILES, type PiecePlacement } from './scene';
 
 /** A point in board tiles: [x east, y up, z south]. */
 export type Point3 = [number, number, number];
@@ -40,14 +41,21 @@ export interface AccessPoint {
   exitLanes: number[];
 }
 
+/** Two road ends that meet but can't carry traffic between them, with the reason in plain language. */
+export interface Mismatch {
+  at: [number, number];
+  level: number;
+  reason: string;
+}
+
 export interface LaneGraph {
   lanes: Lane[];
   gateways: Gateway[];
   openEnds: OpenEnd[];
   accessPoints: AccessPoint[];
+  mismatches: Mismatch[];
 }
 
-export const BOARD_TILES = 16;
 
 /** Lane centres sit this far from the road's centre line, in tiles. */
 const LANE_OFFSET = 0.2;
@@ -58,18 +66,6 @@ const ACCESS_OFFSET = 0.06;
 /** How far a turning-around lane loops past the road end. */
 const U_TURN_HANDLE = 0.6;
 
-/** Rotate a local (x, z) vector anticlockwise seen from above (same convention as three.js rotation.y). */
-function rotate([x, z]: [number, number], degrees: number): [number, number] {
-  const r = (degrees * Math.PI) / 180;
-  const c = Math.round(Math.cos(r) * 1e9) / 1e9;
-  const s = Math.round(Math.sin(r) * 1e9) / 1e9;
-  return [x * c + z * s, -x * s + z * c];
-}
-
-/** The right-hand side of a heading, seen from above with x east and z south. */
-function rightOf([hx, hz]: [number, number]): [number, number] {
-  return [-hz, hx];
-}
 
 interface Slot {
   point: Point3;
@@ -160,24 +156,13 @@ function lanePath(start: Slot, end: Slot): Point3[] {
   const dx = b[0] - a[0];
   const dz = b[2] - a[2];
   const radius = Math.abs(dx * d0[0] + dz * d0[1]);
-  const handle = ARC_HANDLE * radius;
-  const c1 = [a[0] + d0[0] * handle, a[2] + d0[1] * handle];
-  const c2 = [b[0] - d1[0] * handle, b[2] - d1[1] * handle];
-  const points: Point3[] = [];
-  for (let i = 0; i <= CURVE_SAMPLES; i++) {
-    const t = i / CURVE_SAMPLES;
-    const u = 1 - t;
-    const w = [u * u * u, 3 * u * u * t, 3 * u * t * t, t * t * t];
-    points.push([
-      w[0] * a[0] + w[1] * c1[0] + w[2] * c2[0] + w[3] * b[0],
-      a[1] + (b[1] - a[1]) * t,
-      w[0] * a[2] + w[1] * c1[1] + w[2] * c2[1] + w[3] * b[2],
-    ]);
-  }
-  return points;
+  return connector(a, d0, b, d1, ARC_HANDLE * radius);
 }
 
-/** Cubic Bézier between two points with arbitrary unit tangents. */
+/**
+ * Cubic Bézier between two points with unit tangents, sampled along its length.
+ * Without a fixed handle length, the handles are half the chord.
+ */
 function connector(a: Point3, d0: [number, number], b: Point3, d1: [number, number], fixedHandle?: number): Point3[] {
   const handle = fixedHandle ?? 0.5 * Math.hypot(b[0] - a[0], b[2] - a[2]);
   const c1 = [a[0] + d0[0] * handle, a[2] + d0[1] * handle];
@@ -263,9 +248,10 @@ export function buildLaneGraph(placements: PiecePlacement[]): LaneGraph {
       for (const [start, end] of slotPairs(ports.get(fromId)!, ports.get(toId)!)) addLane(lanePath(start, end));
     }
   });
-  connectLanes(lanes);
-  const { gateways, openEnds, accessPoints } = findLooseEnds(allPorts, lanes);
-  return { lanes, gateways, openEnds, accessPoints };
+  const { joinable, mismatches, unmatched } = matchPorts(allPorts);
+  connectLanes(lanes, joinable);
+  const { gateways, openEnds, accessPoints } = findLooseEnds(unmatched, lanes);
+  return { lanes, gateways, openEnds, accessPoints, mismatches };
 }
 
 function sameXZ(a: Point3, b: Point3) {
@@ -281,24 +267,16 @@ function clockwiseFromNorthWest([x, z]: [number, number]) {
   return 3 * n + (n - z);
 }
 
-function onBoardEdge([x, , z]: Point3) {
-  return [x, z].some((v) => Math.abs(v) < SAME_POINT || Math.abs(v - BOARD_TILES) < SAME_POINT);
+/** A road end on the board edge that opens off the board: where traffic enters and leaves. */
+function opensOffBoard(port: PlacedPort) {
+  const [x, , z] = port.centre;
+  const onEdge = [x, z].some((v) => Math.abs(v) < SAME_POINT || Math.abs(v - BOARD_TILES) < SAME_POINT);
+  const [ax, az] = [x + port.facing[0] * 0.01, z + port.facing[1] * 0.01];
+  return onEdge && (ax < 0 || az < 0 || ax > BOARD_TILES || az > BOARD_TILES);
 }
 
-/** Ports with no matching port opposite them become gateways (on the edge) or open ends. */
-function findLooseEnds(ports: PlacedPort[], lanes: Lane[]) {
-  const loose = ports.filter(
-    (port) =>
-      !ports.some(
-        (other) =>
-          other !== port &&
-          other.def.profile === port.def.profile &&
-          sameXZ(other.centre, port.centre) &&
-          Math.abs(other.centre[1] - port.centre[1]) < SAME_POINT &&
-          other.facing[0] === -port.facing[0] &&
-          other.facing[1] === -port.facing[1],
-      ),
-  );
+/** Ports nothing meets become gateways (on the board edge, facing off it), driveways, or open ends. */
+function findLooseEnds(loose: PlacedPort[], lanes: Lane[]) {
   const startsAt = (slots: Slot[]) => lanes.filter((l) => slots.some((s) => pointKey(s.point) === pointKey(l.points[0]))).map((l) => l.id);
   const endsAt = (slots: Slot[]) =>
     lanes.filter((l) => slots.some((s) => pointKey(s.point) === pointKey(l.points[l.points.length - 1]))).map((l) => l.id);
@@ -308,12 +286,12 @@ function findLooseEnds(ports: PlacedPort[], lanes: Lane[]) {
     .map((port) => ({ at: [port.centre[0], port.centre[2]] as [number, number], entryLanes: startsAt(port.in), exitLanes: endsAt(port.out) }));
   const roadEnds = loose.filter((port) => port.def.profile !== 'access');
   const gateways = roadEnds
-    .filter((port) => onBoardEdge(port.centre))
+    .filter((port) => opensOffBoard(port))
     .map((port) => ({ at: [port.centre[0], port.centre[2]] as [number, number], entryLanes: startsAt(port.in), exitLanes: endsAt(port.out) }))
     .sort((a, b) => clockwiseFromNorthWest(a.at) - clockwiseFromNorthWest(b.at))
     .map((g, i) => ({ label: String.fromCharCode(65 + i), ...g }));
   const openEnds = roadEnds
-    .filter((port) => !onBoardEdge(port.centre))
+    .filter((port) => !opensOffBoard(port))
     .map((port) => ({ at: [port.centre[0], port.centre[2]] as [number, number], level: port.centre[1], facing: port.facing }));
   return { gateways, openEnds, accessPoints };
 }
@@ -326,18 +304,75 @@ function pointKey([x, y, z]: Point3) {
   return `${q(x)},${q(y)},${q(z)}`;
 }
 
+function meets(a: PlacedPort, b: PlacedPort) {
+  return (
+    sameXZ(a.centre, b.centre) &&
+    Math.abs(a.centre[1] - b.centre[1]) < SAME_POINT &&
+    a.facing[0] === -b.facing[0] &&
+    a.facing[1] === -b.facing[1]
+  );
+}
+
+function sameSlots(a: Slot[], b: Slot[]) {
+  const keys = (slots: Slot[]) => slots.map((s) => pointKey(s.point)).sort().join('|');
+  return keys(a) === keys(b);
+}
+
+/**
+ * Pair up ports that meet. A pair carries traffic only when both ends have the same
+ * profile and each side's leaving lanes line up with the other side's arriving lanes;
+ * otherwise it is reported as a mismatch rather than half-connected.
+ */
+function matchPorts(ports: PlacedPort[]) {
+  const joinable = new Set<string>();
+  const mismatches: Mismatch[] = [];
+  const unmatched: PlacedPort[] = [];
+  const seen = new Set<PlacedPort>();
+  for (const port of ports) {
+    if (seen.has(port)) continue;
+    const other = ports.find((o) => o !== port && !seen.has(o) && meets(o, port));
+    if (!other) {
+      unmatched.push(port);
+      continue;
+    }
+    seen.add(port);
+    seen.add(other);
+    const reason = mismatchReason(port, other);
+    if (reason) {
+      mismatches.push({ at: [port.centre[0], port.centre[2]], level: port.centre[1], reason });
+      continue;
+    }
+    for (const slot of [...port.out, ...port.in]) joinable.add(pointKey(slot.point));
+  }
+  return { joinable, mismatches, unmatched };
+}
+
+function mismatchReason(a: PlacedPort, b: PlacedPort): string | null {
+  if (a.def.profile !== b.def.profile) {
+    if (a.def.profile === 'layby' || b.def.profile === 'layby') return 'Lay-by road meets a road without a lay-by';
+    return 'These road ends can’t connect';
+  }
+  if (sameSlots(a.out, b.in) && sameSlots(a.in, b.out)) return null;
+  const oneWay = (p: PlacedPort) => p.out.length === 0 || p.in.length === 0;
+  if (oneWay(a) !== oneWay(b)) return 'Lane directions don’t match: one-way meets two-way';
+  return 'Lane directions don’t match';
+}
+
 /**
  * A lane continues into every lane that starts exactly where it ends, height
- * included, so a road passing under a bridge never connects to it.
+ * included, so a road passing under a bridge never connects to it. Between pieces
+ * this only happens through a compatible pair of ports.
  */
-function connectLanes(lanes: Lane[]) {
+function connectLanes(lanes: Lane[], joinable: Set<string>) {
   const startingAt = new Map<string, Lane[]>();
   for (const lane of lanes) {
     const key = pointKey(lane.points[0]);
     startingAt.set(key, [...(startingAt.get(key) ?? []), lane]);
   }
   for (const lane of lanes) {
-    for (const next of startingAt.get(pointKey(lane.points[lane.points.length - 1])) ?? []) {
+    const endKey = pointKey(lane.points[lane.points.length - 1]);
+    for (const next of startingAt.get(endKey) ?? []) {
+      if (next.piece !== lane.piece && !joinable.has(endKey)) continue;
       lane.next.push(next.id);
       next.previous.push(lane.id);
     }

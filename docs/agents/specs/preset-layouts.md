@@ -79,7 +79,7 @@ F  ........|.......
 ```
 
 - Two routes between the west and east areas: the **wide main road** (rows 3–4) with a signalised junction at column 8, and the **narrow shortcut** (row B, slower speed limit) with a stop-controlled junction `X` at column 8. Links at columns 1 and E join them.
-- School at column A: driveway `d` (peak of local trips) and a pedestrian crossing `z` on the shortcut.
+- School at column A: driveway `d` (peak of local trips), a pedestrian crossing `z` on the shortcut, and a lay-by **drop-off bay** beside the school (kit pieces `road-side-exit`, `road-side`, `road-side-entry`; added after T4).
 - Open connection `o` south of the T at column 4; free space for another junction control or a traffic-calming element.
 
 ## 4. Flyover Bottleneck (redrawn 2026-11-12)
@@ -104,12 +104,12 @@ E  ........|.......
 F  ........|.......
 ```
 
-Extra legend: `e` side exit (diverge) · `m` side entry (merge) · `B` bridge deck.
+Extra legend: `e` T-junction where eastbound drivers can turn off · `m` T-junction where the alternative merges back under a **yield** sign · `B` bridge deck. (Updated after T4: the kit's side-entry/exit pieces are a lay-by bay, so turn-offs and merges use T-junctions.)
 
 - **Raised route** (rows 4–5 → row 4): enters from the west as a divided two-lane road, narrows to one lane at the road split `<` (column 3), climbs the ramps `//` (columns 5–6), crosses the bridge `BBB` (columns 7–9) over the surface road, and descends `\\` (columns A–B) back to ground.
 - **Surface road** (column 8) runs north–south at ground level and passes **under** the bridge with no connection there.
-- **Getting off before the bottleneck:** eastbound drivers can leave at the side exit `e` (column 1, before the narrowing) and take the link (column 1) down to the **slower surface alternative** (row B).
+- **Getting off before the bottleneck:** eastbound drivers can leave at the T-junction `e` (column 1, before the narrowing) and take the link (column 1) down to the **slower surface alternative** (row B).
 - **Slower surface alternative** (row B): crosses the surface road at a signal-controlled crossroads `#` (column 8), then turns north at column D.
-- **Where the routes meet again:** the alternative climbs column D and **merges back into the raised route** at the side entry `m` (row 4, column D), downstream of the descent. Drivers choose the route before the climb and rejoin after it.
+- **Where the routes meet again:** the alternative climbs column D and **merges back into the raised route** at the T-junction `m` (row 4, column D) under a yield sign, downstream of the descent. Drivers choose the route before the climb and rejoin after it.
 - **Levels:** the only way onto or off the bridge is the main route's own ramps; the surface road and the alternative never touch the bridge level.
 - **Player build space:** the north-west and north-east quadrants (rows 0–3), the area between the routes (rows 6–A), and the south (rows C–F). **Open connection** `o` east of the T at column D (row B), plus room beside the one-lane section (row 3, columns 4–6) for an extra lane.

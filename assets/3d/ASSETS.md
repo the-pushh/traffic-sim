@@ -61,9 +61,9 @@ Classified from the City Kit Roads previews and measured GLB bounds (2026-11-11)
 | 6 | Curved T-junction | `road-curve-intersection`, `-barrier` | 2×2 | At-grade junction |
 | 7 | Roundabout | `road-roundabout`, `-barrier` | 3×3 | Yield-on-entry circulation |
 | 8 | Road split (single ↔ divided) | `road-split`, `-barrier` | 1×2 | Lane-count / width change |
-| 9 | Side lane (widening) | `road-side`, `-barrier` | 1 × 1.31 | Extra lane, capacity |
-| 10 | Side entry (merge taper) | `road-side-entry`, `-barrier` | 1 × 1.31 | Merge, gap acceptance |
-| 11 | Side exit (diverge taper) | `road-side-exit`, `-barrier` | 1 × 1.31 | Diverge / off-ramp |
+| 9 | Lay-by road | `road-side`, `-barrier` | 1 × 1.31 | Drop-off / bus bay beside the through lane |
+| 10 | Lay-by start taper | `road-side-entry`, `-barrier` | 1 × 1.31 | Diverge into the bay |
+| 11 | Lay-by end taper | `road-side-exit`, `-barrier` | 1 × 1.31 | Merge out of the bay, gap acceptance |
 | 12 | Straight ramp | `road-slant`, `road-slant-high`, `road-slant-flat`, `road-slant-flat-high`, `*-barrier` | 1×1; 0 → 0.27 → 0.52 | Level change |
 | 13 | Curved ramp | `road-slant-curve`, `road-slant-flat-curve`, `-barrier` | 2×1 | Level change on a curve |
 | 14 | Bridge / flyover deck | `road-bridge` | 1×1, deck at 0.52 (2 world units clear) | Grade separation |
@@ -80,7 +80,7 @@ Classified from the City Kit Roads previews and measured GLB bounds (2026-11-11)
 
 **Gaps:** no narrower or wider road pieces (width differences come from lane count via divided roads and side lanes, plus speed limits); no yield sign (warning sign stands in); no multi-lane highway piece.
 
-**Coverage target:** 22 types → 60% needs **14**. The planned presets use these 17 (77%): 1 straight, 2 bend, 3 curve, 4 crossroads, 5 T-junction, 7 roundabout, 8 road split, 10 side entry, 11 side exit, 12 straight ramp, 14 bridge, 15 road end, 16 crossing, 17 driveway, 19 traffic light, 20 stop sign, 21 yield (warning sign). The final count is confirmed once the preset layouts are built.
+**Coverage target:** 22 types → 60% needs **14**. Updated after T4 measured the pieces (rows 9–11 are a lay-by bay, not merge/diverge lanes). The planned presets use **18 (82%)**: 1 straight, 2 bend, 3 curve, 4 crossroads, 5 T-junction, 7 roundabout, 8 road split (two-to-one merge), 9–11 lay-by road and tapers (School Run drop-off bay), 12 straight ramp, 14 bridge, 15 road end, 16 crossing, 17 driveway, 19 traffic light, 20 stop sign, 21 yield (warning sign). Without the drop-off bay it is 15 (68%). Merges come from the road split's lane drop and yield-controlled T-junctions. The final count is confirmed once the presets are built.
 
 ## Vehicle types (for the behaviour model)
 
