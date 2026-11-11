@@ -28,7 +28,7 @@ Use semantic token names. Check the contrast of text, focus indicators, and cont
 
 ## Workspace layout
 
-Give most of the workspace to the 3D viewport. Put the scene picker, traffic load, run duration, Play, Pause, and Reset in a compact toolbar. Keep camera controls beside the viewport. In edit mode, show a collapsible **Parts** drawer and an inspector for the selected piece or junction. On narrower browser windows, let players dismiss these panels to see more of the network.
+Give most of the workspace to the 3D viewport. Put the scene picker, traffic load, run duration, Play, Pause, and Reset in a compact toolbar. *Confirmed 2026-11-11 (see `docs/agents/specs/sim-experience.md`):* the 3D view fills the window with no header bar. A floating, rounded **dock** at the bottom holds Play/Pause, Restart, the clock and progress bar, the 5-tick load control, and the 30/60/90 s select; the Parts section joins it later. A **scene pill** above the dock steps through scenes with ‹ › arrows. Settings and scene arrows are disabled and greyed out for the whole run. Keep camera controls beside the viewport. In edit mode, show a collapsible **Parts** drawer and an inspector for the selected piece or junction. On narrower browser windows, let players dismiss these panels to see more of the network.
 
 Show the simulation clock during a run and the results when it ends. Display units beside numeric settings. Label icon-only controls, show keyboard focus, and preserve scene state when panels open or the browser resizes.
 
@@ -64,7 +64,7 @@ Distinguish valid and invalid placements with an outline or icon as well as colo
 - Let players change traffic demand, entry and exit points, and junction controls. If an entry has no route to its intended exit, highlight it and explain what needs to be connected.
 - Pause traffic while players edit the layout. Pressing **Play** after a layout change starts a fresh run on the edited network.
 
-**Reset** restores the selected scene’s starting layout, traffic controls, and demand, and clears the current run. **Save as new scene** saves the edited layout, controls, and demand as a separate scene in the picker. Reopening it loads that saved setup, ready for a new run. The original preset stays available.
+**Reset** restores the selected scene’s starting layout, traffic controls, and demand, and clears the current run. **Save as new scene** saves the edited layout, controls, and demand as a separate scene in the picker. Reopening it loads that saved setup, ready for a new run. The original preset stays available. *Changed 2026-11-11 by the owner:* **Save** (shown only with unsaved edits) overrides the scene with the player's network in this browser, and **Reset** returns to the designer's network. Leaving a scene with unsaved edits asks first ("Leaving resets the road network to default.").
 
 ## Simulation and results
 

@@ -47,3 +47,55 @@ Extraction: `unzip -q -n <zip> -d assets/3d/source/<pack>` (UnZip 6.00, macOS), 
 No format conversion was needed: Three.js `GLTFLoader` loads the supplied GLB files with their relative texture paths. Delivered assets total ≈ 200 KB and are committed directly to git.
 
 **Scene scale (verified in the browser):** one road tile = 4 world units; sedan scaled ×0.55 (≈ 0.83 W × 1.4 L) sits inside one lane at x = +0.75 on the road surface (y = 0.08).
+
+## Traffic-affecting element types (for the 60% coverage target)
+
+Classified from the City Kit Roads previews and measured GLB bounds (2026-11-11). Cosmetic variants (barrier, line, path, sidewalk, pavement, square-corner, object/hanging versions) count as one type. Footprints are in source tiles (1 tile = 4 world units in the app).
+
+| # | Element type | Source models (variants) | Footprint / notes | Simulation role |
+| --- | --- | --- | --- | --- |
+| 1 | Straight road | `road-straight`, `road-straight-half`, `road-straight-barrier*` | 1×1; `-half` is half **length**, not narrower | Lanes, speed limit |
+| 2 | Tight bend | `road-bend`, `-barrier`, `-sidewalk`, `-square`, `-square-barrier` | 1×1, 90° | Curve speed |
+| 3 | Wide curve | `road-curve`, `-barrier`, `-pavement` | 2×2, 90° | Curve speed (faster than bend) |
+| 4 | Crossroads (4-way) | `road-crossroad`, `-line`, `-path`, `-barrier` | 1×1 | At-grade junction |
+| 5 | T-junction | `road-intersection`, `-line`, `-path`, `-barrier` | 1×1 | At-grade junction |
+| 6 | Curved T-junction | `road-curve-intersection`, `-barrier` | 2×2 | At-grade junction |
+| 7 | Roundabout | `road-roundabout`, `-barrier` | 3×3 | Yield-on-entry circulation |
+| 8 | Road split (single ↔ divided) | `road-split`, `-barrier` | 1×2 | Lane-count / width change |
+| 9 | Side lane (widening) | `road-side`, `-barrier` | 1 × 1.31 | Extra lane, capacity |
+| 10 | Side entry (merge taper) | `road-side-entry`, `-barrier` | 1 × 1.31 | Merge, gap acceptance |
+| 11 | Side exit (diverge taper) | `road-side-exit`, `-barrier` | 1 × 1.31 | Diverge / off-ramp |
+| 12 | Straight ramp | `road-slant`, `road-slant-high`, `road-slant-flat`, `road-slant-flat-high`, `*-barrier` | 1×1; 0 → 0.27 → 0.52 | Level change |
+| 13 | Curved ramp | `road-slant-curve`, `road-slant-flat-curve`, `-barrier` | 2×1 | Level change on a curve |
+| 14 | Bridge / flyover deck | `road-bridge` | 1×1, deck at 0.52 (2 world units clear) | Grade separation |
+| 15 | Road end / turnaround | `road-end`, `road-end-round`, `*-barrier` | 1×1 | Dead end, U-turn |
+| 16 | Pedestrian crossing | `road-crossing` | 1×1 | Traffic calming / slow zone |
+| 17 | Driveway | `road-driveway-single`, `-double`, `*-barrier` | 1×1 | Local trip origin/destination |
+| 18 | Paved square | `road-square`, `-barrier` | 1×1 | Open area / drop-off zone |
+| 19 | Traffic light | `traffic-light`, `-hanging`, `traffic-light-object-*` | prop | Signal control |
+| 20 | Stop sign | `road-sign-stop`, `road-sign-object-stop` | prop | Stop control |
+| 21 | Warning sign (used as **yield**) | `road-sign-warning`, `road-sign-object-warning` | prop | Yield control; no dedicated yield sign exists |
+| 22 | Lane closure | `construction-barrier`, `-cone`, `-fence`, `-light` | prop | Closes a lane / connection |
+
+**Not traffic-affecting (cosmetic):** street and highway signs, empty signs, street lights, electricity poles and wires, dumpster, bridge pillars (deck support), elevation tiles (`tile-*`, embankment fill).
+
+**Gaps:** no narrower or wider road pieces (width differences come from lane count via divided roads and side lanes, plus speed limits); no yield sign (warning sign stands in); no multi-lane highway piece.
+
+**Coverage target:** 22 types → 60% needs **14**. The planned presets use these 17 (77%): 1 straight, 2 bend, 3 curve, 4 crossroads, 5 T-junction, 7 roundabout, 8 road split, 10 side entry, 11 side exit, 12 straight ramp, 14 bridge, 15 road end, 16 crossing, 17 driveway, 19 traffic light, 20 stop sign, 21 yield (warning sign). The final count is confirmed once the preset layouts are built.
+
+## Vehicle types (for the behaviour model)
+
+Classified from the Car Kit previews and measured bounds (2026-11-12). The models are stylised and **not to scale with each other** (sedan 2.55 units long, garbage truck 3.45), so the simulation uses realistic per-type lengths and each model is scaled to its type's length.
+
+| Simulation type | Car Kit models | Notes |
+| --- | --- | --- |
+| Compact car | `hatchback-sports`, `sedan-sports` | Quickest to pull away, shortest gap |
+| Sedan | `sedan`, `taxi`, `police` | |
+| SUV | `suv`, `suv-luxury` | |
+| Pickup | `truck`, `truck-flat` | Kenney's "truck" is a pickup |
+| Van | `van`, `ambulance` | |
+| Box truck | `delivery`, `delivery-flat` | Light goods lorry / flatbed |
+| Heavy truck | `garbage-truck`, `firetruck` | Slowest acceleration, needs most room past a junction |
+| Tractor | `tractor`, `tractor-police`, `tractor-shovel` | Slow vehicle; low top speed |
+
+**Not used as traffic:** karts (`kart-*`) and race cars (`race`, `race-future`). **Gap:** no bus model exists. Emergency models drive as their base type (no sirens or priority).
