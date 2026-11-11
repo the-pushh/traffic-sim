@@ -117,6 +117,49 @@ const panAfterReset = await shot('09b-space-pan-with-reset-focused');
 await page.waitForTimeout(200);
 const afterSpaceRelease = await shot('09c-after-space-release');
 
+// Run controls (T1). The dev server honours ?timeScale= so a 30 s run ends in ~2 s.
+const runPage = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+const runUrl = new URL(url);
+runUrl.searchParams.set('timeScale', '15');
+await runPage.goto(runUrl.href);
+await runPage.waitForSelector('.status', { state: 'hidden', timeout: 30000 });
+const dockState = () => runPage.locator('.dock').getAttribute('data-state');
+const clockText = () => runPage.locator('.clock').textContent();
+const settingsDisabled = () =>
+  runPage.evaluate(() => {
+    const controls = [document.querySelector('.intensity input'), ...document.querySelectorAll('[data-duration]'), ...document.querySelectorAll('.pill-arrow')];
+    return controls.every((c) => c.disabled);
+  });
+const settingsEnabled = () =>
+  runPage.evaluate(() => [document.querySelector('.intensity input'), ...document.querySelectorAll('[data-duration]')].every((c) => !c.disabled));
+const runChecks = {};
+runChecks.tipShownOnFirstVisit = await runPage.locator('.first-visit-tip').isVisible();
+runChecks.readyClock = (await clockText()) === '0:00 / 0:30' && (await dockState()) === 'ready' && (await settingsEnabled());
+await runPage.locator('.dock').screenshot({ path: `${outDir}/11-dock-ready.png` });
+await runPage.getByRole('button', { name: 'Play' }).click();
+runChecks.playRunsAndLocksSettings = (await dockState()) === 'running' && (await settingsDisabled());
+runChecks.tipGoneAfterPlay = (await runPage.locator('.first-visit-tip').count()) === 0;
+await runPage.waitForTimeout(300);
+await runPage.getByRole('button', { name: 'Pause' }).click();
+const pausedAt = await clockText();
+await runPage.waitForTimeout(600);
+runChecks.pauseHoldsClockAndKeepsLock = (await dockState()) === 'paused' && (await clockText()) === pausedAt && (await settingsDisabled());
+await runPage.locator('.bottom-stack').screenshot({ path: `${outDir}/12-dock-paused-locked.png` });
+await runPage.getByRole('button', { name: 'Play' }).click();
+await runPage.waitForFunction(() => document.querySelector('.dock')?.dataset.state === 'ended', null, { timeout: 15000 });
+runChecks.endsExactlyAtDuration = (await clockText()) === '0:30 / 0:30' && (await settingsEnabled());
+await runPage.locator('.dock').screenshot({ path: `${outDir}/13-dock-ended.png` });
+await runPage.getByRole('button', { name: 'Play' }).click();
+runChecks.playAfterEndContinuesFromZero = (await dockState()) === 'running' && (await clockText()).startsWith('0:0');
+await runPage.getByRole('button', { name: 'Restart run' }).click();
+runChecks.restartReturnsToReady = (await dockState()) === 'ready' && (await clockText()) === '0:00 / 0:30' && (await settingsEnabled());
+await runPage.getByRole('button', { name: '60 s' }).click();
+runChecks.durationChangeShown = (await clockText()) === '0:00 / 1:00';
+await runPage.reload();
+await runPage.waitForSelector('.status', { state: 'hidden', timeout: 30000 });
+runChecks.tipRememberedAfterReload = (await runPage.locator('.first-visit-tip').count()) === 0;
+await runPage.close();
+
 const webglRenderer = await page.evaluate(() => {
   const gl = document.querySelector('canvas').getContext('webgl2');
   const info = gl?.getExtension('WEBGL_debug_renderer_info');
@@ -162,6 +205,7 @@ const result = {
   retryFocused,
   resetDisabledDuringFailure,
   retryRecovered,
+  runChecks,
 };
 writeFileSync(`${outDir}/result.json`, JSON.stringify(result, null, 2));
 console.log(JSON.stringify(result, null, 2));
@@ -184,5 +228,6 @@ const ok =
   failureMessage === "Couldn't load models/vehicles/sedan.glb" &&
   retryFocused &&
   resetDisabledDuringFailure &&
-  retryRecovered;
+  retryRecovered &&
+  Object.values(runChecks).every(Boolean);
 process.exit(ok ? 0 : 1);

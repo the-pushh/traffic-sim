@@ -17,6 +17,7 @@
   --font-body: 14px;
   --font-meta: 12px;
   --font-title: 20px;
+  --dock-shadow: 0 8px 24px rgb(0 0 0 / 0.35);
   color-scheme: dark;
 }
 
@@ -34,33 +35,12 @@ body {
 }
 
 #app {
-  display: grid;
-  grid-template-rows: auto 1fr;
   height: 100%;
-}
-
-.toolbar {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-2) var(--space-4);
-  background: var(--color-surface);
-}
-
-.toolbar h1 {
-  margin: 0;
-  font-size: var(--font-title);
-  font-weight: 600;
-}
-
-.toolbar .hint {
-  color: var(--color-text-muted);
-  font-size: var(--font-meta);
 }
 
 .viewport {
   position: relative;
-  min-height: 0;
+  height: 100%;
   overflow: hidden;
 }
 
@@ -223,4 +203,196 @@ button.primary {
 
 .status.error p {
   color: var(--color-error);
+}
+
+/* Bottom stack: first-visit tip, scene pill, and the floating dock. */
+.bottom-stack {
+  position: absolute;
+  left: 50%;
+  bottom: var(--space-4);
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  max-width: calc(100% - 2 * var(--space-4));
+  pointer-events: none;
+}
+
+.bottom-stack > * {
+  pointer-events: auto;
+}
+
+.dock {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--color-surface) 94%, transparent);
+  box-shadow: var(--dock-shadow);
+}
+
+.dock-section {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.dock-divider {
+  align-self: stretch;
+  width: 1px;
+  background: var(--color-border);
+}
+
+.icon-button {
+  display: grid;
+  place-items: center;
+  width: var(--control-height);
+  padding: 0;
+}
+
+.icon-button svg {
+  width: 20px;
+  height: 20px;
+}
+
+.timeline {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 160px;
+}
+
+.clock {
+  font-variant-numeric: tabular-nums;
+  font-size: var(--font-meta);
+  color: var(--color-text-muted);
+}
+
+.progress {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--color-border);
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: var(--color-accent);
+  transform-origin: left;
+  transform: scaleX(0);
+}
+
+.dock-label {
+  font-size: var(--font-meta);
+  color: var(--color-text-muted);
+}
+
+.dock-label strong {
+  color: var(--color-text);
+  font-weight: 600;
+}
+
+.intensity {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 170px;
+}
+
+.intensity input {
+  width: 100%;
+  accent-color: var(--color-accent);
+}
+
+.duration {
+  display: flex;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.duration .segment {
+  border: 0;
+  border-radius: 0;
+  min-width: 52px;
+}
+
+.duration .segment + .segment {
+  border-left: 1px solid var(--color-border);
+}
+
+.duration .segment[aria-pressed='true'] {
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+  font-weight: 600;
+}
+
+/* Disabled settings during a run: greyed out. */
+.intensity input:disabled,
+.dock button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.intensity:has(input:disabled) .dock-label {
+  opacity: 0.5;
+}
+
+.scene-pill {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-surface) 94%, transparent);
+  box-shadow: var(--dock-shadow);
+}
+
+.scene-name {
+  padding: 0 var(--space-2);
+  font-weight: 600;
+}
+
+.pill-arrow {
+  height: 32px;
+  min-width: 32px;
+  padding: 0;
+  border-radius: 999px;
+  font-size: 18px;
+  line-height: 1;
+}
+
+.first-visit-tip {
+  position: relative;
+  max-width: 420px;
+  padding: var(--space-2) var(--space-5) var(--space-2) var(--space-3);
+  border: 1px solid var(--color-accent);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  box-shadow: var(--dock-shadow);
+}
+
+.first-visit-tip p {
+  margin: 0;
+}
+
+.first-visit-tip .tip-camera {
+  margin-top: var(--space-1);
+  font-size: var(--font-meta);
+  color: var(--color-text-muted);
+}
+
+.tip-close {
+  position: absolute;
+  top: var(--space-1);
+  right: var(--space-1);
+  height: 24px;
+  min-width: 24px;
+  padding: 0;
+  border: 0;
+  background: transparent;
 }

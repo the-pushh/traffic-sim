@@ -1,0 +1,106 @@
+import { describe, expect, it } from 'vitest';
+import { RunController } from './runController';
+
+describe('run controller', () => {
+  it('starts ready at 0:00 with the 30 s duration and settings unlocked', () => {
+    const run = new RunController();
+
+    expect(run.state).toBe('ready');
+    expect(run.clock).toBe(0);
+    expect(run.duration).toBe(30);
+    expect(run.settingsLocked).toBe(false);
+  });
+
+  it('advances in fixed 1/30 s steps and ends exactly at the chosen duration', () => {
+    const run = new RunController();
+    run.play();
+    expect(run.state).toBe('running');
+
+    let steps = run.tick(10);
+    expect(steps).toBe(300);
+    expect(run.clock).toBeCloseTo(10, 9);
+
+    steps += run.tick(25); // overshoots the 30 s run
+    expect(steps).toBe(900);
+    expect(run.clock).toBe(30);
+    expect(run.state).toBe('ended');
+    expect(run.tick(5)).toBe(0);
+  });
+
+  it('carries fractions of a step between frames', () => {
+    const run = new RunController();
+    run.play();
+    let steps = 0;
+    for (let frame = 0; frame < 60; frame++) steps += run.tick(1 / 60);
+    expect(steps).toBe(30);
+    expect(run.clock).toBeCloseTo(1, 9);
+  });
+
+  it('holds the clock while paused', () => {
+    const run = new RunController();
+    run.play();
+    run.tick(4);
+    run.pause();
+
+    expect(run.state).toBe('paused');
+    expect(run.tick(10)).toBe(0);
+    expect(run.clock).toBeCloseTo(4, 9);
+
+    run.play();
+    run.tick(1);
+    expect(run.clock).toBeCloseTo(5, 9);
+  });
+
+  it('locks intensity and duration for the whole run, playing or paused, and unlocks when it ends', () => {
+    const run = new RunController();
+    expect(run.setDuration(60)).toBe(true);
+    expect(run.setIntensity('high')).toBe(true);
+
+    run.play();
+    expect(run.settingsLocked).toBe(true);
+    expect(run.setDuration(90)).toBe(false);
+    run.pause();
+    expect(run.settingsLocked).toBe(true);
+    expect(run.setIntensity('congested')).toBe(false);
+    expect(run.duration).toBe(60);
+    expect(run.intensity).toBe('high');
+
+    run.play();
+    run.tick(61);
+    expect(run.state).toBe('ended');
+    expect(run.settingsLocked).toBe(false);
+    expect(run.setDuration(30)).toBe(true);
+  });
+
+  it('tells the simulation whether Play starts, resumes, or continues after the end', () => {
+    const run = new RunController();
+    expect(run.play()).toBe('start');
+    run.pause();
+    expect(run.play()).toBe('resume');
+    run.tick(30);
+    expect(run.state).toBe('ended');
+
+    expect(run.play()).toBe('continue');
+    expect(run.state).toBe('running');
+    expect(run.clock).toBe(0);
+    expect(run.tick(30)).toBe(900);
+    expect(run.state).toBe('ended');
+  });
+
+  it('restarts back to ready at 0:00 from any state, unlocking the settings', () => {
+    for (const reach of ['running', 'paused', 'ended'] as const) {
+      const run = new RunController();
+      run.play();
+      run.tick(reach === 'ended' ? 30 : 3);
+      if (reach === 'paused') run.pause();
+      expect(run.state).toBe(reach);
+
+      run.restart();
+
+      expect(run.state).toBe('ready');
+      expect(run.clock).toBe(0);
+      expect(run.settingsLocked).toBe(false);
+      expect(run.play()).toBe('start');
+    }
+  });
+});
