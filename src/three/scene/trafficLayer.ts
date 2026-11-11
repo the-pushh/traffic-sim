@@ -31,7 +31,8 @@ export function createTrafficLayer(graph: LaneGraph, models: Map<string, Object3
     const size = modelSize.get(name)!;
     const lengthScale = ((v.type.length / METRES_PER_TILE) * TILE_SIZE) / size.z;
     const widthScale = Math.min(lengthScale, (MAX_WIDTH_OF_LANE * LANE_WIDTH_WORLD) / size.x);
-    object.scale.set(widthScale, widthScale, lengthScale);
+    // Height halfway between the two, so narrowed models don't look flattened.
+    object.scale.set(widthScale, (widthScale + lengthScale) / 2, lengthScale);
     object.userData.vehicleId = v.id;
     object.traverse((o) => {
       if ((o as Mesh).isMesh) {
@@ -55,7 +56,15 @@ export function createTrafficLayer(graph: LaneGraph, models: Map<string, Object3
     return pointAlongLane(graph.lanes[v.route[laneIndex]], distance);
   }
 
+  let shown: TrafficSimulation | null = null;
+
   function sync(simulation: TrafficSimulation) {
+    // A rebuilt simulation (Restart, new intensity) reuses vehicle ids: start drawing afresh.
+    if (simulation !== shown) {
+      for (const object of drawn.values()) group.remove(object);
+      drawn.clear();
+      shown = simulation;
+    }
     const present = new Set<number>();
     for (const v of simulation.allVehicles()) {
       present.add(v.id);

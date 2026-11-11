@@ -136,7 +136,7 @@ const settingsDisabled = () =>
 const settingsEnabled = () =>
   runPage.evaluate(() => [document.querySelector('.intensity input'), ...document.querySelectorAll('[data-duration]')].every((c) => !c.disabled));
 const runChecks = {};
-let result_hoverTag = null;
+let hoverTag = null;
 runChecks.noHeaderAndViewFillsWindow = await runPage.evaluate(() => {
   const view = document.querySelector('.viewport').getBoundingClientRect();
   return !document.querySelector('header') && view.top === 0 && view.height === innerHeight && view.width === innerWidth;
@@ -198,8 +198,8 @@ if (isDevServer) {
     await runPage.mouse.move(target.x, target.y);
     await runPage.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
     const tag = await runPage.locator('.vehicle-tooltip').textContent();
-    runChecks.hoverTagShowsTypeProfileReason = /^[A-Z][a-z ]+ · (Steady|Cautious|Assertive|Cooperative|Impatient) · .+$/.test(tag ?? '');
-    result_hoverTag = tag;
+    runChecks.hoverTagShowsTypeProfileReason = /^[A-Z][A-Za-z ]+ · (Steady|Cautious|Assertive|Cooperative|Impatient) · .+$/.test(tag ?? '');
+    hoverTag = tag;
   } else runChecks.hoverTagShowsTypeProfileReason = false;
   await runPage.screenshot({ path: `${outDir}/14-traffic-paused.png` });
   await runPage.getByRole('button', { name: 'Restart run' }).click();
@@ -255,7 +255,7 @@ const result = {
   resetDisabledDuringFailure,
   retryRecovered,
   runChecks,
-  hoverTag: result_hoverTag,
+  hoverTag: hoverTag,
 };
 writeFileSync(`${outDir}/result.json`, JSON.stringify(result, null, 2));
 console.log(JSON.stringify(result, null, 2));

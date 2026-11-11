@@ -32,9 +32,10 @@ import { buildLaneGraph, type LaneGraph, type Point3, portPose } from '../../sim
 import { rightOf } from '../../simulation/network/geometry';
 import { PIECES } from '../../simulation/network/pieces';
 import { type SceneDefinition, type SignalTiming, validateScene } from '../../simulation/network/scene';
-import { DEFAULT_SIGNAL_TIMING } from '../../simulation/traffic/signals';
+import { aspectAt, DEFAULT_SIGNAL_TIMING } from '../../simulation/traffic/signals';
 import { createAssetLoader } from '../loaders/assetLoader';
 import { CONTROL_MODELS } from './controlModels';
+import { MISMATCH_COLOUR, SIGNAL_LAMP_COLOURS, SIGNAL_LAMP_HEIGHTS } from './palette';
 
 /** A scene definition that can't be loaded, with each problem in plain language. */
 export class SceneDefinitionError extends Error {
@@ -46,16 +47,11 @@ export class SceneDefinitionError extends Error {
   }
 }
 
-/** The lamp above one traffic light and the cycle it follows. */
-export interface SignalLamp {
-  timing: SignalTiming;
-  material: MeshBasicMaterial;
-}
-
 export interface SceneView {
   scene: Scene;
   graph: LaneGraph;
-  signalLamps: SignalLamp[];
+  /** Show every traffic light's aspect at simulation time `t`. */
+  updateSignals(t: number): void;
   /** World-space bounds of the board, for camera framing. */
   bounds: Box3;
 }
@@ -69,7 +65,6 @@ const LANE_COLOR = '#dfe9ff';
 const GATEWAY_COLOR = '#2f6fd6';
 const OPEN_END_COLOR = '#f2c14e';
 const ACCESS_COLOR = '#e07a5f';
-const MISMATCH_COLOR = '#d64545';
 
 const world = (p: Point3, lift = 0) => {
   const [x, y, z] = boardToWorld([p[0], p[1] + ROAD_SURFACE, p[2]]);
@@ -109,7 +104,7 @@ export async function createSceneView(definition: SceneDefinition, baseUrl: stri
 
   const controls = new Group();
   controls.name = 'traffic-controls';
-  const signalLamps: SignalLamp[] = [];
+  const signalLamps: { timing: SignalTiming; lamp: Mesh; base: Vector3; material: MeshBasicMaterial }[] = [];
   const lampGeometry = new SphereGeometry(0.22, 16, 12);
   for (const control of definition.controls) {
     const { centre, facing } = portPose(definition.pieces[control.piece], control.port);
@@ -121,12 +116,11 @@ export async function createSceneView(definition: SceneDefinition, baseUrl: stri
     sign.rotation.y = Math.atan2(facing[0], facing[1]);
     controls.add(sign);
     if (control.type === 'signal') {
-      // A lamp above the light shows its current aspect (red, amber, green).
-      const material = new MeshBasicMaterial({ color: '#d64545' });
+      // A lamp on the light shows its aspect by colour and by position (red top, amber middle, green bottom).
+      const material = new MeshBasicMaterial({ color: SIGNAL_LAMP_COLOURS.red });
       const lamp = new Mesh(lampGeometry, material);
-      lamp.position.copy(sign.position).add(new Vector3(0, 2.25, 0));
       controls.add(lamp);
-      signalLamps.push({ timing: control.timing ?? DEFAULT_SIGNAL_TIMING, material });
+      signalLamps.push({ timing: control.timing ?? DEFAULT_SIGNAL_TIMING, lamp, base: sign.position.clone(), material });
     }
   }
   setShadows(controls, { cast: true });
@@ -134,7 +128,15 @@ export async function createSceneView(definition: SceneDefinition, baseUrl: stri
 
   scene.add(createLaneOverlay(graph));
 
-  return { scene, graph, signalLamps, bounds: new Box3().setFromObject(board) };
+  const updateSignals = (t: number) => {
+    for (const { timing, lamp, base, material } of signalLamps) {
+      const aspect = aspectAt(timing, t);
+      material.color.set(SIGNAL_LAMP_COLOURS[aspect]);
+      lamp.position.copy(base).add(new Vector3(0, SIGNAL_LAMP_HEIGHTS[aspect], 0));
+    }
+  };
+  updateSignals(0);
+  return { scene, graph, updateSignals, bounds: new Box3().setFromObject(board) };
 }
 
 /** Lane centrelines with direction arrows, labelled gateways, open road ends, and driveways. */
@@ -193,7 +195,7 @@ function createLaneOverlay(graph: LaneGraph) {
   }
   // Road ends that meet but can't connect.
   for (const mismatch of graph.mismatches) {
-    const warning = textSprite('!', MISMATCH_COLOR);
+    const warning = textSprite('!', MISMATCH_COLOUR);
     warning.position.copy(world([mismatch.at[0], mismatch.level, mismatch.at[1]], 1.4));
     overlay.add(warning);
   }

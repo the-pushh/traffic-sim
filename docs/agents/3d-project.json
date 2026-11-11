@@ -40,7 +40,8 @@
     "forwardAxis": "+Z for vehicles (Car Kit front wheels at +Z). City Kit road-straight runs along X in source; rotated 90\u00b0 about Y to run along Z.",
     "handedness": "right-handed (glTF / Three.js)",
     "originPolicy": "Car Kit: origin at ground centre of vehicle. City Kit Roads: origin at tile centre, surface at y=0.02 (source units). App keeps source origins and places by transform. Scene ground: a 64 \u00d7 64 unit square board (16 \u00d7 16 road tiles), rounded corners (r = 4), 0.4 thick + 0.2 bevel above and below (0.8 visible edge), centred on the origin with its top face at y = 0; roads and vehicles sit on that top face.",
-    "conversionPolicy": "Inspect source units and axes, confirm the application's conventions, and record conversions before applying them."
+    "conversionPolicy": "Inspect source units and axes, confirm the application's conventions, and record conversions before applying them.",
+    "simulationUnits": "Traffic simulation in metres and seconds; 1 tile = 8.75 m (lane 0.4 tile = 3.5 m)"
   },
   "assets": {
     "archives": {
@@ -85,6 +86,13 @@
         "appScale": 4,
         "conversion": "none (copied)",
         "totalBytes": "about 456 KB"
+      },
+      "vehicles": {
+        "source": "assets/3d/source/kenney_car-kit/Models/GLB format/*.glb (18 models for 8 vehicle types)",
+        "served": "public/models/vehicles/*.glb sharing Textures/colormap.png",
+        "totalBytes": "about 3.5 MB",
+        "conversion": "none (copied)",
+        "scale": "type length in metres / 8.75 m per tile \u00d7 4 units per tile; width capped at 75% of a lane"
       }
     },
     "license": "CC0 1.0 (all three Kenney packs)"
@@ -237,6 +245,14 @@
         "command": "node scripts/verify-browser.mjs https://traffic-sim-one.vercel.app/",
         "browser": "Google Chrome 157.0.8103.50 on macOS, headless and headed (visible window), 1440x900; WebGL via ANGLE Metal on Apple M1 Pro",
         "result": "pass on production: all camera, run and failure-state checks; no console errors; 22 assets HTTP 200.",
+        "previews": "artifacts/3d/previews/ (git-ignored)"
+      },
+      {
+        "date": "2026-11-12",
+        "check": "T3 driving core (#5)",
+        "command": "npm test; npm run verify:browser and npm run verify:browser:headed (dev)",
+        "browser": "Google Chrome 157.0.8103.50 on macOS, headless and headed (visible window), 1440x900; WebGL via ANGLE Metal on Apple M1 Pro",
+        "result": "pass: traffic enters both ends, queues at the red light, hover tag reads 'Type \u00b7 Profile \u00b7 Reason' (e.g. 'SUV \u00b7 Steady \u00b7 Red light'); close-ups at Congested inspected (queues at the stop lines, lamps at aspect positions, vehicles within lanes); all earlier checks pass; no console errors.",
         "previews": "artifacts/3d/previews/ (git-ignored)"
       }
     ]

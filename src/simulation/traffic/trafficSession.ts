@@ -1,10 +1,10 @@
-import type { LaneGraph } from '../simulation/network/buildLaneGraph';
-import type { SceneDefinition } from '../simulation/network/scene';
-import type { RunController } from '../simulation/runController';
-import { TRIPS_PER_MINUTE } from '../simulation/traffic/intensity';
-import { resolveSignals } from '../simulation/traffic/signals';
-import { TrafficSimulation } from '../simulation/traffic/trafficSimulation';
-import { STEPS_PER_SECOND } from '../simulation/runController';
+import type { LaneGraph } from '../network/buildLaneGraph';
+import type { SceneDefinition } from '../network/scene';
+import type { RunController } from '../runController';
+import { TRIPS_PER_MINUTE } from './intensity';
+import { resolveSignals } from './signals';
+import { TrafficSimulation } from './trafficSimulation';
+import { STEPS_PER_SECOND } from '../runController';
 
 /** Seconds simulated off-screen so a scene opens with traffic already on the roads. */
 const WARM_UP_SECONDS = 25;
@@ -47,5 +47,7 @@ export class TrafficSession {
       demand: { tripsPerMinute: TRIPS_PER_MINUTE[this.run.intensity], entries: this.scene.demand.gateways },
     });
     for (let i = 0; i < WARM_UP_SECONDS * STEPS_PER_SECOND; i++) this.simulation.step(STEP);
+    // Measures cover the run itself, not the warm-up.
+    this.simulation.resetCounts();
   }
 }

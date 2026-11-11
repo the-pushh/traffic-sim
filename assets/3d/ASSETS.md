@@ -111,3 +111,7 @@ Ports were measured from the GLB geometry: an opening is an edge with kerbs at b
 - **Roundabout:** circulating carriageway from radius 0.45 to 1.15 tiles — one lane, centre line at 0.8.
 
 **Road texture:** `roadTexture_01.png` was used for a separate textured strip in the first starter scene. Scenes are now built entirely from City Kit pieces (which carry their own `colormap.png`), so the texture is no longer served; the original stays in `assets/3d/source/kenney_road-textures/`.
+
+## Vehicle models served (T3, 2026-11-12)
+
+All 18 Car Kit models used by the eight vehicle types are copied unchanged to `public/models/vehicles/` (about 3.5 MB in total, 170–280 KB each), sharing `Textures/colormap.png`: `hatchback-sports`, `sedan-sports`, `sedan`, `taxi`, `police`, `suv`, `suv-luxury`, `truck`, `truck-flat`, `van`, `ambulance`, `delivery`, `delivery-flat`, `garbage-truck`, `firetruck`, `tractor`, `tractor-police`, `tractor-shovel`. Each is drawn at its type's real length (1 tile = 8.75 m); width is capped at 75% of a lane and height is scaled between the two, because the stylised models are wider than real vehicles.

@@ -1,3 +1,13 @@
+export type Stream = 'vehicles' | 'entries' | 'trips';
+const STREAM_SALT: Record<Stream, number> = { vehicles: 0x1b873593, entries: 0x85ebca6b, trips: 0xc2b2ae35 };
+
+/** 32-bit integer hash (murmur3 finaliser): spreads nearby inputs far apart. */
+function mix(x: number) {
+  x = Math.imul(x ^ (x >>> 16), 0x85ebca6b);
+  x = Math.imul(x ^ (x >>> 13), 0xc2b2ae35);
+  return (x ^ (x >>> 16)) >>> 0;
+}
+
 /** Small seeded random-number generator (mulberry32): the same seed gives the same sequence. */
 export class Random {
   private state: number;
@@ -33,8 +43,12 @@ export class Random {
     return entries[entries.length - 1][0];
   }
 
-  /** An independent generator derived from this one and a label. */
-  fork(label: number) {
-    return new Random(Math.imul(this.state ^ 0x9e3779b9, 2654435761 + label * 97) >>> 0);
+  /**
+   * An independent generator for item `index` of a named `stream` (e.g. trips or entries),
+   * derived from this generator's seed without consuming its sequence. Different streams
+   * never share seeds by construction.
+   */
+  fork(stream: Stream, index: number) {
+    return new Random(mix(mix(this.state ^ STREAM_SALT[stream]) ^ mix(index + 1)));
   }
 }

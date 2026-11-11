@@ -16,6 +16,18 @@ const LOOKAHEAD = 250;
 const STOP_LINE_MARGIN = 0.5;
 /** A car this close behind its leader (in its own preferred following distance) is following it. */
 const FOLLOWING_RANGE = 2.5;
+/** Nothing may ever get closer than this to the vehicle ahead, metres. */
+const CONTACT_MARGIN = 0.1;
+
+/** Why a vehicle is doing what it does, as shown on hover. */
+export type Reason =
+  | 'Red light'
+  | 'Amber light'
+  | 'Queued behind the car ahead'
+  | 'Braking for the car ahead'
+  | 'Following the car ahead'
+  | 'Pulling away'
+  | 'Cruising';
 
 export interface VehicleState {
   id: number;
@@ -31,7 +43,9 @@ export interface VehicleState {
   acceleration: number;
   /** Speed this driver wants on the current road, m/s. */
   preferredSpeed: number;
-  reason: string;
+  reason: Reason;
+  /** Lane of a stop line the driver decided to go through on amber. */
+  committedThrough: number | null;
 }
 
 /** Trips arriving at the board's entries. Rates are per entry with weight 1. */
@@ -65,11 +79,13 @@ export interface SimulationOptions {
   demand?: Demand;
 }
 
+/** A trip waiting at an entry; its vehicle and driver are fixed when it arrives. */
 interface PendingTrip {
   type: VehicleTypeId;
-  profile: ProfileId;
+  driver: Driver;
   to: string;
-  random: Random;
+  /** False for trips that arrived before the counts were last reset (e.g. during warm-up). */
+  counted: boolean;
 }
 
 interface Entry {
@@ -96,7 +112,16 @@ interface Obstacle {
   /** Distance from this vehicle's front bumper to the obstacle's rear, metres. */
   gap: number;
   speed: number;
-  reason: 'car' | 'signal';
+  kind: 'car' | 'red' | 'amber';
+  /** The vehicle ahead, for cars. */
+  vehicle?: VehicleState;
+}
+
+/** Where a vehicle's rear bumper is: a lane of its route and the distance along it. */
+interface Rear {
+  vehicle: VehicleState;
+  lane: number;
+  position: number;
 }
 
 /**
@@ -109,7 +134,7 @@ export class TrafficSimulation {
   private readonly random: Random;
   private nextId = 0;
   private readonly laneLength: number[];
-  private readonly signals: SignalControl[];
+  private readonly signalOnLane = new Map<number, SignalControl>();
   /** Simulated seconds since the simulation started. */
   time = 0;
   private readonly entries: Entry[];
@@ -120,8 +145,10 @@ export class TrafficSimulation {
   private finished = 0;
   private due = 0;
   /** Seconds each finished trip took from entering the board to leaving it. */
-  readonly travelTimes: number[] = [];
+  travelTimes: number[] = [];
   private readonly enteredAt = new Map<number, number>();
+  /** Rear bumpers by lane, rebuilt each step. */
+  private rearsByLane = new Map<number, Rear[]>();
 
   constructor(
     private readonly graph: LaneGraph,
@@ -129,20 +156,31 @@ export class TrafficSimulation {
   ) {
     this.random = new Random(options.seed);
     this.laneLength = graph.lanes.map((l) => l.length * METRES_PER_TILE);
-    this.signals = options.signals ?? [];
+    for (const signal of options.signals ?? []) for (const lane of signal.lanes) this.signalOnLane.set(lane, signal);
     this.demand = options.demand;
     this.entries = Object.entries(options.demand?.entries ?? {})
       .filter(([, weight]) => weight > 0)
       .map(([label, weight], i) => {
-        const arrivals = this.random.fork(1000 + i);
-        const ratePerSecond = ((options.demand!.tripsPerMinute * weight) / 60) || 0;
+        const arrivals = this.random.fork('entries', i);
+        const ratePerSecond = (options.demand!.tripsPerMinute * weight) / 60 || 0;
         return { label, ratePerSecond, arrivals, nextArrival: ratePerSecond > 0 ? arrivals.exponential(ratePerSecond) : Infinity, waiting: [] };
       });
   }
 
   get counts(): TripCounts {
-    const waiting = this.entries.reduce((n, e) => n + e.waiting.length, 0);
+    const waiting = this.entries.reduce((n, e) => n + e.waiting.filter((t) => t.counted).length, 0);
     return { due: this.due, entered: this.entered, finished: this.finished, waiting };
+  }
+
+  /**
+   * Start counting afresh, e.g. after the warm-up. Trips already on the board or
+   * waiting outside carry on as before but aren't counted in the new totals.
+   */
+  resetCounts() {
+    this.due = this.entered = this.finished = 0;
+    this.travelTimes = [];
+    this.enteredAt.clear();
+    for (const entry of this.entries) for (const trip of entry.waiting) trip.counted = false;
   }
 
   allVehicles(): VehicleState[] {
@@ -152,9 +190,7 @@ export class TrafficSimulation {
   /** Distance travelled along the route so far, front bumper, metres. */
   routeProgress(id: number): number {
     const v = this.vehicle(id);
-    let distance = v.position;
-    for (let i = 0; i < v.routeIndex; i++) distance += this.laneLength[v.route[i]];
-    return distance;
+    return this.lengthOf(v.route, 0, v.routeIndex) + v.position;
   }
 
   /** Whether the vehicle is still on the board (it leaves at its exit). */
@@ -168,26 +204,12 @@ export class TrafficSimulation {
     return v;
   }
 
-  addVehicle({ type, profile, from, to, position, speed = 0 }: NewVehicle, random = this.random.fork(this.nextId)): number {
-    const route = this.route(from, to);
-    const driver = sampleDriver(profile, random);
-    const vehicleType = VEHICLE_TYPES[type];
-    const id = this.nextId++;
-    const v: VehicleState = {
-      id,
-      type: vehicleType,
-      driver,
-      route,
-      routeIndex: 0,
-      position: position ?? vehicleType.length,
-      speed,
-      acceleration: 0,
-      preferredSpeed: Math.min(vehicleType.maxSpeed, DEFAULT_SPEED_LIMIT * driver.speedFactor),
-      reason: speed > 0 ? 'Cruising' : 'Pulling away',
-    };
-    this.advanceAlongRoute(v);
-    this.vehicles.set(id, v);
-    return id;
+  /** Place a vehicle directly (tests and set-ups); demand-driven trips enter through `step`. */
+  addVehicle({ type, profile, from, to, position, speed = 0 }: NewVehicle): number {
+    const route = this.cachedRoute(from, to);
+    if (!route) throw new Error(`No route from ${from} to ${to}`);
+    const driver = sampleDriver(profile, this.random.fork('vehicles', this.nextId));
+    return this.place(VEHICLE_TYPES[type], driver, route, position ?? VEHICLE_TYPES[type].length, speed);
   }
 
   /**
@@ -215,24 +237,62 @@ export class TrafficSimulation {
   }
 
   step(dt: number) {
+    this.indexRears();
     this.arriveAndEnter();
     const all = [...this.vehicles.values()];
     // Decide every vehicle's acceleration from the same snapshot, then move them all.
+    const leaders = new Map<VehicleState, Obstacle | null>();
     for (const v of all) {
-      const car = this.nearestAhead(v, all);
+      const car = this.leaderAhead(v.route, v.routeIndex, v.position, v);
+      leaders.set(v, car);
       const signal = this.signalAhead(v);
-      const [carAccel, signalAccel] = [this.idmAcceleration(v, car), signal ? this.idmAcceleration(v, signal) : Infinity];
-      const binding = signalAccel < carAccel ? signal : car;
+      const carAccel = this.idmAcceleration(v, car);
+      const signalAccel = signal ? this.idmAcceleration(v, signal) : Infinity;
       v.acceleration = Math.min(carAccel, signalAccel);
-      v.reason = describe(v, binding);
+      v.reason = describe(v, signalAccel < carAccel ? signal : car);
     }
     this.time += dt;
+    const moves = new Map<VehicleState, number>();
     for (const v of all) {
       v.speed = Math.max(0, v.speed + v.acceleration * dt);
-      v.position += v.speed * dt;
+      moves.set(v, v.speed * dt);
+    }
+    // Safety net: no vehicle may move further than the room the vehicle ahead leaves it.
+    for (const v of all) {
+      const leader = leaders.get(v);
+      if (!leader?.vehicle) continue;
+      const room = leader.gap + (moves.get(leader.vehicle) ?? 0) - CONTACT_MARGIN;
+      if (moves.get(v)! > room) {
+        moves.set(v, Math.max(0, room));
+        v.speed = Math.min(v.speed, leader.vehicle.speed);
+      }
+    }
+    for (const v of all) {
+      v.position += moves.get(v)!;
       this.advanceAlongRoute(v);
       if (v.routeIndex === v.route.length - 1 && v.position >= this.laneLength[v.route[v.routeIndex]]) this.finish(v);
     }
+  }
+
+  private place(type: VehicleType, driver: Driver, route: number[], position: number, speed: number) {
+    const id = this.nextId++;
+    const v: VehicleState = {
+      id,
+      type,
+      driver,
+      route,
+      routeIndex: 0,
+      position,
+      speed,
+      acceleration: 0,
+      preferredSpeed: Math.min(type.maxSpeed, DEFAULT_SPEED_LIMIT * driver.speedFactor),
+      reason: speed > 0 ? 'Cruising' : 'Pulling away',
+      committedThrough: null,
+    };
+    this.advanceAlongRoute(v);
+    this.vehicles.set(id, v);
+    this.indexRear(v);
+    return id;
   }
 
   private finish(v: VehicleState) {
@@ -244,7 +304,11 @@ export class TrafficSimulation {
     }
   }
 
-  /** New trips arrive at each entry on their seeded schedule; the first waiting trip enters when there's room. */
+  /**
+   * New trips arrive at each entry on their seeded schedule. The first waiting trip
+   * enters once its driver's minimum gap fits behind whatever is ahead, at a speed
+   * that keeps their preferred following distance.
+   */
   private arriveAndEnter() {
     for (const entry of this.entries) {
       while (this.time >= entry.nextArrival) {
@@ -256,58 +320,50 @@ export class TrafficSimulation {
         entry.nextArrival += entry.arrivals.exponential(entry.ratePerSecond);
       }
       const trip = entry.waiting[0];
-      if (trip && this.roomToEnter(entry.label, trip)) {
-        entry.waiting.shift();
-        const id = this.addVehicle({ type: trip.type, profile: trip.profile, from: entry.label, to: trip.to, speed: 0 }, trip.random);
-        const v = this.vehicle(id);
-        const ahead = this.nearestAhead(v, this.allVehicles());
-        v.speed = Math.min(v.preferredSpeed, ahead && ahead.gap < 40 ? ahead.speed : v.preferredSpeed * 0.7);
+      if (!trip) continue;
+      const route = this.cachedRoute(entry.label, trip.to)!;
+      const type = VEHICLE_TYPES[trip.type];
+      // Look from where the new vehicle's rear would be (the board edge), so anything
+      // overlapping its footprint counts; then measure from its front.
+      const fromEdge = this.leaderAhead(route, 0, 0, null);
+      const ahead = fromEdge && { ...fromEdge, gap: fromEdge.gap - type.length };
+      const preferred = Math.min(type.maxSpeed, DEFAULT_SPEED_LIMIT * trip.driver.speedFactor);
+      let speed = preferred * 0.7;
+      if (ahead) {
+        if (ahead.gap < trip.driver.minGap + 0.5) continue; // entrance full: the trip keeps waiting
+        speed = Math.min(speed, (ahead.gap - trip.driver.minGap) / trip.driver.headway, ahead.speed + 1);
+      }
+      entry.waiting.shift();
+      const id = this.place(type, trip.driver, route, type.length, Math.max(0, speed));
+      if (trip.counted) {
         this.enteredAt.set(id, this.time);
         this.entered++;
       }
     }
   }
 
-  /** Draw a trip's destination, vehicle and driver profile from its own seeded generator. */
+  /** Draw a trip's destination, vehicle and driver from its own seeded generator. */
   private newTrip(from: string): PendingTrip | null {
-    const random = this.random.fork(100000 + this.tripCount++);
-    const destinations =
-      this.demand?.destinations ??
-      Object.fromEntries(this.graph.gateways.filter((g) => g.label !== from).map((g) => [g.label, 1]));
+    const random = this.random.fork('trips', this.tripCount++);
+    const destinations = this.demand?.destinations ?? Object.fromEntries(this.graph.gateways.filter((g) => g.label !== from).map((g) => [g.label, 1]));
     const reachable = Object.fromEntries(Object.entries(destinations).filter(([to, w]) => w > 0 && this.cachedRoute(from, to)));
     if (!Object.keys(reachable).length) return null;
-    return {
-      to: random.weighted(reachable),
-      type: random.weighted({ ...DEFAULT_VEHICLE_MIX, ...this.demand?.vehicleMix } as Record<VehicleTypeId, number>),
-      profile: random.weighted({ ...DEFAULT_PROFILE_MIX, ...this.demand?.profileMix } as Record<ProfileId, number>),
-      random,
-    };
-  }
-
-  /** Whether the entry lane has room for this vehicle plus a minimum gap behind whatever is ahead. */
-  private roomToEnter(from: string, trip: PendingTrip): boolean {
-    const route = this.cachedRoute(from, trip.to)!;
-    const needed = VEHICLE_TYPES[trip.type].length + 3;
-    for (const v of this.vehicles.values()) {
-      const index = route.indexOf(v.route[v.routeIndex]);
-      if (index < 0) continue;
-      let front = v.position;
-      for (let i = 0; i < index; i++) front += this.laneLength[route[i]];
-      if (front - v.type.length < needed) return false;
-    }
-    return true;
+    const to = random.weighted(reachable);
+    const type = random.weighted({ ...DEFAULT_VEHICLE_MIX, ...this.demand?.vehicleMix } as Record<VehicleTypeId, number>);
+    const profile = random.weighted({ ...DEFAULT_PROFILE_MIX, ...this.demand?.profileMix } as Record<ProfileId, number>);
+    return { to, type, driver: sampleDriver(profile, random), counted: true };
   }
 
   private cachedRoute(from: string, to: string): number[] | null {
     const key = `${from}>${to}`;
-    if (!this.routes.has(key)) {
-      try {
-        this.routes.set(key, this.route(from, to));
-      } catch {
-        this.routes.set(key, null);
-      }
-    }
+    if (!this.routes.has(key)) this.routes.set(key, this.findRoute(from, to));
     return this.routes.get(key)!;
+  }
+
+  private lengthOf(route: number[], from: number, to: number) {
+    let total = 0;
+    for (let i = from; i < to; i++) total += this.laneLength[route[i]];
+    return total;
   }
 
   private advanceAlongRoute(v: VehicleState) {
@@ -317,12 +373,53 @@ export class TrafficSimulation {
     }
   }
 
+  /** Index every vehicle by the lane its rear bumper is on, so leaders are found per lane. */
+  private indexRears() {
+    this.rearsByLane = new Map();
+    for (const v of this.vehicles.values()) this.indexRear(v);
+  }
+
+  private indexRear(v: VehicleState) {
+    let index = v.routeIndex;
+    let position = v.position - v.type.length;
+    while (position < 0 && index > 0) {
+      index--;
+      position += this.laneLength[v.route[index]];
+    }
+    const rear = { vehicle: v, lane: v.route[index], position };
+    const list = this.rearsByLane.get(rear.lane);
+    if (list) list.push(rear);
+    else this.rearsByLane.set(rear.lane, [rear]);
+  }
+
+  /**
+   * The nearest vehicle whose rear bumper is ahead on this route, from a front-bumper
+   * position on `route[index]`. Rear-based, so a vehicle that has turned onto another
+   * lane still counts while its rear is on this route. `self` is skipped.
+   */
+  private leaderAhead(route: number[], index: number, position: number, self: VehicleState | null): Obstacle | null {
+    let travelled = -position;
+    for (let i = index; i < route.length && travelled <= LOOKAHEAD; i++) {
+      let best: Obstacle | null = null;
+      for (const rear of this.rearsByLane.get(route[i]) ?? []) {
+        if (rear.vehicle === self) continue;
+        // On the starting lane, vehicles whose front is behind ours don't count; one level with us does.
+        if (i === index && rear.position + rear.vehicle.type.length < position) continue;
+        const gap = travelled + rear.position;
+        if (!best || gap < best.gap) best = { gap, speed: rear.vehicle.speed, kind: 'car', vehicle: rear.vehicle };
+      }
+      if (best) return best;
+      travelled += this.laneLength[route[i]];
+    }
+    return null;
+  }
+
   /** The next signal-controlled lane on the route ahead, and how far away its stop line is. */
-  private nextStopLine(v: VehicleState): { signal: SignalControl; distance: number } | null {
+  private nextStopLine(v: VehicleState): { signal: SignalControl; lane: number; distance: number } | null {
     let distance = this.laneLength[v.route[v.routeIndex]] - v.position;
     for (let i = v.routeIndex + 1; i < v.route.length && distance <= LOOKAHEAD; i++) {
-      const signal = this.signals.find((s) => s.lanes.has(v.route[i]));
-      if (signal) return { signal, distance };
+      const signal = this.signalOnLane.get(v.route[i]);
+      if (signal) return { signal, lane: v.route[i], distance };
       distance += this.laneLength[v.route[i]];
     }
     return null;
@@ -330,29 +427,25 @@ export class TrafficSimulation {
 
   /**
    * A red light, or an amber the driver can stop for comfortably, is a standing
-   * obstacle just short of the stop line.
+   * obstacle just short of the stop line. A driver who chose to go on amber is
+   * committed and keeps going.
    */
   private signalAhead(v: VehicleState): Obstacle | null {
     const next = this.nextStopLine(v);
-    if (!next) return null;
-    const aspect = aspectAt(next.signal.timing, this.time);
-    const canStop = next.distance > (v.speed * v.speed) / (2 * v.driver.comfortBraking);
-    if (aspect === 'green' || (aspect === 'amber' && !canStop)) return null;
-    // The model keeps the driver's minimum gap to an obstacle; drivers pull up to the line itself.
-    return { gap: next.distance - STOP_LINE_MARGIN + v.driver.minGap, speed: 0, reason: 'signal' };
-  }
-
-  /** The closest vehicle ahead on this vehicle's route, within its lookahead. */
-  private nearestAhead(v: VehicleState, all: VehicleState[]): Obstacle | null {
-    let best: Obstacle | null = null;
-    for (const other of all) {
-      if (other === v) continue;
-      const distance = this.distanceAlongRoute(v.id, other.id);
-      if (distance > LOOKAHEAD) continue;
-      const gap = distance - other.type.length;
-      if (!best || gap < best.gap) best = { gap, speed: other.speed, reason: 'car' };
+    if (!next) {
+      v.committedThrough = null;
+      return null;
     }
-    return best;
+    if (v.committedThrough === next.lane) return null;
+    const aspect = aspectAt(next.signal.timing, this.time);
+    if (aspect === 'green') return null;
+    const canStop = next.distance > (v.speed * v.speed) / (2 * v.driver.comfortBraking);
+    if (aspect === 'amber' && !canStop) {
+      v.committedThrough = next.lane;
+      return null;
+    }
+    // The model keeps the driver's minimum gap to an obstacle; drivers pull up to the line itself.
+    return { gap: next.distance - STOP_LINE_MARGIN + v.driver.minGap, speed: 0, kind: aspect === 'amber' ? 'amber' : 'red' };
   }
 
   /**
@@ -372,8 +465,8 @@ export class TrafficSimulation {
     return Math.max(-v.type.maxBraking, Math.min(v.type.maxAcceleration, accel));
   }
 
-  /** Shortest route by lane count from a gateway's entry lanes to another gateway's exit lanes. */
-  private route(fromLabel: string, toLabel: string): number[] {
+  /** Shortest route by lane count from a gateway's entry lanes to another gateway's exit lanes, or null. */
+  private findRoute(fromLabel: string, toLabel: string): number[] | null {
     const from = this.graph.gateways.find((g) => g.label === fromLabel);
     const to = this.graph.gateways.find((g) => g.label === toLabel);
     if (!from || !to) throw new Error(`Unknown gateway ${!from ? fromLabel : toLabel}`);
@@ -395,13 +488,13 @@ export class TrafficSimulation {
         }
       }
     }
-    throw new Error(`No route from ${fromLabel} to ${toLabel}`);
+    return null;
   }
 }
 
 /** Why the vehicle is doing what it's doing, in the words shown on hover. */
-function describe(v: VehicleState, ahead: Obstacle | null): string {
-  if (ahead?.reason === 'signal' && (v.acceleration < 0 || v.speed < 0.3)) return 'Red light';
+function describe(v: VehicleState, ahead: Obstacle | null): Reason {
+  if (ahead && ahead.kind !== 'car' && (v.acceleration < 0 || v.speed < 0.3)) return ahead.kind === 'amber' ? 'Amber light' : 'Red light';
   const close = ahead !== null && ahead.gap < v.driver.minGap + FOLLOWING_RANGE * v.driver.headway * Math.max(v.speed, 1);
   if (close && v.speed < 0.3 && ahead.speed < 0.3) return 'Queued behind the car ahead';
   if (close && v.acceleration < -1) return 'Braking for the car ahead';

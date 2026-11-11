@@ -1,4 +1,4 @@
-import { PCFSoftShadowMap, PerspectiveCamera, Timer, Vector3, WebGLRenderer } from 'three';
+import { PCFSoftShadowMap, PerspectiveCamera, Timer, WebGLRenderer } from 'three';
 import { createDock } from '../components/dock';
 import { createFirstVisitTip } from '../components/firstVisitTip';
 import { attachJoystickControl, setJoystickEnabled } from '../components/joystickControl';
@@ -12,15 +12,15 @@ import { ObserverCamera } from '../three/controls/observerCamera';
 import { attachViewportInput } from '../three/controls/viewportInput';
 import { AssetLoadError } from '../three/loaders/assetLoader';
 import { signalTest } from '../scenes/signalTest';
-import { aspectAt } from '../simulation/traffic/signals';
 import { createAssetLoader } from '../three/loaders/assetLoader';
 import { createSceneView, SceneDefinitionError } from '../three/scene/createSceneView';
 import { createTrafficLayer, VEHICLE_MODEL_NAMES } from '../three/scene/trafficLayer';
-import { TrafficSession } from './trafficSession';
+import { createVehiclePicker } from '../three/scene/vehiclePicker';
+import { exposeTrafficDebug } from './devHooks';
+import { TrafficSession } from '../simulation/traffic/trafficSession';
 
 /** The scene the app opens on until the scene carousel arrives (T11). */
 const currentScene = signalTest;
-const LAMP_COLOURS = { green: '#3fbf6a', amber: '#f2b63c', red: '#d64545' } as const;
 
 const ZOOM_STEP = 0.8;
 
@@ -126,24 +126,13 @@ async function start() {
       createSceneView(currentScene, import.meta.env.BASE_URL),
       Promise.all(VEHICLE_MODEL_NAMES.map((name) => load.model(`models/vehicles/${name}.glb`))),
     ]);
-    const { scene, bounds, graph, signalLamps } = view;
+    const { scene, bounds, graph, updateSignals } = view;
     const traffic = createTrafficLayer(graph, new Map(VEHICLE_MODEL_NAMES.map((name, i) => [name, vehicleModels[i]])));
     scene.add(traffic.group);
     const session = new TrafficSession(currentScene, graph, run);
     tooltip ??= createVehicleTooltip(viewport, renderer.domElement);
-    if (import.meta.env.DEV) {
-      // Dev-only hook for the browser check: where each vehicle is on screen, and why it is doing what it does.
-      (window as unknown as { __trafficDebug: unknown }).__trafficDebug = {
-        vehicles: () =>
-          traffic.group.children.map((object) => {
-            const p = object.getWorldPosition(new Vector3()).project(camera);
-            const rect = renderer.domElement.getBoundingClientRect();
-            const v = session.simulation.vehicle(object.userData.vehicleId);
-            return { x: rect.left + ((p.x + 1) / 2) * rect.width, y: rect.top + ((1 - p.y) / 2) * rect.height, reason: v.reason, speed: v.speed };
-          }),
-        counts: () => session.simulation.counts,
-      };
-    }
+    const pickVehicle = createVehiclePicker(traffic.group);
+    exposeTrafficDebug(renderer.domElement, camera, traffic.group, () => session.simulation);
     observer = ObserverCamera.framing(camera, bounds, { coveredBottom });
     const joystick = new CameraJoystick(observer);
     const detachViewport = attachViewportInput(renderer.domElement, observer);
@@ -159,8 +148,8 @@ async function start() {
       joystick.update(delta);
       session.advance(run.tick(delta * TIME_SCALE));
       traffic.sync(session.simulation);
-      for (const lamp of signalLamps) lamp.material.color.set(LAMP_COLOURS[aspectAt(lamp.timing, session.simulation.time)]);
-      tooltip!.update(camera, traffic.group, session.simulation);
+      updateSignals(session.simulation.time);
+      tooltip!.update((ndc) => pickVehicle(camera, ndc), session.simulation, time);
       syncRunUi();
       renderer.render(scene, camera);
     });

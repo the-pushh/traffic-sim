@@ -4,6 +4,7 @@ import type { PiecePlacement } from '../network/scene';
 import { resolveSignals } from './signals';
 import { TrafficSimulation } from './trafficSimulation';
 import { VEHICLE_TYPES } from './vehicleTypes';
+import { PROFILE_RANGES } from './drivers';
 
 const STEP = 1 / 30;
 /** A straight road across the whole board, west to east. */
@@ -202,5 +203,93 @@ describe('driving core: demand', () => {
     expect(sim.counts.entered).toBeLessThan(sim.counts.due);
     const queue = sim.allVehicles().sort((a, b) => sim.routeProgress(b.id) - sim.routeProgress(a.id));
     for (let i = 1; i < queue.length; i++) expect(sim.distanceAlongRoute(queue[i].id, queue[i - 1].id) - queue[i - 1].type.length).toBeGreaterThan(0);
+  });
+});
+
+describe('driving core: safety and fairness (review findings)', () => {
+  const pieces: PiecePlacement[] = road.map((p, i) => (i === 8 ? { ...p, piece: 'crossing' } : p));
+  const signalGraph = buildLaneGraph(pieces);
+  const west = signalGraph.gateways.find((g) => g.at[0] === 0)!.label;
+  const east = signalGraph.gateways.find((g) => g.at[0] === 16)!.label;
+  const redFirst = resolveSignals(pieces, signalGraph, [{ type: 'signal', piece: 8, port: 'w', timing: { green: 20, amber: 3, red: 20, offset: 23 } }]);
+
+  it('never lets one vehicle overlap another, even closing too fast to stop on a car held at a red light', () => {
+    const sim = new TrafficSimulation(signalGraph, { seed: 11, signals: redFirst });
+    // The stop line is 70 m from the west edge; the tractor waits right at it.
+    const standing = sim.addVehicle({ type: 'tractor', profile: 'steady', from: west, to: east, position: 69, speed: 0 });
+    // A heavy truck at 14 m/s, 15 m behind: more than its brakes can absorb.
+    const fast = sim.addVehicle({ type: 'heavyTruck', profile: 'assertive', from: west, to: east, position: 50, speed: 14 });
+    for (let i = 0; i < 300; i++) {
+      sim.step(STEP);
+      expect(gapBetween(sim, fast, standing)).toBeGreaterThan(0);
+    }
+    expect(sim.vehicle(standing).speed).toBe(0);
+  });
+
+  it('lets vehicles enter without emergency braking, even at a congested entrance', () => {
+    const sim = new TrafficSimulation(signalGraph, { seed: 12, signals: redFirst, demand: { tripsPerMinute: 40, entries: { [west]: 1 } } });
+    let hardest = 0;
+    run(sim, 60, () => {
+      for (const v of sim.allVehicles()) hardest = Math.min(hardest, v.acceleration);
+    });
+    // Comfortable braking tops out at 3.5 m/s² for the most assertive drivers.
+    expect(hardest).toBeGreaterThanOrEqual(-4);
+  });
+
+  it('starts queued cars moving strictly one after another on green', () => {
+    const sim = new TrafficSimulation(signalGraph, { seed: 13, signals: redFirst });
+    const cars = [0, 1, 2, 3].map((i) => sim.addVehicle({ type: i % 2 ? 'van' : 'compact', profile: 'steady', from: west, to: east, position: 40 - i * 10, speed: 10 }));
+    const startedAt = new Map<number, number>();
+    let t = 0;
+    run(sim, 32, () => {
+      t += STEP;
+      for (const car of cars) if (t > 20 && !startedAt.has(car) && sim.vehicle(car).speed > 0.5) startedAt.set(car, t);
+    });
+    const times = cars.map((c) => startedAt.get(c)!);
+    for (let i = 1; i < times.length; i++) expect(times[i]).toBeGreaterThan(times[i - 1]);
+  });
+
+  it('fits more compact cars than heavy trucks into the same queue space', () => {
+    const queueLength = (type: 'compact' | 'heavyTruck') => {
+      const sim = new TrafficSimulation(signalGraph, { seed: 14, signals: redFirst });
+      // The stop line is 70 m in; start just behind it.
+      const ids = [0, 1, 2, 3, 4].map((i) => sim.addVehicle({ type, profile: 'steady', from: west, to: east, position: 66 - i * 13, speed: 4 }));
+      run(sim, 18);
+      return sim.routeProgress(ids[0]) - (sim.routeProgress(ids[4]) - sim.vehicle(ids[4]).type.length);
+    };
+    expect(queueLength('compact')).toBeLessThan(queueLength('heavyTruck') - 20);
+  });
+
+  it('keeps going once it has decided to go on amber, and says why it stops for amber', () => {
+    // Amber starts at t = 20; this car is too close to stop comfortably.
+    const amberAt20 = resolveSignals(pieces, signalGraph, [{ type: 'signal', piece: 8, port: 'w', timing: { green: 20, amber: 3, red: 20, offset: 0 } }]);
+    const sim = new TrafficSimulation(signalGraph, { seed: 15, signals: amberAt20 });
+    run(sim, 19.4);
+    const going = sim.addVehicle({ type: 'sedan', profile: 'steady', from: west, to: east, position: 64, speed: 13 });
+    let hardest = 0;
+    while (sim.has(going) && sim.stopLineDistance(going) !== Infinity) {
+      sim.step(STEP);
+      hardest = Math.min(hardest, sim.vehicle(going).acceleration);
+    }
+    expect(hardest).toBeGreaterThan(-3);
+
+    const stopper = new TrafficSimulation(signalGraph, { seed: 16, signals: amberAt20 });
+    run(stopper, 20.2);
+    const far = stopper.addVehicle({ type: 'sedan', profile: 'steady', from: west, to: east, position: 20, speed: 10 });
+    run(stopper, 2); // amber lasts until t = 23
+    expect(stopper.vehicle(far).reason).toBe('Amber light');
+  });
+});
+
+describe('driver profiles', () => {
+  it('overlap one another on every preference, so drivers of different profiles can still behave alike', () => {
+    const profiles = Object.values(PROFILE_RANGES);
+    for (const key of ['speedFactor', 'headway', 'minGap', 'acceleration', 'comfortBraking', 'acceptedGap'] as const) {
+      for (const a of profiles)
+        for (const b of profiles) {
+          const [lo, hi] = [Math.max(a[key][0], b[key][0]), Math.min(a[key][1], b[key][1])];
+          expect(hi - lo, `${a.label} vs ${b.label} on ${key}`).toBeGreaterThan(0);
+        }
+    }
   });
 });
