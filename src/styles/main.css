@@ -412,3 +412,18 @@ button.primary {
   border: 0;
   background: transparent;
 }
+
+.vehicle-tooltip {
+  position: absolute;
+  top: 0;
+  left: 0;
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: var(--font-meta);
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: var(--shadow-floating);
+}

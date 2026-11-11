@@ -19,6 +19,7 @@ import {
   type Object3D,
   Quaternion,
   RingGeometry,
+  SphereGeometry,
   Scene,
   Shape,
   Sprite,
@@ -27,13 +28,14 @@ import {
   Vector3,
 } from 'three';
 import { boardToWorld, groundBoard, TILE_SIZE } from '../../scenes/board';
-import { placeholderVehicle } from '../../scenes/vehicles';
 import { buildLaneGraph, type LaneGraph, type Point3, portPose } from '../../simulation/network/buildLaneGraph';
 import { rightOf } from '../../simulation/network/geometry';
 import { PIECES } from '../../simulation/network/pieces';
-import { type SceneDefinition, validateScene } from '../../simulation/network/scene';
+import { type SceneDefinition, type SignalTiming, validateScene } from '../../simulation/network/scene';
+import { aspectAt, DEFAULT_SIGNAL_TIMING } from '../../simulation/traffic/signals';
 import { createAssetLoader } from '../loaders/assetLoader';
 import { CONTROL_MODELS } from './controlModels';
+import { MISMATCH_COLOUR, SIGNAL_LAMP_COLOURS, SIGNAL_LAMP_HEIGHTS } from './palette';
 
 /** A scene definition that can't be loaded, with each problem in plain language. */
 export class SceneDefinitionError extends Error {
@@ -48,6 +50,8 @@ export class SceneDefinitionError extends Error {
 export interface SceneView {
   scene: Scene;
   graph: LaneGraph;
+  /** Show every traffic light's aspect at simulation time `t`. */
+  updateSignals(t: number): void;
   /** World-space bounds of the board, for camera framing. */
   bounds: Box3;
 }
@@ -61,7 +65,6 @@ const LANE_COLOR = '#dfe9ff';
 const GATEWAY_COLOR = '#2f6fd6';
 const OPEN_END_COLOR = '#f2c14e';
 const ACCESS_COLOR = '#e07a5f';
-const MISMATCH_COLOR = '#d64545';
 
 const world = (p: Point3, lift = 0) => {
   const [x, y, z] = boardToWorld([p[0], p[1] + ROAD_SURFACE, p[2]]);
@@ -78,10 +81,7 @@ export async function createSceneView(definition: SceneDefinition, baseUrl: stri
     ...definition.pieces.map((p) => PIECES[p.piece].model),
     ...definition.controls.map((c) => CONTROL_MODELS[c.type]),
   ]);
-  const [vehicle, ...models] = await Promise.all([
-    load.model(placeholderVehicle.url),
-    ...[...modelNames].map((name) => load.model(`models/roads/${name}.glb`)),
-  ]);
+  const models = await Promise.all([...modelNames].map((name) => load.model(`models/roads/${name}.glb`)));
   const byName = new Map([...modelNames].map((name, i) => [name, models[i]]));
 
   // No scene background: the canvas is transparent so the CSS background token shows through.
@@ -104,6 +104,8 @@ export async function createSceneView(definition: SceneDefinition, baseUrl: stri
 
   const controls = new Group();
   controls.name = 'traffic-controls';
+  const signalLamps: { timing: SignalTiming; lamp: Mesh; base: Vector3; material: MeshBasicMaterial }[] = [];
+  const lampGeometry = new SphereGeometry(0.22, 16, 12);
   for (const control of definition.controls) {
     const { centre, facing } = portPose(definition.pieces[control.piece], control.port);
     // Beside the approach, on the arriving traffic's right, facing that traffic.
@@ -113,24 +115,28 @@ export async function createSceneView(definition: SceneDefinition, baseUrl: stri
     sign.position.copy(world([centre[0] + right[0] * 0.55 - facing[0] * 0.05, centre[1] - ROAD_SURFACE, centre[2] + right[1] * 0.55 - facing[1] * 0.05]));
     sign.rotation.y = Math.atan2(facing[0], facing[1]);
     controls.add(sign);
+    if (control.type === 'signal') {
+      // A lamp on the light shows its aspect by colour and by position (red top, amber middle, green bottom).
+      const material = new MeshBasicMaterial({ color: SIGNAL_LAMP_COLOURS.red });
+      const lamp = new Mesh(lampGeometry, material);
+      controls.add(lamp);
+      signalLamps.push({ timing: control.timing ?? DEFAULT_SIGNAL_TIMING, lamp, base: sign.position.clone(), material });
+    }
   }
   setShadows(controls, { cast: true });
   scene.add(controls);
 
   scene.add(createLaneOverlay(graph));
 
-  // Placeholder vehicle parked on the first entry lane until the driving core adds traffic (T3).
-  const firstLane = graph.gateways[0] && graph.lanes[graph.gateways[0].entryLanes[0]];
-  if (firstLane) {
-    const [a, b] = [world(firstLane.points[0]), world(firstLane.points.at(-1)!)];
-    vehicle.scale.setScalar(placeholderVehicle.scale);
-    vehicle.position.lerpVectors(a, b, 0.5);
-    vehicle.rotation.y = Math.atan2(b.x - a.x, b.z - a.z); // the model faces +z
-    setShadows(vehicle, { cast: true });
-    scene.add(vehicle);
-  }
-
-  return { scene, graph, bounds: new Box3().setFromObject(board) };
+  const updateSignals = (t: number) => {
+    for (const { timing, lamp, base, material } of signalLamps) {
+      const aspect = aspectAt(timing, t);
+      material.color.set(SIGNAL_LAMP_COLOURS[aspect]);
+      lamp.position.copy(base).add(new Vector3(0, SIGNAL_LAMP_HEIGHTS[aspect], 0));
+    }
+  };
+  updateSignals(0);
+  return { scene, graph, updateSignals, bounds: new Box3().setFromObject(board) };
 }
 
 /** Lane centrelines with direction arrows, labelled gateways, open road ends, and driveways. */
@@ -189,7 +195,7 @@ function createLaneOverlay(graph: LaneGraph) {
   }
   // Road ends that meet but can't connect.
   for (const mismatch of graph.mismatches) {
-    const warning = textSprite('!', MISMATCH_COLOR);
+    const warning = textSprite('!', MISMATCH_COLOUR);
     warning.position.copy(world([mismatch.at[0], mismatch.level, mismatch.at[1]], 1.4));
     overlay.add(warning);
   }

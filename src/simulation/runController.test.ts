@@ -137,4 +137,23 @@ describe('run controller', () => {
     expect(run.clock).toBeCloseTo(2, 9);
     expect(run.state).toBe('running');
   });
+
+  it('counts fresh starts, so the simulation knows when to rebuild its starting traffic', () => {
+    const run = new RunController();
+    expect(run.freshStarts).toBe(0);
+
+    run.setIntensity('high'); // in Ready: new starting traffic for the new intensity
+    expect(run.freshStarts).toBe(1);
+    run.play();
+    run.pause();
+    run.play(); // resume: same traffic
+    expect(run.freshStarts).toBe(1);
+    run.tick(30);
+    run.play(); // continue after the end: same traffic
+    expect(run.freshStarts).toBe(1);
+    run.restart();
+    expect(run.freshStarts).toBe(2);
+    run.setDuration(60); // a new duration needs no new traffic
+    expect(run.freshStarts).toBe(2);
+  });
 });

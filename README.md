@@ -2,7 +2,7 @@
 
 A desktop web traffic simulation game built with Three.js. Players will pick a road network, set traffic demand, run short simulations, change the network or junction controls, and compare runs. See `docs/agents/START_HERE.md` and `docs/agents/design.md`.
 
-**Current state:** the app opens a hidden **Test network** built from data (City Kit road pieces placed on a 64-unit board): a signalised crossroads, a flyover on ramps over a road, a roundabout, T-junctions, a driveway and a turnaround, with lanes, entry/exit points (A–H) and an open road end marked. Traffic arrives in T3.
+**Current state:** the app opens a hidden **Signal test** scene: one road across the 64-unit board with a signal-controlled crossing. Press Play and individual drivers (five profiles) in eight vehicle types arrive from both ends, queue at red and pull away on green; hover a vehicle to see its type, driver profile and what it is doing. Junctions, routing and the four presets follow.
 
 ## Live app
 
