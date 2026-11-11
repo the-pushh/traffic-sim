@@ -28,7 +28,6 @@
     "incomingArchives": "assets/3d/incoming",
     "sourceAssets": "assets/3d/source",
     "exportedAssets": "public/models",
-    "textures": "public/textures",
     "previews": "artifacts/3d/previews",
     "servedRoot": "public",
     "appSource": "src",
@@ -80,10 +79,12 @@
         "appRotationY": "90deg",
         "conversion": "none (copied)"
       },
-      "roadTexture": {
-        "source": "assets/3d/source/kenney_road-textures/PNG/Retina/roadTexture_01.png",
-        "served": "public/textures/roadTexture_01.png",
-        "conversion": "none (copied)"
+      "roadPieces": {
+        "source": "assets/3d/source/kenney_city-kit-roads/Models/GLB format/*.glb (17 road pieces + tile-high + 3 control props)",
+        "served": "public/models/roads/*.glb sharing Textures/colormap.png",
+        "appScale": 4,
+        "conversion": "none (copied)",
+        "totalBytes": "about 456 KB"
       }
     },
     "license": "CC0 1.0 (all three Kenney packs)"
@@ -102,7 +103,42 @@
       "laneCompatibility"
     ],
     "placementPreview": "Use a translucent preview with the same position, rotation, elevation, snapping, and validity checks as the final placement.",
-    "gradeSeparation": "Roads at different heights connect through an explicit link, such as a ramp."
+    "gradeSeparation": "Roads at different heights connect through an explicit link, such as a ramp.",
+    "metadataSource": "src/simulation/network/pieces.ts (ports measured from the GLB geometry: an opening is an edge with kerbs at both ends of a 0.8-tile carriageway)",
+    "laneGraphBuilder": "src/simulation/network/buildLaneGraph.ts",
+    "sceneFormat": "src/simulation/network/scene.ts (board tiles: x east, z south, origin at the north-west corner; half tiles allowed; quarter-turn rotations anticlockwise from above; optional base level and per-port one-way flow)",
+    "drivingSide": "right (assumed; owner asked to confirm). Lanes sit 0.2 tile right of the centre line; roundabouts circulate anticlockwise from above.",
+    "laneOffsetTiles": 0.2,
+    "laybyBayOffsetTiles": 0.555,
+    "levelsTiles": {
+      "ground": 0,
+      "rampMid": 0.25,
+      "bridgeDeck": 0.5,
+      "roadSurfaceAboveBase": 0.02
+    },
+    "pieceTypes": {
+      "straight": "road-straight; ports w/e",
+      "bend": "road-bend; ports w, s (1 tile)",
+      "curve": "road-curve 2x2, origin on the shared corner; ports w at (-1,-0.5), s at (0.5,1)",
+      "crossroad": "road-crossroad; ports n/e/s/w; all movements except U-turns",
+      "t-junction": "road-intersection; ports w/e/s",
+      "curve-t-junction": "road-curve-intersection 2x2; ports w (-1,-0.5), e (1,-0.5), s (0.5,1)",
+      "roundabout": "road-roundabout 3x3; ports at the middle of each side; single circulating lane at radius 0.8",
+      "ramp": "road-slant; w at level 0, e at 0.25 (stack two on a support block for the bridge)",
+      "ramp-steep": "road-slant-high; w at 0, e at 0.5 in one tile",
+      "bridge": "road-bridge; deck at 0.5; ports n/s (runs along local z)",
+      "split": "road-split 1x2, origin on the tile boundary; divided road west (north carriageway out, south carriageway in, two lanes each), single two-way road east; two lanes merge into one",
+      "layby / layby-start / layby-end": "road-side / road-side-entry / road-side-exit; lay-by bay on the north side for westbound traffic",
+      "crossing": "road-crossing; straight with a pedestrian crossing (traffic calming)",
+      "driveway": "road-driveway-single; ports w/e plus a narrow access opening on the south side for local trips",
+      "dead-end / turnaround": "road-end / road-end-round; single port e; U-turn",
+      "support": "tile-high; no road (elevation block under a raised ramp)"
+    },
+    "controls": {
+      "signal": "traffic-light",
+      "stop": "road-sign-stop",
+      "yield": "road-sign-warning (no yield sign in the kit)"
+    }
   },
   "performance": {
     "targetDevice": "Desktop web browser",
@@ -184,6 +220,14 @@
         "command": "npm test (61); npm run build; npm run verify:browser and npm run verify:browser:headed on the dev server",
         "browser": "Google Chrome 157.0.8103.50 on macOS, headless and headed (visible window), 1440x900; WebGL via ANGLE Metal on Apple M1 Pro",
         "result": "pass: header removed and view fills the window; dock floats bottom-centre with rounded corners; Play locks intensity/duration with a visible lock hint while running and paused; pause holds the clock; run ends exactly at 0:30; Play after the end continues from 0:00; Restart returns to Ready; a settings change after the end returns to Ready; tip shown once and remembered; all camera checks still pass; board framed above the pill and dock. Fixed during review: textured strip depth-fighting at the new camera distance (lifted to road height).",
+        "previews": "artifacts/3d/previews/ (git-ignored)"
+      },
+      {
+        "date": "2026-11-12",
+        "check": "T4 lane network and scene format (#6)",
+        "command": "npm test; npm run verify:browser on the dev server",
+        "browser": "Google Chrome 157.0.8103.50 on macOS, headless and headed (visible window), 1440x900; WebGL via ANGLE Metal on Apple M1 Pro",
+        "result": "pass: test network renders from data with 22 assets (all 200), no console errors; lane overlay sits on the road surfaces (checked in 3x close-ups of the roundabout, crossroads, flyover and turnaround); bridge lanes stay at deck height over the road below; signals stand on each approach's right; gateways A-H labelled clockwise; open end and driveway marked.",
         "previews": "artifacts/3d/previews/ (git-ignored)"
       }
     ]

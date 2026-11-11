@@ -10,7 +10,8 @@ import { fitCameraToViewport } from '../three/controls/cameraViewport';
 import { ObserverCamera } from '../three/controls/observerCamera';
 import { attachViewportInput } from '../three/controls/viewportInput';
 import { AssetLoadError } from '../three/loaders/assetLoader';
-import { createStarterScene } from '../three/scene/createStarterScene';
+import { testNetwork } from '../scenes/testNetwork';
+import { createSceneView, SceneDefinitionError } from '../three/scene/createSceneView';
 
 const ZOOM_STEP = 0.8;
 
@@ -37,7 +38,7 @@ app.innerHTML = `
       <button type="button" data-action="reset-view" disabled class="primary">Reset View</button>
     </div>
     <div class="bottom-stack"></div>
-    <div class="status" role="status" aria-live="polite"><p>Loading road and vehicle…</p></div>
+    <div class="status" role="status" aria-live="polite"><p>Loading the road network…</p></div>
   </main>
 `;
 
@@ -48,7 +49,7 @@ const bottomStack = app.querySelector<HTMLElement>('.bottom-stack')!;
 // Run controls: created once, inert until the scene has loaded.
 const run = new RunController();
 const tip = createFirstVisitTip(bottomStack, () => run.duration);
-const pill = createScenePill(bottomStack, 'Starter scene');
+const pill = createScenePill(bottomStack, testNetwork.name);
 const dock = createDock(bottomStack, run, { onPlay: () => tip.dismiss() });
 bottomStack.inert = true;
 
@@ -107,9 +108,9 @@ async function start() {
   observer = null;
   status.hidden = false;
   status.className = 'status';
-  status.innerHTML = '<p>Loading road and vehicle…</p>';
+  status.innerHTML = '<p>Loading the road network…</p>';
   try {
-    const { scene, bounds } = await createStarterScene(renderer, import.meta.env.BASE_URL);
+    const { scene, bounds } = await createSceneView(testNetwork, import.meta.env.BASE_URL);
     observer = ObserverCamera.framing(camera, bounds, { coveredBottom });
     const joystick = new CameraJoystick(observer);
     const detachViewport = attachViewportInput(renderer.domElement, observer);
@@ -132,7 +133,7 @@ async function start() {
     bottomStack.inert = false;
   } catch (error) {
     console.error(error);
-    const message = error instanceof AssetLoadError ? error.message : 'Couldn’t start the 3D scene.';
+    const message = error instanceof AssetLoadError || error instanceof SceneDefinitionError ? error.message : 'Couldn’t start the 3D scene.';
     status.className = 'status error';
     status.innerHTML = `<p></p><button type="button" class="primary">Retry</button>`;
     status.querySelector('p')!.textContent = message;

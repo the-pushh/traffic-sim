@@ -49,7 +49,7 @@ Full-window 3D view (cube-diagonal start, 64 × 64 board), no header bar.
 
 ## Network model
 
-- Pieces from the City Kit become **lane graph** segments using per-piece connection metadata (position, travel direction, elevation, lanes). 17 of the 22 traffic-affecting element types are used across the presets (target ≥ 14, see `ASSETS.md`).
+- Pieces from the City Kit become **lane graph** segments using per-piece connection metadata (position, travel direction, elevation, lanes). 18 of the 22 traffic-affecting element types are planned across the presets (target ≥ 14, see `ASSETS.md`).
 - **Width and capacity** come from lane counts (divided roads, side lanes, two-to-one splits) and **speed limits** (narrow streets are slower).
 - **Controls**: traffic lights (fixed-time phases, configurable timings, staggered offsets), stop signs, yield (`road-sign-warning`), roundabout entries yield to circulating traffic, lane closures.
 - **Levels**: the bridge level is reachable only through connected ramps; vehicles on the bridge and the road below never interact.

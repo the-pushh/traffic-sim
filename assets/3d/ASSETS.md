@@ -42,7 +42,6 @@ Extraction: `unzip -q -n <zip> -d assets/3d/source/<pack>` (UnZip 6.00, macOS), 
 | Vehicle texture | `kenney_car-kit/Models/GLB format/Textures/colormap.png` | `public/models/vehicles/Textures/colormap.png` | 12 KB | None |
 | Road piece | `kenney_city-kit-roads/Models/GLB format/road-straight.glb` | `public/models/roads/road-straight.glb` | 5 KB | None (copied GLB) |
 | Road piece texture | `kenney_city-kit-roads/Models/GLB format/Textures/colormap.png` | `public/models/roads/Textures/colormap.png` | 11 KB | None |
-| Road surface texture | `kenney_road-textures/PNG/Retina/roadTexture_01.png` (128×128, straight two-lane road with centre line) | `public/textures/roadTexture_01.png` | 1 KB | None |
 
 No format conversion was needed: Three.js `GLTFLoader` loads the supplied GLB files with their relative texture paths. Delivered assets total ≈ 200 KB and are committed directly to git.
 
@@ -62,9 +61,9 @@ Classified from the City Kit Roads previews and measured GLB bounds (2026-11-11)
 | 6 | Curved T-junction | `road-curve-intersection`, `-barrier` | 2×2 | At-grade junction |
 | 7 | Roundabout | `road-roundabout`, `-barrier` | 3×3 | Yield-on-entry circulation |
 | 8 | Road split (single ↔ divided) | `road-split`, `-barrier` | 1×2 | Lane-count / width change |
-| 9 | Side lane (widening) | `road-side`, `-barrier` | 1 × 1.31 | Extra lane, capacity |
-| 10 | Side entry (merge taper) | `road-side-entry`, `-barrier` | 1 × 1.31 | Merge, gap acceptance |
-| 11 | Side exit (diverge taper) | `road-side-exit`, `-barrier` | 1 × 1.31 | Diverge / off-ramp |
+| 9 | Lay-by road | `road-side`, `-barrier` | 1 × 1.31 | Drop-off / bus bay beside the through lane |
+| 10 | Lay-by start taper | `road-side-entry`, `-barrier` | 1 × 1.31 | Diverge into the bay |
+| 11 | Lay-by end taper | `road-side-exit`, `-barrier` | 1 × 1.31 | Merge out of the bay, gap acceptance |
 | 12 | Straight ramp | `road-slant`, `road-slant-high`, `road-slant-flat`, `road-slant-flat-high`, `*-barrier` | 1×1; 0 → 0.27 → 0.52 | Level change |
 | 13 | Curved ramp | `road-slant-curve`, `road-slant-flat-curve`, `-barrier` | 2×1 | Level change on a curve |
 | 14 | Bridge / flyover deck | `road-bridge` | 1×1, deck at 0.52 (2 world units clear) | Grade separation |
@@ -81,7 +80,7 @@ Classified from the City Kit Roads previews and measured GLB bounds (2026-11-11)
 
 **Gaps:** no narrower or wider road pieces (width differences come from lane count via divided roads and side lanes, plus speed limits); no yield sign (warning sign stands in); no multi-lane highway piece.
 
-**Coverage target:** 22 types → 60% needs **14**. The planned presets use these 17 (77%): 1 straight, 2 bend, 3 curve, 4 crossroads, 5 T-junction, 7 roundabout, 8 road split, 10 side entry, 11 side exit, 12 straight ramp, 14 bridge, 15 road end, 16 crossing, 17 driveway, 19 traffic light, 20 stop sign, 21 yield (warning sign). The final count is confirmed once the preset layouts are built.
+**Coverage target:** 22 types → 60% needs **14**. Updated after T4 measured the pieces (rows 9–11 are a lay-by bay, not merge/diverge lanes). The planned presets use **18 (82%)**: 1 straight, 2 bend, 3 curve, 4 crossroads, 5 T-junction, 7 roundabout, 8 road split (two-to-one merge), 9–11 lay-by road and tapers (School Run drop-off bay), 12 straight ramp, 14 bridge, 15 road end, 16 crossing, 17 driveway, 19 traffic light, 20 stop sign, 21 yield (warning sign). Without the drop-off bay it is 15 (68%). Merges come from the road split's lane drop and yield-controlled T-junctions. The final count is confirmed once the presets are built.
 
 ## Vehicle types (for the behaviour model)
 
@@ -99,3 +98,16 @@ Classified from the Car Kit previews and measured bounds (2026-11-12). The model
 | Tractor | `tractor`, `tractor-police`, `tractor-shovel` | Slow vehicle; low top speed |
 
 **Not used as traffic:** karts (`kart-*`) and race cars (`race`, `race-future`). **Gap:** no bus model exists. Emergency models drive as their base type (no sirens or priority).
+
+## Road piece connections (measured 2026-11-12 for T4)
+
+Ports were measured from the GLB geometry: an opening is an edge with kerbs at both ends of a 0.8-tile carriageway (lanes 0.4 tile wide, centred 0.2 tile either side of the centre line). Recorded as data in `src/simulation/network/pieces.ts` and summarised in `docs/agents/3d-project.json` (`roadPieces`).
+
+- **Road split** (1 × 2) joins a divided road (two full roads at ±0.5) to a single road centred on the tile boundary, so scenes use **half-tile positions** there. Two lanes merge into one.
+- **`road-side`, `-side-entry`, `-side-exit`** add a **lay-by bay** (0.31 tile, from −0.71 to −0.4) with tapers in and out — a drop-off/bus bay, not a through lane. Merges in the presets come from the split's lane drop and yield-controlled T-junctions.
+- **Ramps:** `road-slant` climbs 0 → 0.25 tile, `road-slant-high` 0 → 0.5 in one tile; the **bridge deck** is at 0.5 and runs along the model's z axis. Two `road-slant` stacked on a `tile-high` block make the gentler two-tile ramp.
+- **Driveways** have a narrow 0.26-tile opening on one side: an access point for local trips.
+- **Road ends** (`road-end`, `road-end-round`) open on their +x side only; vehicles turn around.
+- **Roundabout:** circulating carriageway from radius 0.45 to 1.15 tiles — one lane, centre line at 0.8.
+
+**Road texture:** `roadTexture_01.png` was used for a separate textured strip in the first starter scene. Scenes are now built entirely from City Kit pieces (which carry their own `colormap.png`), so the texture is no longer served; the original stays in `assets/3d/source/kenney_road-textures/`.
