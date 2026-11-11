@@ -47,6 +47,7 @@ Extraction: `unzip -q -n <zip> -d assets/3d/source/<pack>` (UnZip 6.00, macOS), 
 No format conversion was needed: Three.js `GLTFLoader` loads the supplied GLB files with their relative texture paths. Delivered assets total ≈ 200 KB and are committed directly to git.
 
 **Scene scale (verified in the browser):** one road tile = 4 world units; sedan scaled ×0.55 (≈ 0.83 W × 1.4 L) sits inside one lane at x = +0.75 on the road surface (y = 0.08).
+<<<<<<< HEAD
 
 ## Traffic-affecting element types (for the 60% coverage target)
 
@@ -82,3 +83,5 @@ Classified from the City Kit Roads previews and measured GLB bounds (2026-11-11)
 **Gaps:** no narrower or wider road pieces (width differences come from lane count via divided roads and side lanes, plus speed limits); no yield sign (warning sign stands in); no multi-lane highway piece.
 
 **Coverage target:** 22 types → 60% needs **14**. The planned presets use these 17 (77%): 1 straight, 2 bend, 3 curve, 4 crossroads, 5 T-junction, 7 roundabout, 8 road split, 10 side entry, 11 side exit, 12 straight ramp, 14 bridge, 15 road end, 16 crossing, 17 driveway, 19 traffic light, 20 stop sign, 21 yield (warning sign). The final count is confirmed once the preset layouts are built.
+=======
+>>>>>>> origin/main
