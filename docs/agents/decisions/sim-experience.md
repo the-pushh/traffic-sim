@@ -48,3 +48,16 @@ Running record of the planning interview (task 10, issue #1). Each line is an ow
 | 6 | Dock layout | `[Play/Pause] [Restart] [clock + progress] │ [Load ticks] [30/60/90 s]`, parts section later; scene pill centred above. |
 | 7 | Vehicle mix | A **random permutation of every vehicle model** (shuffled and cycled so all appear evenly). |
 | 8 | Build order | Engine and dock start on a hidden test crossroads while the owner designs the four scenes as 16 × 16 tile sketches. |
+
+## Round 4 — 2026-11-11
+
+| # | Topic | Decision |
+| --- | --- | --- |
+| 1 | What Save does | Save **overrides the scene** with the player's network (stored in the browser). A **Reset** button stays available to return to the designer's network. *Supersedes the brief's "Save as new scene … separate, reusable scene".* |
+| 2 | Unsaved-changes modal | Text: "Leaving resets the road network to default." Buttons: **Save and switch**, **Discard and switch**; cancel is an **×** at the top-right. |
+| 3 | Save/Reset visibility | Save appears only with unsaved edits; Reset appears whenever the network differs from the designer's default. |
+| 4 | Continue vs Restart | Play after the end continues from the frozen traffic with the clock at 0:00; **Restart** gives the identical fresh start. |
+| 5 | Starting traffic | Seeded off-screen warm-up at the selected load; changing the load before Play rebuilds it. |
+| 6 | Arrows while paused mid-run | Disabled, same rule as settings. |
+
+Planning interview complete; spec in `docs/agents/specs/sim-experience.md`.
