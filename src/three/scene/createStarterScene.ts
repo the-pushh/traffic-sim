@@ -15,8 +15,7 @@ import {
   SRGBColorSpace,
   type WebGLRenderer,
 } from 'three';
-import { squareBoard } from '../../scenes/groundBoard';
-import { starterFootprint, starterScene } from '../../scenes/starterScene';
+import { groundBoard, starterScene } from '../../scenes/starterScene';
 import { createAssetLoader } from '../loaders/assetLoader';
 
 export interface StarterSceneView {
@@ -27,8 +26,6 @@ export interface StarterSceneView {
 
 const GROUND_TOP_COLOR = new Color('#7fa86a');
 const GROUND_SIDE_COLOR = new Color('#6b5a45');
-/** Soft rounding on the board's top and bottom edges, in world units. */
-const BOARD_BEVEL = 0.2;
 /** Top surface of a City Kit Roads tile, in source units (observed in the GLB bounds). */
 const ROAD_SURFACE_HEIGHT = 0.02;
 
@@ -94,8 +91,7 @@ export async function createStarterScene(renderer: WebGLRenderer, baseUrl: strin
 
 /** Square board with rounded corners and visible thickness; its top face is at y = 0. */
 function createGroundBoard() {
-  const { margin, cornerRadius, thickness } = starterScene.ground;
-  const { centerX, centerZ, size } = squareBoard(starterFootprint(), margin);
+  const { size, cornerRadius, thickness, bevel } = groundBoard;
   const half = size / 2;
   const r = cornerRadius;
 
@@ -113,8 +109,8 @@ function createGroundBoard() {
   const geometry = new ExtrudeGeometry(outline, {
     depth: thickness,
     bevelEnabled: true,
-    bevelSize: BOARD_BEVEL,
-    bevelThickness: BOARD_BEVEL,
+    bevelSize: bevel,
+    bevelThickness: bevel,
     bevelSegments: 3,
     curveSegments: 12,
   });
@@ -126,7 +122,7 @@ function createGroundBoard() {
   board.name = 'ground-board';
   // Lay the extrusion flat: its depth runs up the Y axis, top face at y = 0.
   board.rotation.x = -Math.PI / 2;
-  board.position.set(centerX, -(thickness + BOARD_BEVEL), centerZ);
+  board.position.set(0, -(thickness + bevel), 0);
   board.receiveShadow = true;
   return board;
 }
@@ -136,10 +132,12 @@ function addLights(scene: Scene) {
   const sun = new DirectionalLight('#ffffff', 1.8);
   sun.position.set(12, 30, 10);
   sun.castShadow = true;
-  sun.shadow.mapSize.set(2048, 2048);
+  sun.shadow.mapSize.set(4096, 4096);
   const shadowCamera = sun.shadow.camera;
-  shadowCamera.left = shadowCamera.bottom = -20;
-  shadowCamera.right = shadowCamera.top = 20;
+  // Cover the whole ground board.
+  const reach = groundBoard.size / 2 + 2;
+  shadowCamera.left = shadowCamera.bottom = -reach;
+  shadowCamera.right = shadowCamera.top = reach;
   shadowCamera.near = 1;
   shadowCamera.far = 80;
   sun.shadow.bias = -0.0005;

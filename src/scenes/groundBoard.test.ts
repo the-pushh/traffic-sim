@@ -1,12 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { squareBoard } from './groundBoard';
-import { starterFootprint, starterScene } from './starterScene';
+import { groundBoard, starterFootprint, starterScene } from './starterScene';
 
 /** Whether a ground point lies on a rounded square's top face. */
-function onBoard(board: ReturnType<typeof squareBoard>, radius: number, x: number, z: number) {
-  const half = board.size / 2;
-  const dx = Math.abs(x - board.centerX);
-  const dz = Math.abs(z - board.centerZ);
+function onBoard(size: number, radius: number, x: number, z: number) {
+  const half = size / 2;
+  const dx = Math.abs(x);
+  const dz = Math.abs(z);
   if (dx > half || dz > half) return false;
   const cx = Math.max(dx - (half - radius), 0);
   const cz = Math.max(dz - (half - radius), 0);
@@ -14,27 +13,20 @@ function onBoard(board: ReturnType<typeof squareBoard>, radius: number, x: numbe
 }
 
 describe('ground board', () => {
-  it('is a square centred on the road network with a margin on its longer side', () => {
-    const board = squareBoard({ minX: -2, maxX: 8, minZ: -12, maxZ: 12 }, 4);
-    expect(board).toEqual({ centerX: 3, centerZ: 0, size: 32 });
+  it('is a 16 × 16 road-tile square centred on the origin, big enough for multi-junction scenes', () => {
+    expect(groundBoard.size).toBe(16 * starterScene.road.tileSize);
   });
 
-  it('covers the starter roads and vehicle, keeping the margin clear of its rounded corners', () => {
-    const footprint = starterFootprint();
-    expect(footprint).toEqual({ minX: -2, maxX: 8, minZ: -12, maxZ: 12 });
-
-    const { margin, cornerRadius } = starterScene.ground;
-    const board = squareBoard(footprint, margin);
-    for (const x of [footprint.minX - margin, footprint.maxX + margin]) {
-      for (const z of [footprint.minZ, footprint.maxZ]) expect(onBoard(board, cornerRadius, x, z), `${x},${z}`).toBe(true);
-    }
-    for (const x of [footprint.minX, footprint.maxX]) {
-      for (const z of [footprint.minZ - margin, footprint.maxZ + margin]) expect(onBoard(board, cornerRadius, x, z), `${x},${z}`).toBe(true);
-    }
+  it('holds the starter roads with clear ground around them, away from the rounded corners', () => {
+    const f = starterFootprint();
+    const clearance = 4;
+    for (const x of [f.minX - clearance, f.maxX + clearance])
+      for (const z of [f.minZ - clearance, f.maxZ + clearance])
+        expect(onBoard(groundBoard.size, groundBoard.cornerRadius, x, z), `${x},${z}`).toBe(true);
   });
 
-  it('has visible thickness and rounded corners', () => {
-    expect(starterScene.ground.thickness).toBeGreaterThan(0);
-    expect(starterScene.ground.cornerRadius).toBeGreaterThan(0);
+  it('has a 0.8-unit edge: half the earlier 1.6', () => {
+    expect(groundBoard.thickness + 2 * groundBoard.bevel).toBeCloseTo(0.8, 9);
+    expect(groundBoard.cornerRadius).toBeGreaterThan(0);
   });
 });

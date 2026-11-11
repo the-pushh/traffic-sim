@@ -16,11 +16,15 @@ function degreesFromStraightDown(camera: PerspectiveCamera) {
 }
 
 describe('ObserverCamera initial framing', () => {
-  it('starts looking down at the scene at a 45° angle', () => {
+  it('starts on the cube diagonal: equal angles to the X, Y, and Z axes', () => {
     const { camera } = makeObserver();
+    const fromTarget = camera.position.clone().sub(roadBounds.getCenter(new Vector3())).normalize();
 
     expect(camera.position.y).toBeGreaterThan(roadBounds.max.y);
-    expect(degreesFromStraightDown(camera)).toBeCloseTo(45, 6);
+    const diagonal = new Vector3(1, 1, 1).normalize();
+    expect(fromTarget.angleTo(diagonal)).toBeLessThan(1e-6);
+    // The view direction is 35.26° below horizontal, i.e. 54.74° from straight down.
+    expect(degreesFromStraightDown(camera)).toBeCloseTo(54.7356, 3);
   });
 });
 

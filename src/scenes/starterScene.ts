@@ -1,4 +1,26 @@
-import type { Footprint } from './groundBoard';
+/** Area on the ground (XZ plane) that scene pieces occupy, in world units. */
+export interface Footprint {
+  minX: number;
+  maxX: number;
+  minZ: number;
+  maxZ: number;
+}
+
+const TILE_SIZE = 4;
+
+/**
+ * The square board every scene sits on, centred on the origin. Its top face is y = 0.
+ * Sized for multi-junction scenes rather than fitted to one scene's roads.
+ */
+export const groundBoard = {
+  /** Side length in world units: 16 × 16 road tiles. */
+  size: 16 * TILE_SIZE,
+  cornerRadius: 4,
+  /** Flat slab thickness; the bevel adds `bevel` above and below. */
+  thickness: 0.4,
+  /** Soft rounding on the top and bottom edges. */
+  bevel: 0.2,
+} as const;
 
 /**
  * The first starter scene: a short straight road built from supplied road
@@ -13,7 +35,7 @@ export const starterScene = {
     pieceUrl: 'models/roads/road-straight.glb',
     surfaceTextureUrl: 'textures/roadTexture_01.png',
     /** Size of one road tile in world units (source tile is 1 × 1). */
-    tileSize: 4,
+    tileSize: TILE_SIZE,
     /** Number of road-piece tiles laid end to end along Z. */
     tileCount: 6,
     /** X offset of the textured road surface strip, parallel to the piece road. */
@@ -26,13 +48,6 @@ export const starterScene = {
     /** Lane centre offset from the road centre line, in world units. */
     laneOffsetX: 0.75,
     positionZ: 0,
-  },
-  /** Square board the scene sits on; its top face is y = 0. */
-  ground: {
-    /** Clear space between the outermost road and the board's edge. */
-    margin: 4,
-    cornerRadius: 3,
-    thickness: 1.2,
   },
 } as const;
 

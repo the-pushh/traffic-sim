@@ -40,7 +40,7 @@
     "upAxis": "+Y (source GLBs and app)",
     "forwardAxis": "+Z for vehicles (Car Kit front wheels at +Z). City Kit road-straight runs along X in source; rotated 90\u00b0 about Y to run along Z.",
     "handedness": "right-handed (glTF / Three.js)",
-    "originPolicy": "Car Kit: origin at ground centre of vehicle. City Kit Roads: origin at tile centre, surface at y=0.02 (source units). App keeps source origins and places by transform. Scene ground: a square board (rounded corners, 1.2 units thick plus 0.2 bevel) whose top face is y = 0, centred under the road footprint with a 4-unit margin; roads and vehicles sit on that top face.",
+    "originPolicy": "Car Kit: origin at ground centre of vehicle. City Kit Roads: origin at tile centre, surface at y=0.02 (source units). App keeps source origins and places by transform. Scene ground: a 64 \u00d7 64 unit square board (16 \u00d7 16 road tiles), rounded corners (r = 4), 0.4 thick + 0.2 bevel above and below (0.8 visible edge), centred on the origin with its top face at y = 0; roads and vehicles sit on that top face.",
     "conversionPolicy": "Inspect source units and axes, confirm the application's conventions, and record conversions before applying them."
   },
   "assets": {
@@ -168,6 +168,14 @@
         "command": "npm test; npm run verify:browser and npm run verify:browser:headed (dev); node scripts/verify-browser.mjs http://localhost:4173/ (production)",
         "browser": "Google Chrome 157.0.8103.50 on macOS, headless and headed (visible window), 1440x900; WebGL via ANGLE Metal on Apple M1 Pro",
         "result": "pass: all camera checks; no console errors; 5/5 assets 200. Initial view at 45\u00b0 shows the whole rounded square board filling the view; board top at y=0 (geometry bounds y -1.6..0); roads and sedan sit on top with no clipping in zoomed angled view.",
+        "previews": "artifacts/3d/previews/ (git-ignored)"
+      },
+      {
+        "date": "2026-11-11",
+        "check": "cube-diagonal start, 64-unit board, halved edge",
+        "command": "npm test; npm run verify:browser and npm run verify:browser:headed (dev); node scripts/verify-browser.mjs http://localhost:4173/ (production)",
+        "browser": "Google Chrome 157.0.8103.50 on macOS, headless and headed (visible window), 1440x900; WebGL via ANGLE Metal on Apple M1 Pro",
+        "result": "pass: all camera checks, no console errors, 5/5 assets 200. Initial view along (1,1,1) shows the whole board as a diamond; edge visibly thinner.",
         "previews": "artifacts/3d/previews/ (git-ignored)"
       }
     ]

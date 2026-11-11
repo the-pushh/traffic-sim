@@ -10,7 +10,9 @@ export interface CameraPose {
   tilt: number;
 }
 
-const START_TILT = (45 * Math.PI) / 180;
+/** Start on the cube diagonal (1, 1, 1): equal angles to X, Y and Z. */
+const START_TILT = Math.acos(1 / Math.sqrt(3)); // ≈ 54.74° from straight down
+const START_AZIMUTH = Math.PI / 4;
 /** Just off vertical: an exactly vertical view makes lookAt's orientation undefined. */
 const MIN_TILT = 0.001;
 const MAX_TILT = (70 * Math.PI) / 180;
@@ -35,14 +37,14 @@ export class ObserverCamera {
   }
 
   /**
-   * Frame the given bounds at the 45° starting angle, as close as possible while every
+   * Frame the given bounds from the cube-diagonal starting angle, as close as possible while every
    * corner stays on screen with a small border. Uses the camera's current aspect ratio.
    */
   static framing(camera: PerspectiveCamera, bounds: Box3): ObserverCamera {
     const target = bounds.getCenter(new Vector3());
     const radius = bounds.getBoundingSphere(new Sphere()).radius;
     const corners = boxCorners(bounds);
-    const pose: CameraPose = { target, distance: radius, azimuth: 0, tilt: START_TILT };
+    const pose: CameraPose = { target, distance: radius, azimuth: START_AZIMUTH, tilt: START_TILT };
 
     const screenExtent = (distance: number) => {
       placeCamera(camera, { ...pose, distance });
