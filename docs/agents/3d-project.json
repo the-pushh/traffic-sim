@@ -40,7 +40,7 @@
     "upAxis": "+Y (source GLBs and app)",
     "forwardAxis": "+Z for vehicles (Car Kit front wheels at +Z). City Kit road-straight runs along X in source; rotated 90\u00b0 about Y to run along Z.",
     "handedness": "right-handed (glTF / Three.js)",
-    "originPolicy": "Car Kit: origin at ground centre of vehicle. City Kit Roads: origin at tile centre, surface at y=0.02 (source units). App keeps source origins and places by transform.",
+    "originPolicy": "Car Kit: origin at ground centre of vehicle. City Kit Roads: origin at tile centre, surface at y=0.02 (source units). App keeps source origins and places by transform. Scene ground: a square board (rounded corners, 1.2 units thick plus 0.2 bevel) whose top face is y = 0, centred under the road footprint with a 4-unit margin; roads and vehicles sit on that top face.",
     "conversionPolicy": "Inspect source units and axes, confirm the application's conventions, and record conversions before applying them."
   },
   "assets": {
@@ -160,6 +160,14 @@
         "command": "npm run verify:browser and npm run verify:browser:headed (3 consecutive headed passes) on the dev server; node scripts/verify-browser.mjs http://localhost:4173/ on the production preview",
         "browser": "Google Chrome 157.0.8103.50 on macOS, headless and headed (visible window), 1440x900; WebGL via ANGLE Metal on Apple M1 Pro",
         "result": "pass: plain drag leaves the view unchanged; Space+drag pans, including with the joystick or Reset View focused; releasing Space after a pan does not press the focused button; joystick drag and arrow keys orbit/tilt and stop on release; right-drag orbits; wheel and + button zoom; Reset View pixel-identical to start; no console errors; 5/5 assets 200. Found during review: Space ignored when a control had focus, and pointerenter-based hover was unreliable in a visible window; both fixed.",
+        "previews": "artifacts/3d/previews/ (git-ignored)"
+      },
+      {
+        "date": "2026-11-11",
+        "check": "45\u00b0 starting camera and square ground board",
+        "command": "npm test; npm run verify:browser and npm run verify:browser:headed (dev); node scripts/verify-browser.mjs http://localhost:4173/ (production)",
+        "browser": "Google Chrome 157.0.8103.50 on macOS, headless and headed (visible window), 1440x900; WebGL via ANGLE Metal on Apple M1 Pro",
+        "result": "pass: all camera checks; no console errors; 5/5 assets 200. Initial view at 45\u00b0 shows the whole rounded square board filling the view; board top at y=0 (geometry bounds y -1.6..0); roads and sedan sit on top with no clipping in zoomed angled view.",
         "previews": "artifacts/3d/previews/ (git-ignored)"
       }
     ]

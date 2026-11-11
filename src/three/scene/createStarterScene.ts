@@ -2,6 +2,7 @@ import {
   Box3,
   Color,
   DirectionalLight,
+  ExtrudeGeometry,
   Group,
   HemisphereLight,
   Mesh,
@@ -10,10 +11,12 @@ import {
   PlaneGeometry,
   RepeatWrapping,
   Scene,
+  Shape,
   SRGBColorSpace,
   type WebGLRenderer,
 } from 'three';
-import { starterScene } from '../../scenes/starterScene';
+import { squareBoard } from '../../scenes/groundBoard';
+import { starterFootprint, starterScene } from '../../scenes/starterScene';
 import { createAssetLoader } from '../loaders/assetLoader';
 
 export interface StarterSceneView {
@@ -22,7 +25,10 @@ export interface StarterSceneView {
   bounds: Box3;
 }
 
-const GROUND_COLOR = new Color('#7fa86a');
+const GROUND_TOP_COLOR = new Color('#7fa86a');
+const GROUND_SIDE_COLOR = new Color('#6b5a45');
+/** Soft rounding on the board's top and bottom edges, in world units. */
+const BOARD_BEVEL = 0.2;
 /** Top surface of a City Kit Roads tile, in source units (observed in the GLB bounds). */
 const ROAD_SURFACE_HEIGHT = 0.02;
 
@@ -41,13 +47,7 @@ export async function createStarterScene(renderer: WebGLRenderer, baseUrl: strin
   addLights(scene);
 
   const roadLength = road.tileSize * road.tileCount;
-  const ground = new Mesh(
-    new PlaneGeometry(roadLength * 12, roadLength * 12),
-    new MeshStandardMaterial({ color: GROUND_COLOR }),
-  );
-  ground.rotation.x = -Math.PI / 2;
-  ground.position.y = -0.01;
-  ground.receiveShadow = true;
+  const ground = createGroundBoard();
   scene.add(ground);
 
   // Road built from supplied road-straight pieces laid end to end along Z.
@@ -87,8 +87,48 @@ export async function createStarterScene(renderer: WebGLRenderer, baseUrl: strin
   });
   scene.add(car);
 
-  const bounds = new Box3().setFromObject(pieceRoad).union(new Box3().setFromObject(surface)).union(new Box3().setFromObject(car));
+  // Frame the whole board, which contains the roads and vehicle.
+  const bounds = new Box3().setFromObject(ground).union(new Box3().setFromObject(car));
   return { scene, bounds };
+}
+
+/** Square board with rounded corners and visible thickness; its top face is at y = 0. */
+function createGroundBoard() {
+  const { margin, cornerRadius, thickness } = starterScene.ground;
+  const { centerX, centerZ, size } = squareBoard(starterFootprint(), margin);
+  const half = size / 2;
+  const r = cornerRadius;
+
+  const outline = new Shape();
+  outline.moveTo(-half + r, -half);
+  outline.lineTo(half - r, -half);
+  outline.quadraticCurveTo(half, -half, half, -half + r);
+  outline.lineTo(half, half - r);
+  outline.quadraticCurveTo(half, half, half - r, half);
+  outline.lineTo(-half + r, half);
+  outline.quadraticCurveTo(-half, half, -half, half - r);
+  outline.lineTo(-half, -half + r);
+  outline.quadraticCurveTo(-half, -half, -half + r, -half);
+
+  const geometry = new ExtrudeGeometry(outline, {
+    depth: thickness,
+    bevelEnabled: true,
+    bevelSize: BOARD_BEVEL,
+    bevelThickness: BOARD_BEVEL,
+    bevelSegments: 3,
+    curveSegments: 12,
+  });
+  // ExtrudeGeometry groups: 0 = top/bottom faces, 1 = sides and bevels.
+  const board = new Mesh(geometry, [
+    new MeshStandardMaterial({ color: GROUND_TOP_COLOR }),
+    new MeshStandardMaterial({ color: GROUND_SIDE_COLOR }),
+  ]);
+  board.name = 'ground-board';
+  // Lay the extrusion flat: its depth runs up the Y axis, top face at y = 0.
+  board.rotation.x = -Math.PI / 2;
+  board.position.set(centerX, -(thickness + BOARD_BEVEL), centerZ);
+  board.receiveShadow = true;
+  return board;
 }
 
 function addLights(scene: Scene) {

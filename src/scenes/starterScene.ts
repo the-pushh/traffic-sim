@@ -1,3 +1,5 @@
+import type { Footprint } from './groundBoard';
+
 /**
  * The first starter scene: a short straight road built from supplied road
  * pieces, a parallel road surface using a supplied road texture, and one
@@ -25,4 +27,24 @@ export const starterScene = {
     laneOffsetX: 0.75,
     positionZ: 0,
   },
+  /** Square board the scene sits on; its top face is y = 0. */
+  ground: {
+    /** Clear space between the outermost road and the board's edge. */
+    margin: 4,
+    cornerRadius: 3,
+    thickness: 1.2,
+  },
 } as const;
+
+/** Ground area covered by the starter roads (the vehicle sits inside the road). */
+export function starterFootprint(): Footprint {
+  const { tileSize, tileCount, surfaceOffsetX } = starterScene.road;
+  const halfWidth = tileSize / 2;
+  const halfLength = (tileSize * tileCount) / 2;
+  return {
+    minX: Math.min(-halfWidth, surfaceOffsetX - halfWidth),
+    maxX: Math.max(halfWidth, surfaceOffsetX + halfWidth),
+    minZ: -halfLength,
+    maxZ: halfLength,
+  };
+}

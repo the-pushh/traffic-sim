@@ -2,7 +2,7 @@
 
 A desktop web traffic simulation game built with Three.js. Players will pick a road network, set traffic demand, run short simulations, change the network or junction controls, and compare runs. See `docs/agents/START_HERE.md` and `docs/agents/design.md`.
 
-**Current state:** first runnable version — one starter scene with a supplied Kenney sedan on a short straight road built from supplied road pieces, beside a strip using a supplied road texture. Observer camera with Space + drag pan, an on-screen orbit/tilt joystick, zoom, and **Reset View**. No traffic simulation yet.
+**Current state:** first runnable version — one starter scene on a square ground board with rounded corners, viewed from a 45° angle, with a supplied Kenney sedan on a short straight road built from supplied road pieces, beside a strip using a supplied road texture. Observer camera with Space + drag pan, an on-screen orbit/tilt joystick, zoom, and **Reset View**. No traffic simulation yet.
 
 ## Run the app
 

@@ -16,13 +16,11 @@ function degreesFromStraightDown(camera: PerspectiveCamera) {
 }
 
 describe('ObserverCamera initial framing', () => {
-  it('looks down at the scene from above with a slight tilt', () => {
+  it('starts looking down at the scene at a 45° angle', () => {
     const { camera } = makeObserver();
 
     expect(camera.position.y).toBeGreaterThan(roadBounds.max.y);
-    const tilt = degreesFromStraightDown(camera);
-    expect(tilt).toBeGreaterThanOrEqual(15);
-    expect(tilt).toBeLessThanOrEqual(35);
+    expect(degreesFromStraightDown(camera)).toBeCloseTo(45, 6);
   });
 });
 
@@ -34,19 +32,25 @@ function boundsCorners(b: Box3) {
   return corners;
 }
 
+const squareBoardBounds = new Box3(new Vector3(-16, -1.6, -16), new Vector3(16, 1.2, 16));
+const fitCases = [16 / 9, 4 / 3, 1, 0.6].flatMap((aspect) => [
+  { scene: 'long road', bounds: roadBounds, aspect },
+  { scene: 'square board', bounds: squareBoardBounds, aspect },
+]);
+
 describe('ObserverCamera framing fit', () => {
-  it.each([16 / 9, 4 / 3, 1, 0.6])('keeps every corner of the scene on screen and fills the view (aspect %f)', (aspect) => {
+  it.each(fitCases)('keeps every corner of the $scene on screen and fills most of the view (aspect $aspect)', ({ bounds, aspect }) => {
     const camera = new PerspectiveCamera(45, aspect, 0.1, 500);
-    ObserverCamera.framing(camera, roadBounds);
+    ObserverCamera.framing(camera, bounds);
     camera.updateProjectionMatrix();
 
-    const projected = boundsCorners(roadBounds).map((c) => c.project(camera));
+    const projected = boundsCorners(bounds).map((c) => c.project(camera));
     for (const p of projected) {
       expect(Math.abs(p.x)).toBeLessThanOrEqual(1);
       expect(Math.abs(p.y)).toBeLessThanOrEqual(1);
     }
     const largest = Math.max(...projected.flatMap((p) => [Math.abs(p.x), Math.abs(p.y)]));
-    expect(largest).toBeGreaterThanOrEqual(0.6);
+    expect(largest).toBeGreaterThanOrEqual(0.8);
   });
 });
 
