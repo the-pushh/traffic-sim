@@ -42,7 +42,6 @@ Extraction: `unzip -q -n <zip> -d assets/3d/source/<pack>` (UnZip 6.00, macOS), 
 | Vehicle texture | `kenney_car-kit/Models/GLB format/Textures/colormap.png` | `public/models/vehicles/Textures/colormap.png` | 12 KB | None |
 | Road piece | `kenney_city-kit-roads/Models/GLB format/road-straight.glb` | `public/models/roads/road-straight.glb` | 5 KB | None (copied GLB) |
 | Road piece texture | `kenney_city-kit-roads/Models/GLB format/Textures/colormap.png` | `public/models/roads/Textures/colormap.png` | 11 KB | None |
-| Road surface texture | `kenney_road-textures/PNG/Retina/roadTexture_01.png` (128×128, straight two-lane road with centre line) | `public/textures/roadTexture_01.png` | 1 KB | None |
 
 No format conversion was needed: Three.js `GLTFLoader` loads the supplied GLB files with their relative texture paths. Delivered assets total ≈ 200 KB and are committed directly to git.
 
@@ -99,3 +98,16 @@ Classified from the Car Kit previews and measured bounds (2026-11-12). The model
 | Tractor | `tractor`, `tractor-police`, `tractor-shovel` | Slow vehicle; low top speed |
 
 **Not used as traffic:** karts (`kart-*`) and race cars (`race`, `race-future`). **Gap:** no bus model exists. Emergency models drive as their base type (no sirens or priority).
+
+## Road piece connections (measured 2026-11-12 for T4)
+
+Ports were measured from the GLB geometry: an opening is an edge with kerbs at both ends of a 0.8-tile carriageway (lanes 0.4 tile wide, centred 0.2 tile either side of the centre line). Recorded as data in `src/simulation/network/pieces.ts` and summarised in `docs/agents/3d-project.json` (`roadPieces`).
+
+- **Road split** (1 × 2) joins a divided road (two full roads at ±0.5) to a single road centred on the tile boundary, so scenes use **half-tile positions** there. Two lanes merge into one.
+- **`road-side`, `-side-entry`, `-side-exit`** add a **lay-by bay** (0.31 tile, from −0.71 to −0.4) with tapers in and out — a drop-off/bus bay, not a through lane. Merges in the presets come from the split's lane drop and yield-controlled T-junctions.
+- **Ramps:** `road-slant` climbs 0 → 0.25 tile, `road-slant-high` 0 → 0.5 in one tile; the **bridge deck** is at 0.5 and runs along the model's z axis. Two `road-slant` stacked on a `tile-high` block make the gentler two-tile ramp.
+- **Driveways** have a narrow 0.26-tile opening on one side: an access point for local trips.
+- **Road ends** (`road-end`, `road-end-round`) open on their +x side only; vehicles turn around.
+- **Roundabout:** circulating carriageway from radius 0.45 to 1.15 tiles — one lane, centre line at 0.8.
+
+**Road texture:** `roadTexture_01.png` was used for a separate textured strip in the first starter scene. Scenes are now built entirely from City Kit pieces (which carry their own `colormap.png`), so the texture is no longer served; the original stays in `assets/3d/source/kenney_road-textures/`.

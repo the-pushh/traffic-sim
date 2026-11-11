@@ -92,3 +92,5 @@ Owner agreed the spec and the T1–T13 ticket breakdown and authorised implement
 - **Intensity control:** a five-tick slider showing the current tick's name (e.g. "Intensity Medium").
 - **Settings change after a run ends** returns to Ready, so the next Play starts fresh (spec lifecycle table).
 - **Framing above the panels:** the camera's view is centred in the area above the scene pill and dock, and the board is fitted into that area. The first-visit tip is not counted.
+- **Driving side (assumed):** right-hand traffic; roundabouts circulate anticlockwise from above. Asked the owner to confirm (2026-11-12). The side is set in two places in the lane builder (`rightOf` lane placement and the roundabout ring direction).
+- **Road texture strip** retired: scenes are built from City Kit pieces only (T4).
