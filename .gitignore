@@ -1,0 +1,60 @@
+# macOS and Windows metadata
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+Thumbs.db
+Desktop.ini
+
+# VS Code and local editor files
+.vscode/
+.vscode-test/
+.vscode-test-web/
+.history/
+*.code-workspace
+.idea/
+*.swp
+*.swo
+*~
+
+# Dependencies and caches
+node_modules/
+.npm/
+.pnpm-store/
+.vite/
+.turbo/
+.eslintcache
+*.tsbuildinfo
+
+# Build and deployment output
+/dist/
+/build/
+/out/
+/.next/
+/.vercel/
+/.netlify/
+
+# Environment secrets and local agent settings
+.env
+.env.*
+!.env.example
+!.env.*.example
+/.claude/settings.local.json
+
+# Logs and process files
+*.log
+*.pid
+
+# Generated test output
+/coverage/
+/test-results/
+/playwright-report/
+/playwright/.cache/
+
+# Extracted copies of the original Kenney ZIPs
+/assets/3d/source/*
+!/assets/3d/source/.gitkeep
+
+# Generated verification previews
+/artifacts/3d/previews/*
+!/artifacts/3d/previews/.gitkeep
