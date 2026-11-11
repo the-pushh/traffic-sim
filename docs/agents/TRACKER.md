@@ -56,15 +56,6 @@ Spec: `docs/agents/specs/sim-experience.md`. Each ticket is a GitHub issue with 
 - The visible-window browser check (`verify:browser:headed`) is intermittently flaky (timing-sensitive screenshot comparisons); headless is stable.
 - Three.js makes the JS bundle 600+ KB (Vite chunk-size warning). No code splitting yet.
 
-## Proposed follow-up tickets (not yet agreed; publish via the ticketing skill)
+## Earlier proposed follow-ups
 
-1. **Planning:** install or resolve the missing `/grill-with-docs`, `/to-spec`, `/to-tickets`, `/implement` skills (or confirm substitutes), then write the spec and agree tickets. Needs the transcript.
-2. **Road-piece metadata and lane network:** pivots, footprints, lane counts, connection points for the core City Kit pieces. *(Recommended first implementation ticket.)*
-3. **Shared scene format and Traffic Lights preset:** scene picker that opens paused, with entry and exit markers.
-4. **Traffic engine:** vehicle agents follow routes, keep gaps, obey signals and yields.
-5. **Timed runs and results:** 30/60/90 s runs measured in simulation time; results for arrivals, average wait, longest queue.
-6. **Observer camera completion:** verify the camera keeps simulation state once a simulation exists.
-7. **Drag-and-drop editor:** Parts drawer, translucent snapping preview, rotate, invalid-drop explanation, undo.
-8. **Reset and Save as new scene**, plus saved-scene storage.
-9. **Remaining presets:** Turnaround, Flyover, On-Ramp.
-10. **Deployment** and performance budget.
+Superseded by Plan 01 above (agreed 2026-11-12).
