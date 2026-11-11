@@ -4,6 +4,10 @@ A desktop web traffic simulation game built with Three.js. Players will pick a r
 
 **Current state:** the app opens a hidden **Test network** built from data (City Kit road pieces placed on a 64-unit board): a signalised crossroads, a flyover on ramps over a road, a roundabout, T-junctions, a driveway and a turnaround, with lanes, entry/exit points (A–H) and an open road end marked. Traffic arrives in T3.
 
+## Live app
+
+**https://traffic-sim-one.vercel.app** — production, deployed by Vercel from `main` on every merge. Each pull request also gets a Vercel preview (behind Vercel sign-in for the project owner).
+
 ## Run the app
 
 Requires Node.js 24 (verified with 24.20.0) and npm 11.
@@ -40,6 +44,7 @@ The dock at the bottom holds **Play/Pause**, **Restart run**, the clock, the tra
 | `npm run preview` | Serve the production build at <http://localhost:4173/> |
 | `npm run verify:browser` | With the dev server running: open the app in installed Google Chrome (headless), check console errors and asset requests, check a plain drag leaves the view alone, exercise Space + drag pan, the joystick (pointer and arrow keys), right-drag, zoom and Reset View, check the asset-failure/Retry state, and save screenshots to `artifacts/3d/previews/`. Another URL: `node scripts/verify-browser.mjs <url>`. |
 | `npm run verify:browser:headed` | Same check in a visible Chrome window. |
+| `node scripts/verify-browser.mjs https://traffic-sim-one.vercel.app/` | Same check against the deployed app (runs in real time, about 2 minutes). |
 
 On the dev server, `?timeScale=15` speeds up simulation time (used by the browser check to finish a 30 s run in about 2 s). It has no effect in production builds.
 

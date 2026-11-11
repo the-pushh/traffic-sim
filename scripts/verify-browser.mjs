@@ -8,6 +8,9 @@ import { chromium } from 'playwright-core';
 const args = process.argv.slice(2);
 const headed = args.includes('--headed');
 const url = args.find((a) => !a.startsWith('--')) ?? 'http://localhost:5173/';
+// The dev server honours ?timeScale=; a deployed build runs in real time, so allow a full run.
+const isDevServer = /^http:\/\/(localhost|127\.0\.0\.1)/.test(url) && !url.includes(':4173');
+const runEndTimeout = isDevServer ? 15000 : 45000;
 const outDir = 'artifacts/3d/previews';
 mkdirSync(outDir, { recursive: true });
 
@@ -158,7 +161,7 @@ await runPage.waitForTimeout(600);
 runChecks.pauseHoldsClockAndKeepsLock = (await dockState()) === 'paused' && (await clockText()) === pausedAt && (await settingsDisabled());
 await runPage.locator('.bottom-stack').screenshot({ path: `${outDir}/12-dock-paused-locked.png` });
 await runPage.getByRole('button', { name: 'Play' }).click();
-await runPage.waitForFunction(() => document.querySelector('.dock')?.dataset.state === 'ended', null, { timeout: 15000 });
+await runPage.waitForFunction(() => document.querySelector('.dock')?.dataset.state === 'ended', null, { timeout: runEndTimeout });
 runChecks.endsExactlyAtDuration = (await clockText()) === '0:30 / 0:30' && (await settingsEnabled());
 await runPage.locator('.dock').screenshot({ path: `${outDir}/13-dock-ended.png` });
 // Click Play and read the clock in the same task, so the check doesn't depend on timing.
@@ -173,7 +176,7 @@ runChecks.durationChangeShown = (await clockText()) === '0:00 / 1:00';
 // A settings change after a run ends goes back to Ready (fresh start), not a half-full ended run.
 await runPage.getByRole('button', { name: '30 s' }).click();
 await runPage.getByRole('button', { name: 'Play' }).click();
-await runPage.waitForFunction(() => document.querySelector('.dock')?.dataset.state === 'ended', null, { timeout: 15000 });
+await runPage.waitForFunction(() => document.querySelector('.dock')?.dataset.state === 'ended', null, { timeout: runEndTimeout });
 await runPage.getByRole('button', { name: '60 s' }).click();
 runChecks.settingChangeAfterEndReturnsToReady = (await dockState()) === 'ready' && (await clockText()) === '0:00 / 1:00';
 await runPage.reload();
