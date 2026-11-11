@@ -61,3 +61,7 @@ Running record of the planning interview (task 10, issue #1). Each line is an ow
 | 6 | Arrows while paused mid-run | Disabled, same rule as settings. |
 
 Planning interview complete; spec in `docs/agents/specs/sim-experience.md`.
+
+## Layout constraint — 2026-11-11
+
+Each preset network fits **entirely inside the existing 1:1 square board** (16 × 16 road tiles, 64 units), including ramps, junctions and road approaches. Road lengths and junction spacing are adjusted to the asset footprints. Each preset leaves **usable empty space** and **at least one open connection point** where players can add a road or junction and see the effect on traffic.
