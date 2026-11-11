@@ -38,7 +38,7 @@ Full-window 3D view (cube-diagonal start, 64 × 64 board), no header bar.
 | --- | --- | --- |
 | **Ready** | Scene opens, Restart, Reset, or intensity change (rebuilds the warm-up) | enabled |
 | **Running** | Play | **disabled, greyed** |
-| **Paused** | Pause mid-run | **disabled, greyed**; road and control edits allowed (simulation auto-adjusts)* |
+| **Paused** | Pause mid-run | **disabled, greyed**; road and control edits allowed (simulation auto-adjusts) |
 | **Ended** | Clock reaches the duration: traffic freezes, results card shows | enabled |
 
 - **Play after Ended** continues the simulation from the frozen traffic for another selected duration (clock restarts at 0:00).
@@ -46,7 +46,6 @@ Full-window 3D view (cube-diagonal start, 64 × 64 board), no header bar.
 - **Switching scenes** with unsaved edits asks first: "Leaving resets the road network to default." [Save and switch] [Discard and switch], × to cancel.
 - **Save** overrides the scene in this browser; **Reset** restores the designer's network.
 
-\* Interpretation of round 5 #5, to confirm with the owner.
 
 ## Network model
 

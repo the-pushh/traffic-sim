@@ -2,7 +2,7 @@
 
 Tracker: **GitHub Issues** on `the-pushh/traffic-sim` (owner's choice): plan issue [#1](https://github.com/the-pushh/traffic-sim/issues/1). This file mirrors the plan issue and is synced to it after every update. Statuses: `todo` · `in progress` · `done` · `blocked`.
 
-## Plan: 00 — First runnable version (setup + starter scene)
+## Plan 00 — First runnable version (setup + starter scene)
 
 Scope: repo setup, asset inventory, one starter scene with a supplied vehicle on a textured road, observer camera basics and **Reset View**. Traffic engine, timed runs, editor, saved maps, and remaining presets are follow-up tickets.
 
@@ -17,7 +17,27 @@ Scope: repo setup, asset inventory, one starter scene with a supplied vehicle on
 | 7 | Laptop-friendly camera: Hold Space + drag on the map pans (plain drag reserved for the editor); on-screen joystick orbits/tilts as the primary control; right-drag stays an optional shortcut | done | Owner feedback on PR #2: left/right drag can't be the primary control on laptops; owner chose the joystick. TDD: `dragGesture` + `mapClaimsSpace` (8 tests), `CameraJoystick` (6 tests); 32/32 pass, build ok. Review (Standards + Spec) found Space ignored when a control had focus and Space-release pressing the focused button; fixed, middle-drag dropped as unagreed. Browser (headless, 3× visible Chrome, production): plain drag doesn't move the view; Space+drag pans incl. with joystick/Reset View focused; joystick drag + arrow keys orbit/tilt and stop on release; Reset View pixel-identical. DOM widget code is covered by the browser check, not unit tests (agreed seams). |
 | 8 | Default camera at 45°; ground as a 1:1 square board with rounded corners and thickness, with roads and vehicle on its top surface | done | Owner request after PR #2 review. TDD: start-tilt test changed to 45° (red→green); `squareBoard`/`starterFootprint` (3 tests: square, centred, margin clear of rounded corners); framing now fits the scene exactly (binary search to 90% of screen) with long-road and square-board cases at 4 aspects; 39/39 pass, build ok. Board = extruded rounded square, 1.2 thick + 0.2 bevel, top face measured at y = 0. Browser (headless, visible Chrome, production): all camera checks pass, no errors; 45° start view and zoomed angled view inspected. |
 | 9 | Board at half thickness; camera starts on the cube diagonal (equal angles to X, Y, Z); board big enough for the planned scenes | done | Owner request; owner approved tasks 1–8. TDD: start pose test now requires the camera offset along (1,1,1) (red→green); board tests require 16 × 16 tiles (64 units) holding the starter roads clear of the corners, and a 0.8 edge (was 1.6). 39/39 pass, build ok. Shadow area widened to cover the board. Browser: headless and production pass; visible-window check failed once (output not captured) then passed twice, so it is treated as an intermittent flake. Diagonal start view inspected. |
-| 10 | Plan the experience from app entry to running the simulator: presets, driver and vehicle agents, editing, delivery; agree tickets | in progress | Grilling rounds 1–5 answered (installed `mattpocock-skills:grilling` in place of the missing `/grill-with-docs`). Owner supplied `PRESETS_PLAN.md` and `BEHAVIOUR_PLAN.md`. Spec rewritten (`docs/agents/specs/sim-experience.md`); layouts redrawn inside 16 × 16 (`preset-layouts.md`); asset element types (22, plan uses 17) and vehicle types (8, no bus) in `assets/3d/ASSETS.md`. Ticket breakdown proposed to owner for agreement. |
+| 10 | Plan the experience from app entry to running the simulator: presets, driver and vehicle agents, editing, delivery; agree tickets | done | Grilling rounds 1–5 (installed `mattpocock-skills:grilling` in place of the missing `/grill-with-docs`). Owner plans `PRESETS_PLAN.md` and `BEHAVIOUR_PLAN.md`; spec `docs/agents/specs/sim-experience.md`; layouts `preset-layouts.md`; asset and vehicle types in `ASSETS.md`. Owner agreed the spec and the T1–T13 breakdown on 2026-11-12; tickets published as issues #3–#15. |
+
+## Plan 01 — Traffic simulator build
+
+Spec: `docs/agents/specs/sim-experience.md`. Each ticket is a GitHub issue with acceptance criteria; this table mirrors their status. Statuses: `todo` · `in progress` · `in review` (PR open) · `done` (merged and verified) · `blocked`.
+
+| Issue | Ticket | Blocked by | Status | Verification note |
+| --- | --- | --- | --- | --- |
+| [#3](https://github.com/the-pushh/traffic-sim/issues/3) | T1 — Dock and run controls | — | in progress | |
+| [#4](https://github.com/the-pushh/traffic-sim/issues/4) | T2 — Vercel deployment | T1 | todo | |
+| [#5](https://github.com/the-pushh/traffic-sim/issues/5) | T3 — Driving core on one lane and one light | T1 | todo | |
+| [#6](https://github.com/the-pushh/traffic-sim/issues/6) | T4 — Lane network and scene format | — | in progress | |
+| [#7](https://github.com/the-pushh/traffic-sim/issues/7) | T5 — Junction behaviour | T3, T4 | todo | |
+| [#8](https://github.com/the-pushh/traffic-sim/issues/8) | T6 — Routing | T3, T4 | todo | |
+| [#9](https://github.com/the-pushh/traffic-sim/issues/9) | T7 — Main Street preset, measures and results card | T5 | todo | |
+| [#10](https://github.com/the-pushh/traffic-sim/issues/10) | T8 — Market Roundabout preset | T5, T7 | todo | |
+| [#11](https://github.com/the-pushh/traffic-sim/issues/11) | T9 — School Run preset | T6, T7 | todo | |
+| [#12](https://github.com/the-pushh/traffic-sim/issues/12) | T10 — Flyover Bottleneck preset | T6, T7 | todo | |
+| [#13](https://github.com/the-pushh/traffic-sim/issues/13) | T11 — Scene carousel and saving | T7 | todo | |
+| [#14](https://github.com/the-pushh/traffic-sim/issues/14) | T12 — Editor | T6, T11 | todo | |
+| [#15](https://github.com/the-pushh/traffic-sim/issues/15) | T13 — Verification and delivery report | all | todo | |
 
 ## Flags from task 1
 
