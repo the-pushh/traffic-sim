@@ -159,7 +159,8 @@
       "build": "npm run build",
       "preview": "npm run preview  # http://localhost:4173/",
       "browserCheck": "npm run verify:browser  # requires dev server; or node scripts/verify-browser.mjs <url>",
-      "browserCheckHeaded": "npm run verify:browser:headed  # same check in a visible Chrome window"
+      "browserCheckHeaded": "npm run verify:browser:headed  # same check in a visible Chrome window",
+      "browserCheckDeployed": "node scripts/verify-browser.mjs https://traffic-sim-one.vercel.app/"
     },
     "initialBrowserCheck": "Load one supplied vehicle on a short road section with a supplied road texture. Inspect the scene, browser errors, and asset requests before marking setup verified.",
     "requiredViews": [
@@ -229,7 +230,23 @@
         "browser": "Google Chrome 157.0.8103.50 on macOS, headless and headed (visible window), 1440x900; WebGL via ANGLE Metal on Apple M1 Pro",
         "result": "pass: test network renders from data with 22 assets (all 200), no console errors; lane overlay sits on the road surfaces (checked in 3x close-ups of the roundabout, crossroads, flyover and turnaround); bridge lanes stay at deck height over the road below; signals stand on each approach's right; gateways A-H labelled clockwise; open end and driveway marked.",
         "previews": "artifacts/3d/previews/ (git-ignored)"
+      },
+      {
+        "date": "2026-11-12",
+        "check": "T2 deployed app (#4)",
+        "command": "node scripts/verify-browser.mjs https://traffic-sim-one.vercel.app/",
+        "browser": "Google Chrome 157.0.8103.50 on macOS, headless and headed (visible window), 1440x900; WebGL via ANGLE Metal on Apple M1 Pro",
+        "result": "pass on production: all camera, run and failure-state checks; no console errors; 22 assets HTTP 200.",
+        "previews": "artifacts/3d/previews/ (git-ignored)"
       }
     ]
+  },
+  "deployment": {
+    "host": "Vercel",
+    "project": "pushkar1809s-projects/traffic-sim",
+    "productionUrl": "https://traffic-sim-one.vercel.app",
+    "trigger": "Git integration: production on every merge to main; a preview per pull request (previews require Vercel sign-in)",
+    "config": "vercel.json: framework vite, installCommand npm ci, buildCommand npm run build (type-check + Vite), outputDirectory dist",
+    "note": "https://traffic-sim.vercel.app belongs to someone else's project; never use it."
   }
 }
