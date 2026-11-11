@@ -85,3 +85,10 @@ Each preset network fits **entirely inside the existing 1:1 square board** (16 �
 ## Agreement — 2026-11-12
 
 Owner agreed the spec and the T1–T13 ticket breakdown and authorised implementation. Vercel project linked by the owner: `pushkar1809s-projects/traffic-sim`, connected to the GitHub repo. Owner allowed `gh pr merge`.
+
+## Implementation notes — 2026-11-12
+
+- **T1 scene pill label:** shows "Starter scene" until the Main Street preset exists (T7); the "Main Street" label criterion moves to T7 (#9).
+- **Intensity control:** a five-tick slider showing the current tick's name (e.g. "Intensity Medium").
+- **Settings change after a run ends** returns to Ready, so the next Play starts fresh (spec lifecycle table).
+- **Framing above the panels:** the camera's view is centred in the area above the scene pill and dock, and the board is fitted into that area. The first-visit tip is not counted.

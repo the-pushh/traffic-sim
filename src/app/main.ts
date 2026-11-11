@@ -1,7 +1,12 @@
 import { PCFSoftShadowMap, PerspectiveCamera, Timer, WebGLRenderer } from 'three';
+import { createDock } from '../components/dock';
+import { createFirstVisitTip } from '../components/firstVisitTip';
 import { attachJoystickControl, setJoystickEnabled } from '../components/joystickControl';
+import { createScenePill } from '../components/scenePill';
+import { RunController } from '../simulation/runController';
 import '../styles/main.css';
 import { CameraJoystick } from '../three/controls/cameraJoystick';
+import { fitCameraToViewport } from '../three/controls/cameraViewport';
 import { ObserverCamera } from '../three/controls/observerCamera';
 import { attachViewportInput } from '../three/controls/viewportInput';
 import { AssetLoadError } from '../three/loaders/assetLoader';
@@ -9,12 +14,17 @@ import { createStarterScene } from '../three/scene/createStarterScene';
 
 const ZOOM_STEP = 0.8;
 
+/** Dev-only speed-up for browser checks, e.g. `?timeScale=10` (1–100). Ignored in production builds. */
+function devTimeScale() {
+  if (!import.meta.env.DEV) return 1;
+  const value = Number(new URLSearchParams(location.search).get('timeScale'));
+  return Number.isFinite(value) && value >= 1 && value <= 100 ? value : 1;
+}
+const TIME_SCALE = devTimeScale();
+
 const app = document.querySelector<HTMLDivElement>('#app')!;
 app.innerHTML = `
-  <header class="toolbar">
-    <h1>Traffic Simulator</h1>
-    <span class="hint" id="camera-hint">Over the map: hold Space and drag to pan, scroll to zoom · Joystick orbits and tilts (arrow keys when it’s focused)</span>
-  </header>
+  <h1 class="visually-hidden">Traffic Simulator</h1>
   <main class="viewport" aria-label="3D traffic scene">
     <div class="camera-controls" role="group" aria-label="Camera">
       <div class="joystick" tabindex="0" role="application" aria-roledescription="joystick"
@@ -26,12 +36,27 @@ app.innerHTML = `
       <button type="button" data-action="zoom-out" disabled aria-label="Zoom out" title="Zoom out">−</button>
       <button type="button" data-action="reset-view" disabled class="primary">Reset View</button>
     </div>
+    <div class="bottom-stack"></div>
     <div class="status" role="status" aria-live="polite"><p>Loading road and vehicle…</p></div>
   </main>
 `;
 
 const viewport = app.querySelector<HTMLElement>('.viewport')!;
 const status = app.querySelector<HTMLElement>('.status')!;
+const bottomStack = app.querySelector<HTMLElement>('.bottom-stack')!;
+
+// Run controls: created once, inert until the scene has loaded.
+const run = new RunController();
+const tip = createFirstVisitTip(bottomStack, () => run.duration);
+const pill = createScenePill(bottomStack, 'Starter scene');
+const dock = createDock(bottomStack, run, { onPlay: () => tip.dismiss() });
+bottomStack.inert = true;
+
+
+function syncRunUi() {
+  dock.sync();
+  tip.sync();
+}
 
 // Transparent canvas: the page's --color-background token shows behind the scene.
 const renderer = new WebGLRenderer({ antialias: true, alpha: true });
@@ -42,14 +67,19 @@ viewport.prepend(renderer.domElement);
 
 const camera = new PerspectiveCamera(45, 1, 0.1, 500);
 
+/** Fraction of the screen height covered by the scene pill and dock (the tip is temporary and not counted). */
+let coveredBottom = 0;
 function resize() {
-  const { clientWidth: w, clientHeight: h } = viewport;
-  renderer.setSize(w, h, false);
-  camera.aspect = w / Math.max(h, 1);
-  camera.updateProjectionMatrix();
+  const { clientWidth: width, clientHeight: height } = viewport;
+  renderer.setSize(width, height, false);
+  // Measure from the panels' real layout: everything from the top of the scene pill down.
+  const panelsTop = pill.element.getBoundingClientRect().top - viewport.getBoundingClientRect().top;
+  const covered = Math.max(0, height - panelsTop);
+  coveredBottom = fitCameraToViewport(camera, { width, height, covered });
 }
 new ResizeObserver(resize).observe(viewport);
 resize();
+
 
 const cameraControls = app.querySelector<HTMLElement>('.camera-controls')!;
 let observer: ObserverCamera | null = null;
@@ -80,7 +110,7 @@ async function start() {
   status.innerHTML = '<p>Loading road and vehicle…</p>';
   try {
     const { scene, bounds } = await createStarterScene(renderer, import.meta.env.BASE_URL);
-    observer = ObserverCamera.framing(camera, bounds);
+    observer = ObserverCamera.framing(camera, bounds, { coveredBottom });
     const joystick = new CameraJoystick(observer);
     const detachViewport = attachViewportInput(renderer.domElement, observer);
     const detachJoystick = attachJoystickControl(joystickElement, joystick);
@@ -91,11 +121,15 @@ async function start() {
     timer.reset();
     renderer.setAnimationLoop((time) => {
       timer.update(time);
-      joystick.update(Math.min(timer.getDelta(), 0.1));
+      const delta = Math.min(timer.getDelta(), 0.1);
+      joystick.update(delta);
+      run.tick(delta * TIME_SCALE); // Simulation steps are consumed here once traffic exists (T3).
+      syncRunUi();
       renderer.render(scene, camera);
     });
     status.hidden = true;
     setCameraControlsEnabled(true);
+    bottomStack.inert = false;
   } catch (error) {
     console.error(error);
     const message = error instanceof AssetLoadError ? error.message : 'Couldn’t start the 3D scene.';

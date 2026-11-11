@@ -26,6 +26,10 @@ Then open <http://localhost:5173/> in a desktop browser.
 | **+** / **−** buttons | Zoom in / out |
 | **Reset View** | Return to the starting overhead view |
 
+### Running the simulation
+
+The dock at the bottom holds **Play/Pause**, **Restart run**, the clock, the traffic **Intensity** (Almost empty → Congested) and the run length (**30 s / 60 s / 90 s**). Intensity and run length are greyed out while a run is playing or paused. When the clock reaches the run length the run ends; **Play** continues for another run length, **Restart run** goes back to the start. Traffic arrives in T3; until then the clock runs on its own.
+
 ## Commands
 
 | Command | Purpose |
@@ -36,6 +40,8 @@ Then open <http://localhost:5173/> in a desktop browser.
 | `npm run preview` | Serve the production build at <http://localhost:4173/> |
 | `npm run verify:browser` | With the dev server running: open the app in installed Google Chrome (headless), check console errors and asset requests, check a plain drag leaves the view alone, exercise Space + drag pan, the joystick (pointer and arrow keys), right-drag, zoom and Reset View, check the asset-failure/Retry state, and save screenshots to `artifacts/3d/previews/`. Another URL: `node scripts/verify-browser.mjs <url>`. |
 | `npm run verify:browser:headed` | Same check in a visible Chrome window. |
+
+On the dev server, `?timeScale=15` speeds up simulation time (used by the browser check to finish a 30 s run in about 2 s). It has no effect in production builds.
 
 ## Assets
 

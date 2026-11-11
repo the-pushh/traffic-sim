@@ -25,7 +25,7 @@ Spec: `docs/agents/specs/sim-experience.md`. Each ticket is a GitHub issue with 
 
 | Issue | Ticket | Blocked by | Status | Verification note |
 | --- | --- | --- | --- | --- |
-| [#3](https://github.com/the-pushh/traffic-sim/issues/3) | T1 — Dock and run controls | — | in progress | |
+| [#3](https://github.com/the-pushh/traffic-sim/issues/3) | T1 — Dock and run controls | — | in review | Run controller TDD (10 tests) + viewport helper (4) + framing above panels (8); 61/61 pass; build ok; browser check (headless + visible) 15 run checks + all camera checks pass. Standards + Spec review: fixed settings-after-end lifecycle bug, bad-dt guard, focus-ring clipping, visible lock hint, tokens, dead aspect line, check-script gaps; strip depth-fighting found and fixed. Pill shows "Starter scene" until T7. |
 | [#4](https://github.com/the-pushh/traffic-sim/issues/4) | T2 — Vercel deployment | T1 | todo | |
 | [#5](https://github.com/the-pushh/traffic-sim/issues/5) | T3 — Driving core on one lane and one light | T1 | todo | |
 | [#6](https://github.com/the-pushh/traffic-sim/issues/6) | T4 — Lane network and scene format | — | in progress | |

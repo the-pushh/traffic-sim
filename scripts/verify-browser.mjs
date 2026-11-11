@@ -117,6 +117,70 @@ const panAfterReset = await shot('09b-space-pan-with-reset-focused');
 await page.waitForTimeout(200);
 const afterSpaceRelease = await shot('09c-after-space-release');
 
+// Run controls (T1). The dev server honours ?timeScale= so a 30 s run ends in ~2 s.
+const runPage = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+const runUrl = new URL(url);
+runUrl.searchParams.set('timeScale', '15');
+await runPage.goto(runUrl.href);
+await runPage.waitForSelector('.status', { state: 'hidden', timeout: 30000 });
+const dockState = () => runPage.locator('.dock').getAttribute('data-state');
+const clockText = () => runPage.locator('.clock').textContent();
+const settingsDisabled = () =>
+  runPage.evaluate(() => {
+    const controls = [document.querySelector('.intensity input'), ...document.querySelectorAll('[data-duration]')];
+    return controls.every((c) => c.disabled) && !document.querySelector('.lock-hint').hidden;
+  });
+const settingsEnabled = () =>
+  runPage.evaluate(() => [document.querySelector('.intensity input'), ...document.querySelectorAll('[data-duration]')].every((c) => !c.disabled));
+const runChecks = {};
+runChecks.noHeaderAndViewFillsWindow = await runPage.evaluate(() => {
+  const view = document.querySelector('.viewport').getBoundingClientRect();
+  return !document.querySelector('header') && view.top === 0 && view.height === innerHeight && view.width === innerWidth;
+});
+runChecks.dockFloatsAtBottomCentre = await runPage.evaluate(() => {
+  const dock = document.querySelector('.dock').getBoundingClientRect();
+  return Math.abs(dock.left + dock.width / 2 - innerWidth / 2) < 2 && innerHeight - dock.bottom < 40 && getComputedStyle(document.querySelector('.dock')).borderTopLeftRadius !== '0px';
+});
+runChecks.sceneArrowsInertUntilCarousel = await runPage.evaluate(() => [...document.querySelectorAll('.pill-arrow')].every((a) => a.disabled));
+runChecks.tipShownOnFirstVisit = await runPage.locator('.first-visit-tip').isVisible();
+runChecks.readyClock = (await clockText()) === '0:00 / 0:30' && (await dockState()) === 'ready' && (await settingsEnabled());
+await runPage.locator('.intensity input').fill('4');
+runChecks.intensityChangeShowsLabel = (await runPage.locator('.intensity-name').textContent()) === 'Congested';
+await runPage.locator('.intensity input').fill('2');
+await runPage.locator('.dock').screenshot({ path: `${outDir}/11-dock-ready.png` });
+await runPage.getByRole('button', { name: 'Play' }).click();
+runChecks.playRunsAndLocksSettings = (await dockState()) === 'running' && (await settingsDisabled());
+runChecks.tipGoneAfterPlay = (await runPage.locator('.first-visit-tip').count()) === 0;
+await runPage.waitForTimeout(300);
+await runPage.getByRole('button', { name: 'Pause' }).click();
+const pausedAt = await clockText();
+await runPage.waitForTimeout(600);
+runChecks.pauseHoldsClockAndKeepsLock = (await dockState()) === 'paused' && (await clockText()) === pausedAt && (await settingsDisabled());
+await runPage.locator('.bottom-stack').screenshot({ path: `${outDir}/12-dock-paused-locked.png` });
+await runPage.getByRole('button', { name: 'Play' }).click();
+await runPage.waitForFunction(() => document.querySelector('.dock')?.dataset.state === 'ended', null, { timeout: 15000 });
+runChecks.endsExactlyAtDuration = (await clockText()) === '0:30 / 0:30' && (await settingsEnabled());
+await runPage.locator('.dock').screenshot({ path: `${outDir}/13-dock-ended.png` });
+// Click Play and read the clock in the same task, so the check doesn't depend on timing.
+runChecks.playAfterEndContinuesFromZero = await runPage.evaluate(() => {
+  document.querySelector('[data-action="play-pause"]').click();
+  return document.querySelector('.dock').dataset.state === 'running' && document.querySelector('.clock').textContent === '0:00 / 0:30';
+});
+await runPage.getByRole('button', { name: 'Restart run' }).click();
+runChecks.restartReturnsToReady = (await dockState()) === 'ready' && (await clockText()) === '0:00 / 0:30' && (await settingsEnabled());
+await runPage.getByRole('button', { name: '60 s' }).click();
+runChecks.durationChangeShown = (await clockText()) === '0:00 / 1:00';
+// A settings change after a run ends goes back to Ready (fresh start), not a half-full ended run.
+await runPage.getByRole('button', { name: '30 s' }).click();
+await runPage.getByRole('button', { name: 'Play' }).click();
+await runPage.waitForFunction(() => document.querySelector('.dock')?.dataset.state === 'ended', null, { timeout: 15000 });
+await runPage.getByRole('button', { name: '60 s' }).click();
+runChecks.settingChangeAfterEndReturnsToReady = (await dockState()) === 'ready' && (await clockText()) === '0:00 / 1:00';
+await runPage.reload();
+await runPage.waitForSelector('.status', { state: 'hidden', timeout: 30000 });
+runChecks.tipRememberedAfterReload = (await runPage.locator('.first-visit-tip').count()) === 0;
+await runPage.close();
+
 const webglRenderer = await page.evaluate(() => {
   const gl = document.querySelector('canvas').getContext('webgl2');
   const info = gl?.getExtension('WEBGL_debug_renderer_info');
@@ -162,6 +226,7 @@ const result = {
   retryFocused,
   resetDisabledDuringFailure,
   retryRecovered,
+  runChecks,
 };
 writeFileSync(`${outDir}/result.json`, JSON.stringify(result, null, 2));
 console.log(JSON.stringify(result, null, 2));
@@ -184,5 +249,6 @@ const ok =
   failureMessage === "Couldn't load models/vehicles/sedan.glb" &&
   retryFocused &&
   resetDisabledDuringFailure &&
-  retryRecovered;
+  retryRecovered &&
+  Object.values(runChecks).every(Boolean);
 process.exit(ok ? 0 : 1);

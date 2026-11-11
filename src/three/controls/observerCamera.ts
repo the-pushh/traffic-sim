@@ -1,5 +1,14 @@
 import { Box3, PerspectiveCamera, Sphere, Vector3 } from 'three';
 
+export interface FramingOptions {
+  /**
+   * Fraction of the screen height covered by panels along the bottom edge. The scene
+   * is fitted into the area above them. Pair it with a camera view offset that
+   * centres the view in that area.
+   */
+  coveredBottom?: number;
+}
+
 /** Where the camera looks and how it orbits around that point. Angles in radians. */
 export interface CameraPose {
   target: Vector3;
@@ -40,7 +49,7 @@ export class ObserverCamera {
    * Frame the given bounds from the cube-diagonal starting angle, as close as possible while every
    * corner stays on screen with a small border. Uses the camera's current aspect ratio.
    */
-  static framing(camera: PerspectiveCamera, bounds: Box3): ObserverCamera {
+  static framing(camera: PerspectiveCamera, bounds: Box3, { coveredBottom = 0 }: FramingOptions = {}): ObserverCamera {
     const target = bounds.getCenter(new Vector3());
     const radius = bounds.getBoundingSphere(new Sphere()).radius;
     const corners = boxCorners(bounds);
@@ -49,7 +58,12 @@ export class ObserverCamera {
     const screenExtent = (distance: number) => {
       placeCamera(camera, { ...pose, distance });
       camera.updateProjectionMatrix();
-      return Math.max(...corners.map((c) => c.clone().project(camera)).flatMap((p) => [Math.abs(p.x), Math.abs(p.y)]));
+      // Vertical extent is measured within the uncovered part of the screen, NDC y ∈ [-1 + 2k, 1].
+      const centreY = coveredBottom;
+      const halfHeight = 1 - coveredBottom;
+      return Math.max(
+        ...corners.map((c) => c.clone().project(camera)).flatMap((p) => [Math.abs(p.x), Math.abs(p.y - centreY) / halfHeight]),
+      );
     };
     // Closer means larger on screen: binary-search the distance where the outermost corner hits FRAME_FILL.
     let near = radius * 0.5;

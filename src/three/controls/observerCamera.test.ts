@@ -58,6 +58,27 @@ describe('ObserverCamera framing fit', () => {
   });
 });
 
+describe('ObserverCamera framing above floating panels', () => {
+  it.each(fitCases)('keeps the $scene clear of a covered strip at the bottom of the screen (aspect $aspect)', ({ bounds, aspect }) => {
+    const width = 1440;
+    const height = width / aspect;
+    const covered = 140; // dock + scene pill
+    const camera = new PerspectiveCamera(45, aspect, 0.1, 500);
+    camera.setViewOffset(width, height + covered, 0, covered, width, height);
+    camera.updateProjectionMatrix();
+
+    ObserverCamera.framing(camera, bounds, { coveredBottom: covered / height });
+
+    const lowestVisible = -1 + (2 * covered) / height;
+    const projected = boundsCorners(bounds).map((c) => c.project(camera));
+    for (const p of projected) {
+      expect(p.y).toBeGreaterThanOrEqual(lowestVisible);
+      expect(p.y).toBeLessThanOrEqual(1);
+      expect(Math.abs(p.x)).toBeLessThanOrEqual(1);
+    }
+  });
+});
+
 describe('ObserverCamera Reset View', () => {
   it('restores the starting position and view direction after orbit, tilt, pan, and zoom', () => {
     const { camera, observer } = makeObserver();
