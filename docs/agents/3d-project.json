@@ -1,0 +1,81 @@
+{
+  "configVersion": 1,
+  "status": "provisional",
+  "purpose": "Desktop web application for building road networks and running agent-based traffic simulations in Three.js",
+  "toolchain": {
+    "authoringTool": null,
+    "runtime": "Three.js in the browser",
+    "versions": {},
+    "setupVerified": false
+  },
+  "paths": {
+    "incomingArchives": "assets/3d/incoming",
+    "sourceAssets": "assets/3d/source",
+    "exportedAssets": "public/models",
+    "textures": "public/textures",
+    "previews": "artifacts/3d/previews"
+  },
+  "coordinates": {
+    "unit": null,
+    "upAxis": null,
+    "forwardAxis": null,
+    "handedness": null,
+    "originPolicy": null,
+    "conversionPolicy": "Inspect source units and axes, confirm the application's conventions, and record conversions before applying them."
+  },
+  "assets": {
+    "archives": {
+      "vehicles": "assets/3d/incoming/kenney_car-kit.zip",
+      "roadPieces": "assets/3d/incoming/kenney_city-kit-roads.zip",
+      "roadTextures": "assets/3d/incoming/kenney_road-textures.zip"
+    },
+    "sourceFormats": [],
+    "deliveryFormats": [],
+    "preserveEditableSources": true,
+    "externalDependencies": [],
+    "licenseRecordsPath": "assets/3d/ASSETS.md"
+  },
+  "roadPieces": {
+    "requiredMetadata": [
+      "pivot",
+      "footprint",
+      "laneCount",
+      "connectionPoints"
+    ],
+    "requiredConnectionPointMetadata": [
+      "position",
+      "travelDirection",
+      "elevation",
+      "laneCompatibility"
+    ],
+    "placementPreview": "Use a translucent preview with the same position, rotation, elevation, snapping, and validity checks as the final placement.",
+    "gradeSeparation": "Roads at different heights connect through an explicit link, such as a ramp."
+  },
+  "performance": {
+    "targetDevice": "Desktop web browser",
+    "targetBrowser": null,
+    "referenceHardware": null,
+    "representativeScene": "Traffic Lights",
+    "representativeTrafficLoad": null,
+    "targetFrameRate": null,
+    "maxDeliveryBytes": null,
+    "maxTrianglesPerScene": null,
+    "maxTextureDimension": null
+  },
+  "verification": {
+    "commands": {},
+    "initialBrowserCheck": "Load one supplied vehicle on a short road section with a supplied road texture. Inspect the scene, browser errors, and asset requests before marking setup verified.",
+    "requiredViews": [
+      "overhead",
+      "angled perspective"
+    ],
+    "checkScale": true,
+    "checkMaterialsAndTextures": true,
+    "checkMissingDependencies": true,
+    "checkAnimationIfPresent": true,
+    "checkPlacementPreviewAndSnapping": true,
+    "checkLaneConnectionsAndRampElevation": true,
+    "checkCameraPreservesSimulationState": true,
+    "checkSceneSwitchCleanup": true
+  }
+}
