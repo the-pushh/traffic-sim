@@ -1,101 +1,109 @@
-# Spec: from opening the app to running the simulation
+# Spec: traffic simulator — presets, driver agents, editing, delivery
 
-Parent: issue #1 (plan 00, task 10). Decisions: `docs/agents/decisions/sim-experience.md` (rounds 1–4). Brief: `docs/agents/START_HERE.md`; design: `docs/agents/design.md`.
+Parent: issue #1. Sources, in order of precedence: owner decisions `docs/agents/decisions/sim-experience.md` (rounds 1–5 and the layout constraint) · `docs/agents/BEHAVIOUR_PLAN.md` · `docs/agents/PRESETS_PLAN.md` · `docs/agents/design.md` · `docs/agents/START_HERE.md`. Layout sketches: `docs/agents/specs/preset-layouts.md`. Assets: `assets/3d/ASSETS.md`.
 
 ## Goal
 
-A player opens the app, sees a scene with traffic already on the roads, picks a traffic load and a run length, presses Play, watches traffic flow through signals, and gets results when the time is up. They can run again and compare against the previous run.
+A player opens the app on **Main Street** with traffic already on the roads, picks a traffic intensity and a run length, presses Play, and watches individual drivers deal with signals, roundabouts, merges and a flyover. They edit a road or control, rerun the same arrivals, drivers and vehicles, and compare the numbers. They can also build their own network on a blank board.
 
 ## Screen
 
-Full-window 3D view, no header bar. Floating panels:
+Full-window 3D view (cube-diagonal start, 64 × 64 board), no header bar.
 
 ```text
 ┌──────────────────────────────────────────────────────────┐
 │                                            ┌──────────┐  │
-│                                            │ joystick │  │
-│              3D board (cube-diagonal view) │  +  −    │  │
-│                                            │ Reset    │  │
+│     hover a vehicle:                       │ joystick │  │
+│     "Truck · Assertive · Braking for the   │  +  −    │  │
+│      car ahead"                            │ Reset    │  │
 │                                            │ View     │  │
-│                                            └──────────┘  │
-│              ┌──────────── results card ────────────┐    │  appears when a run ends
-│              └──────────────────────────────────────┘    │
-│                  ( ‹  Traffic Lights  › [Save][Reset] )  │  scene pill
+│              ┌──────────── results card ─────└──────────┘│
+│              └───────────────────────────────────┘       │
+│              ( ‹  Main Street  ›  [Save] [Reset] )       │  scene pill
 │  ┌──────────────────────────────────────────────────────┐│
-│  │ ▶  ↺  0:12 / 0:30 ━━━━━░░░░ │ Load ●●●○○  │ 30 60 90 ││  dock (rounded, floating)
+│  │ ▶ ↺ 0:12 / 0:30 ━━━━░░░ │ Intensity ●●●○○ │ 30 60 90 │ parts… ││
 │  └──────────────────────────────────────────────────────┘│
 └──────────────────────────────────────────────────────────┘
 ```
 
-- **Dock** (bottom-centre, rounded corners): Play/Pause · Restart · clock and progress bar │ load (5 ticks: Almost empty · Low · Medium · High · Congested) · duration (30 s · 60 s · 90 s). The parts section is added on the right, after another divider, in the editor ticket; until then it is absent.
-- **Scene pill** (centred above the dock): `‹ Scene name ›`, plus a one-line suggested-experiment caption. **Save** appears after the name only when there are unsaved edits. **Reset** appears whenever the network differs from the designer's default.
-- **Camera controls** stay top-right as built.
-- **First visit:** a tip above the dock says "Press **Play** to run 30 s of traffic". It goes away on the first Play and is remembered in the browser.
+- **Dock** (floating, rounded, bottom-centre): Play/Pause · Restart · clock and progress │ intensity (Almost empty · Low · Medium · High · Congested) · duration (30/60/90 s) │ parts section (arrives with the editor).
+- **Scene pill** above the dock: `‹ Scene ›` cycles Main Street → Market Roundabout → School Run → Flyover Bottleneck → Blank board. Save appears only with unsaved edits; Reset appears when the network differs from the designer's.
+- **Hover a vehicle**: "Type · Profile · Reason" (e.g. "Compact car · Cautious · Waiting for a larger gap").
+- **Live queue labels** on each junction approach during a run.
+- **First visit**: tip "Press Play to run 30 s of traffic", shown once.
 
 ## Run lifecycle
 
-```text
-          load scene / change load tick (rebuilds warm-up)
-                │
-                ▼
-  ┌────────► READY ──Play──► RUNNING ◄──Play── PAUSED
-  │      (frozen warm-up)      │   └──Pause──►   │
-  │                            │ clock = duration
-  │                            ▼
-  │                          ENDED (traffic frozen, results shown)
-  │                            │ Play: continue from frozen traffic, clock 0:00
-  │                            └──────────► RUNNING
-  └── Restart (any state): identical fresh start from the warm-up state
-```
-
-| State | Load, duration, scene arrows | Clock |
+| State | How you get there | Intensity, duration, scene arrows |
 | --- | --- | --- |
-| Ready | enabled | 0:00 |
-| Running / Paused | **disabled and greyed out** | counting / held |
-| Ended | enabled | full |
+| **Ready** | Scene opens, Restart, Reset, or intensity change (rebuilds the warm-up) | enabled |
+| **Running** | Play | **disabled, greyed** |
+| **Paused** | Pause mid-run | **disabled, greyed**; road and control edits allowed (simulation auto-adjusts)* |
+| **Ended** | Clock reaches the duration: traffic freezes, results card shows | enabled |
 
-- **Restart** returns to Ready with the same seed, so the same load and duration give the same traffic. This is the strict before/after comparison.
-- **Reset** (pill) restores the designer's network and default load, and clears the run.
-- **Switching scenes** happens only when arrows are enabled. If there are unsaved edits, a modal says "Leaving resets the road network to default." with **Save and switch** and **Discard and switch** buttons; × at the top-right cancels.
-- **Save** overrides the scene with the player's network in this browser. Reset brings back the designer's version.
+- **Play after Ended** continues the simulation from the frozen traffic for another selected duration (clock restarts at 0:00).
+- **Restart** returns to Ready with the **same arrivals, drivers and vehicles**, for before/after comparison after an edit.
+- **Switching scenes** with unsaved edits asks first: "Leaving resets the road network to default." [Save and switch] [Discard and switch], × to cancel.
+- **Save** overrides the scene in this browser; **Reset** restores the designer's network.
 
-## Simulation model (first version; the owner will specify behaviour later)
+\* Interpretation of round 5 #5, to confirm with the owner.
 
-- **Lane graph** built from road pieces' connection points. Vehicles follow lane centrelines.
-- **Car following:** keep a gap to the vehicle ahead (IDM), stop for red signals and the end of queues.
-- **Signals:** fixed-time phases per junction.
-- **Time:** fixed 1/30 s steps in simulation time, independent of frame rate. The run ends exactly at 30/60/90 s.
-- **Arrivals:** seeded random arrivals at each entry, with a rate per load tick (internal values tuned so that Congested builds visible queues). Each vehicle gets a random reachable exit.
-- **Vehicles:** a shuffled sequence of every Car Kit vehicle model, cycled so all appear evenly. Behaviour is the same for all models for now; length comes from the model.
-- **Warm-up:** each scene opens paused after a seeded off-screen warm-up at the selected load.
+## Network model
 
-## Results
+- Pieces from the City Kit become **lane graph** segments using per-piece connection metadata (position, travel direction, elevation, lanes). 17 of the 22 traffic-affecting element types are used across the presets (target ≥ 14, see `ASSETS.md`).
+- **Width and capacity** come from lane counts (divided roads, side lanes, two-to-one splits) and **speed limits** (narrow streets are slower).
+- **Controls**: traffic lights (fixed-time phases, configurable timings, staggered offsets), stop signs, yield (`road-sign-warning`), roundabout entries yield to circulating traffic, lane closures.
+- **Levels**: the bridge level is reachable only through connected ramps; vehicles on the bridge and the road below never interact.
 
-When the run ends, a card above the dock shows these measures, labelled with scene, load and duration:
+## Driver and vehicle model (`BEHAVIOUR_PLAN.md`)
 
-| Measure | Definition |
+- Each trip gets a **driver profile** and a **vehicle type**, chosen independently. Preferences are drawn once per trip from overlapping profile ranges: preferred speed, following gap, pull-away and braking rates, accepted gap size.
+- **Profiles**: Steady, Cautious, Assertive, Cooperative, Impatient. Impatience builds while delayed and eases once moving.
+- **Vehicle types** (from the Car Kit): compact car, sedan, SUV, pickup, van, box truck, heavy truck, tractor. Each has its own length, acceleration, braking and turning limits. There's no bus in the kit. The mix depends on the scene.
+- **Driving**: smooth acceleration and braking in response to the vehicle ahead, curves, speed limits, controls and space. Gap acceptance at roundabouts and merges. A vehicle won't enter a junction unless its exit has room for its length. Cooperative drivers make room for merging traffic.
+- **Rule-following** is separate from the profile. Most drivers comply. Modest speeding or rolling a stop is decided **once per approach**, only when the road looks clear. Other drivers react to what actually happens, and every vehicle still checks for conflicts.
+- **Each vehicle has a current reason** for what it's doing (e.g. "Red light", "Waiting for a gap", "Exit lane full", "Braking for the car ahead"). This is shown on hover.
+- **Fixed 1/30 s simulation steps** and **seeded randomness** for arrivals, drivers and vehicles, so a Restart reproduces the same run.
+
+## Demand
+
+- Each preset defines its own **demand pattern**: per-entry weights (e.g. the roundabout's uneven arms) and timed peaks (School Run's local trips).
+- The **intensity** control scales trips due per minute.
+- When an entrance is full, trips **wait outside** and are counted.
+
+## Measures (absolute numbers, each with its sample count)
+
+| Measure | Shown as |
 | --- | --- |
-| Reached destination | Vehicles that arrived at their exit during the run. |
-| Average wait | Mean time vehicles spent nearly stopped (below a small speed threshold) during the run. |
-| Longest queue | Most vehicles stopped one behind another in a single lane at any moment. |
+| Trips due / entered / finished | three counts |
+| Average travel time | seconds · number of finished trips |
+| Queue length by approach | vehicles, live and peak · per approach |
+| Blocked trips | count of trips with no path |
 
-The previous run is shown beside it with ▲▼ change markers. The card can be dismissed.
+The results card shows the latest run and the previous one, labelled with scene, intensity and duration.
 
-## First scene: test crossroads
+## Presets (sketches in `preset-layouts.md`; all inside 16 × 16 tiles, each with free space and an open connection)
 
-A hidden test scene that isn't in the picker: one signal-controlled 4-way crossroads in the board centre, with 4 roads to the board edges, giving entry/exit points A–D. It proves the engine while the owner designs the four starter scenes (provisionally Traffic Lights, Flyover, On-Ramp, Turnaround) as 16 × 16 tile sketches.
+1. **Main Street**: divided arterial, three staggered signals, one-tile short block that backs up, narrower side streets.
+2. **Market Roundabout**: four-arm single-lane roundabout, uneven demand, a signal just past the east exit that spills back into the circle.
+3. **School Run**: wide signalised main road and a narrow, slower, stop-controlled shortcut between the same areas, plus a school driveway, crossing and a local-trip peak.
+4. **Flyover Bottleneck**: divided route narrowing to one lane over a flyover. A slower surface alternative leaves before the climb and merges back after it.
+5. **Blank board**: edge entry/exit points only, for the player's own scenario.
 
 ## Test seams (to agree before writing tests)
 
-| Seam | What the tests catch | What they miss |
+| Seam | Catches | Misses |
 | --- | --- | --- |
-| **Run controller** (Ready/Running/Paused/Ended; play, pause, restart, tick; settings-locked flag) | Run ends exactly at the duration, settings and arrows lock and unlock at the right moments, Play after the end continues, Restart resets | Visual state of the dock |
-| **Simulation core** (`network + settings + seed → step(dt) → snapshot / results`), pure TypeScript with no Three.js | Same seed gives the same results; vehicles stop at red and queue; vehicles only use connected lanes; measures are computed correctly on small hand-built networks | Rendering, animation smoothness |
-| **Lane network builder** (road pieces + placements → lane graph) | Connections only where piece endpoints meet; entry/exit points found at the board edge | Visual alignment of models |
-| **Scene store** (designer default, saved override, unsaved edits; save, reset, discard) with an in-memory storage adapter | Save overrides, Reset restores the designer's network, unsaved-edit detection | The browser's actual storage |
+| **Run controller** | Ends exactly at 30/60/90 s; settings and arrows lock and unlock; Play after the end continues; Restart reproduces | Dock visuals |
+| **Driving core** (one lane, one light first) | Following, queueing at red, pulling away one by one on green; profile and vehicle differences (a compact car pulls away faster and fits a shorter gap than a truck); smooth speed changes | Rendering |
+| **Junction behaviour** | Yield and stop priority, gap acceptance, no entry while the exit is full, staggered signals, rule violations decided once per approach | Visual timing |
+| **Lane network builder** | Connections only where piece endpoints meet; ramps are the only level change; entry/exit points found | Model alignment |
+| **Routing and edits** | Routes to destinations, rerouting after a closed connection, blocked trips | — |
+| **Measures** | Counts and averages with sample sizes on hand-built networks | — |
+| **Scene store** | Save overrides, Reset restores, unsaved-edit detection | Browser storage itself |
 
-The dock, pill, modal and results card are checked in the browser (`verify:browser`), not unit-tested.
+The dock, pill, modal, hover tag, results card and the four presets in 3D are checked in the browser (`verify:browser`), along with the plan's verification list: signal timing shifts queues, a stop or yield changes who goes first, closing a connection diverts trips, the flyover and the road below interact only via ramps, and one before-and-after edit changes the queue or travel time.
 
-## Out of scope here
+## Delivery
 
-Drag-and-drop editor and parts section, the four designed scenes, detailed driver behaviour, scrubbing and replay, playback speed, deployment.
+Deploy to **Vercel**. Report the deployed URL, the four presets, and the element types counted toward the 60% target.

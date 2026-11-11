@@ -65,3 +65,19 @@ Planning interview complete; spec in `docs/agents/specs/sim-experience.md`.
 ## Layout constraint — 2026-11-11
 
 Each preset network fits **entirely inside the existing 1:1 square board** (16 × 16 road tiles, 64 units), including ramps, junctions and road approaches. Road lengths and junction spacing are adjusted to the asset footprints. Each preset leaves **usable empty space** and **at least one open connection point** where players can add a road or junction and see the effect on traffic.
+
+## Round 5 — 2026-11-12 (after the owner's preset plan)
+
+| # | Topic | Decision |
+| --- | --- | --- |
+| 1 | Road widths | Mix **lane counts** (divided roads, side lanes, two-to-one splits) and **speed limits** to create width and capacity differences. |
+| 2 | Yield | Use the kit's own signs: `road-sign-warning` is the yield control; `road-sign-stop` is stop; roundabout entries yield. |
+| 3 | Own scenario | Fifth carousel entry, **Blank board**, built with the kit's pieces and signs. |
+| 4 | "Replay" | Not a replay: pressing Play after a run ends **continues the simulation for the selected duration**. Rerunning the same arrivals, drivers and vehicles is **Restart**. Timeline stays progress-only. |
+| 5 | Edits mid-run | The simulation **auto-adjusts** to edits (committed vehicles clear, trips reroute, blocked trips shown). Settings buttons stay **disabled** during the run. *Interpretation to confirm: road/control edits are allowed while paused mid-run.* |
+| 6 | Measures | **Absolute numbers**, always with the **sample count** next to each measure (e.g. "Average travel time 41 s · 118 trips"). |
+| 7 | Flyover | Show where the slower surface route **rejoins** the raised route; keep the alternative, connections and build space visible on the 16 × 16 sketch (redrawn). |
+| 8 | Demand | Each preset defines its own demand pattern (per-entry weights, timed peaks); the 5-tick control scales it. |
+| 9 | Deployment | **Vercel**. |
+| 10 | Drivers and vehicles | Owner's behaviour model, `docs/agents/BEHAVIOUR_PLAN.md`; supersedes the proposed fixed mix and round 3 #7 ("every vehicle"): use a sensible mix per scene. |
+| — | Defaults applied | First scene **Main Street**. Hovering a vehicle shows "Type · Profile · Reason" (from the behaviour model). |

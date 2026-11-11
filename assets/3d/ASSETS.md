@@ -82,3 +82,20 @@ Classified from the City Kit Roads previews and measured GLB bounds (2026-11-11)
 **Gaps:** no narrower or wider road pieces (width differences come from lane count via divided roads and side lanes, plus speed limits); no yield sign (warning sign stands in); no multi-lane highway piece.
 
 **Coverage target:** 22 types → 60% needs **14**. The planned presets use these 17 (77%): 1 straight, 2 bend, 3 curve, 4 crossroads, 5 T-junction, 7 roundabout, 8 road split, 10 side entry, 11 side exit, 12 straight ramp, 14 bridge, 15 road end, 16 crossing, 17 driveway, 19 traffic light, 20 stop sign, 21 yield (warning sign). The final count is confirmed once the preset layouts are built.
+
+## Vehicle types (for the behaviour model)
+
+Classified from the Car Kit previews and measured bounds (2026-11-12). The models are stylised and **not to scale with each other** (sedan 2.55 units long, garbage truck 3.45), so the simulation uses realistic per-type lengths and each model is scaled to its type's length.
+
+| Simulation type | Car Kit models | Notes |
+| --- | --- | --- |
+| Compact car | `hatchback-sports`, `sedan-sports` | Quickest to pull away, shortest gap |
+| Sedan | `sedan`, `taxi`, `police` | |
+| SUV | `suv`, `suv-luxury` | |
+| Pickup | `truck`, `truck-flat` | Kenney's "truck" is a pickup |
+| Van | `van`, `ambulance` | |
+| Box truck | `delivery`, `delivery-flat` | Light goods lorry / flatbed |
+| Heavy truck | `garbage-truck`, `firetruck` | Slowest acceleration, needs most room past a junction |
+| Tractor | `tractor`, `tractor-police`, `tractor-shovel` | Slow vehicle; low top speed |
+
+**Not used as traffic:** karts (`kart-*`) and race cars (`race`, `race-future`). **Gap:** no bus model exists. Emergency models drive as their base type (no sirens or priority).
