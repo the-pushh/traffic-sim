@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { PIECES } from '../simulation/network/pieces';
 import { CONTROL_MODELS } from '../three/scene/controlModels';
-import { placeholderVehicle } from './vehicles';
+import { VEHICLE_TYPES } from '../simulation/traffic/vehicleTypes';
 
 const publicDir = join(import.meta.dirname, '../../public');
 
@@ -24,9 +24,8 @@ function expectServedWithTextures(url: string) {
 }
 
 describe('served 3D assets', () => {
-  it('serves the placeholder vehicle with its textures, at a relative URL', () => {
-    expect(placeholderVehicle.url.startsWith('/')).toBe(false);
-    expectServedWithTextures(placeholderVehicle.url);
+  it.each(Object.values(VEHICLE_TYPES).flatMap((t) => t.models))('serves the %s vehicle model with its textures', (model) => {
+    expectServedWithTextures(`models/vehicles/${model}.glb`);
   });
 
   it.each(Object.values(PIECES).map((p) => p.model))('serves the %s road piece with its textures', (model) => {

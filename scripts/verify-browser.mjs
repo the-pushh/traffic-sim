@@ -136,6 +136,7 @@ const settingsDisabled = () =>
 const settingsEnabled = () =>
   runPage.evaluate(() => [document.querySelector('.intensity input'), ...document.querySelectorAll('[data-duration]')].every((c) => !c.disabled));
 const runChecks = {};
+let result_hoverTag = null;
 runChecks.noHeaderAndViewFillsWindow = await runPage.evaluate(() => {
   const view = document.querySelector('.viewport').getBoundingClientRect();
   return !document.querySelector('header') && view.top === 0 && view.height === innerHeight && view.width === innerWidth;
@@ -179,6 +180,30 @@ await runPage.getByRole('button', { name: 'Play' }).click();
 await runPage.waitForFunction(() => document.querySelector('.dock')?.dataset.state === 'ended', null, { timeout: runEndTimeout });
 await runPage.getByRole('button', { name: '60 s' }).click();
 runChecks.settingChangeAfterEndReturnsToReady = (await dockState()) === 'ready' && (await clockText()) === '0:00 / 1:00';
+// Traffic (T3): play for a while, pause, check vehicles queue at the red light and the hover tag explains them.
+if (isDevServer) {
+  await runPage.getByRole('button', { name: 'Restart run' }).click();
+  await runPage.getByRole('button', { name: 'Play' }).click();
+  // Within one 30 s signal cycle (2 s here), some car must be waiting at the red light.
+  const sawQueue = await runPage
+    .waitForFunction(() => window.__trafficDebug.vehicles().some((v) => v.reason === 'Red light' || v.reason === 'Queued behind the car ahead'), null, { timeout: 4000, polling: 50 })
+    .then(() => true, () => false);
+  await runPage.getByRole('button', { name: 'Pause' }).click();
+  await runPage.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+  const vehicles = await runPage.evaluate(() => window.__trafficDebug.vehicles());
+  runChecks.trafficOnTheRoad = vehicles.length >= 1;
+  runChecks.someQueuedOrStoppedAtRed = sawQueue;
+  const target = vehicles.find((v) => v.x > 100 && v.x < 1300 && v.y > 80 && v.y < 650);
+  if (target) {
+    await runPage.mouse.move(target.x, target.y);
+    await runPage.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+    const tag = await runPage.locator('.vehicle-tooltip').textContent();
+    runChecks.hoverTagShowsTypeProfileReason = /^[A-Z][a-z ]+ · (Steady|Cautious|Assertive|Cooperative|Impatient) · .+$/.test(tag ?? '');
+    result_hoverTag = tag;
+  } else runChecks.hoverTagShowsTypeProfileReason = false;
+  await runPage.screenshot({ path: `${outDir}/14-traffic-paused.png` });
+  await runPage.getByRole('button', { name: 'Restart run' }).click();
+}
 await runPage.reload();
 await runPage.waitForSelector('.status', { state: 'hidden', timeout: 30000 });
 runChecks.tipRememberedAfterReload = (await runPage.locator('.first-visit-tip').count()) === 0;
@@ -230,6 +255,7 @@ const result = {
   resetDisabledDuringFailure,
   retryRecovered,
   runChecks,
+  hoverTag: result_hoverTag,
 };
 writeFileSync(`${outDir}/result.json`, JSON.stringify(result, null, 2));
 console.log(JSON.stringify(result, null, 2));

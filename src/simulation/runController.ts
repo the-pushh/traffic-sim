@@ -23,6 +23,11 @@ export class RunController {
   state: RunState = 'ready';
   duration: RunDuration = 30;
   intensity: Intensity = 'medium';
+  /**
+   * Increases whenever the simulation must rebuild its starting traffic: Restart, a
+   * new intensity in Ready, or a settings change after a run ends.
+   */
+  freshStarts = 0;
   private stepsDone = 0;
   private pendingSeconds = 0;
 
@@ -48,6 +53,7 @@ export class RunController {
 
   /** Back to Ready at 0:00; the simulation rebuilds its warm-up state from the same seed. */
   restart() {
+    this.freshStarts++;
     this.state = 'ready';
     this.stepsDone = 0;
     this.pendingSeconds = 0;
@@ -71,9 +77,11 @@ export class RunController {
 
   /** Same rules as `setDuration`; a new intensity also needs a new warm-up. */
   setIntensity(intensity: Intensity): boolean {
+    const wasReady = this.state === 'ready';
     return this.changeSetting(() => {
       if (intensity === this.intensity) return false;
       this.intensity = intensity;
+      if (wasReady) this.freshStarts++;
       return true;
     });
   }

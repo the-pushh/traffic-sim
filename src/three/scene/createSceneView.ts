@@ -19,6 +19,7 @@ import {
   type Object3D,
   Quaternion,
   RingGeometry,
+  SphereGeometry,
   Scene,
   Shape,
   Sprite,
@@ -27,11 +28,11 @@ import {
   Vector3,
 } from 'three';
 import { boardToWorld, groundBoard, TILE_SIZE } from '../../scenes/board';
-import { placeholderVehicle } from '../../scenes/vehicles';
 import { buildLaneGraph, type LaneGraph, type Point3, portPose } from '../../simulation/network/buildLaneGraph';
 import { rightOf } from '../../simulation/network/geometry';
 import { PIECES } from '../../simulation/network/pieces';
-import { type SceneDefinition, validateScene } from '../../simulation/network/scene';
+import { type SceneDefinition, type SignalTiming, validateScene } from '../../simulation/network/scene';
+import { DEFAULT_SIGNAL_TIMING } from '../../simulation/traffic/signals';
 import { createAssetLoader } from '../loaders/assetLoader';
 import { CONTROL_MODELS } from './controlModels';
 
@@ -45,9 +46,16 @@ export class SceneDefinitionError extends Error {
   }
 }
 
+/** The lamp above one traffic light and the cycle it follows. */
+export interface SignalLamp {
+  timing: SignalTiming;
+  material: MeshBasicMaterial;
+}
+
 export interface SceneView {
   scene: Scene;
   graph: LaneGraph;
+  signalLamps: SignalLamp[];
   /** World-space bounds of the board, for camera framing. */
   bounds: Box3;
 }
@@ -78,10 +86,7 @@ export async function createSceneView(definition: SceneDefinition, baseUrl: stri
     ...definition.pieces.map((p) => PIECES[p.piece].model),
     ...definition.controls.map((c) => CONTROL_MODELS[c.type]),
   ]);
-  const [vehicle, ...models] = await Promise.all([
-    load.model(placeholderVehicle.url),
-    ...[...modelNames].map((name) => load.model(`models/roads/${name}.glb`)),
-  ]);
+  const models = await Promise.all([...modelNames].map((name) => load.model(`models/roads/${name}.glb`)));
   const byName = new Map([...modelNames].map((name, i) => [name, models[i]]));
 
   // No scene background: the canvas is transparent so the CSS background token shows through.
@@ -104,6 +109,8 @@ export async function createSceneView(definition: SceneDefinition, baseUrl: stri
 
   const controls = new Group();
   controls.name = 'traffic-controls';
+  const signalLamps: SignalLamp[] = [];
+  const lampGeometry = new SphereGeometry(0.22, 16, 12);
   for (const control of definition.controls) {
     const { centre, facing } = portPose(definition.pieces[control.piece], control.port);
     // Beside the approach, on the arriving traffic's right, facing that traffic.
@@ -113,24 +120,21 @@ export async function createSceneView(definition: SceneDefinition, baseUrl: stri
     sign.position.copy(world([centre[0] + right[0] * 0.55 - facing[0] * 0.05, centre[1] - ROAD_SURFACE, centre[2] + right[1] * 0.55 - facing[1] * 0.05]));
     sign.rotation.y = Math.atan2(facing[0], facing[1]);
     controls.add(sign);
+    if (control.type === 'signal') {
+      // A lamp above the light shows its current aspect (red, amber, green).
+      const material = new MeshBasicMaterial({ color: '#d64545' });
+      const lamp = new Mesh(lampGeometry, material);
+      lamp.position.copy(sign.position).add(new Vector3(0, 2.25, 0));
+      controls.add(lamp);
+      signalLamps.push({ timing: control.timing ?? DEFAULT_SIGNAL_TIMING, material });
+    }
   }
   setShadows(controls, { cast: true });
   scene.add(controls);
 
   scene.add(createLaneOverlay(graph));
 
-  // Placeholder vehicle parked on the first entry lane until the driving core adds traffic (T3).
-  const firstLane = graph.gateways[0] && graph.lanes[graph.gateways[0].entryLanes[0]];
-  if (firstLane) {
-    const [a, b] = [world(firstLane.points[0]), world(firstLane.points.at(-1)!)];
-    vehicle.scale.setScalar(placeholderVehicle.scale);
-    vehicle.position.lerpVectors(a, b, 0.5);
-    vehicle.rotation.y = Math.atan2(b.x - a.x, b.z - a.z); // the model faces +z
-    setShadows(vehicle, { cast: true });
-    scene.add(vehicle);
-  }
-
-  return { scene, graph, bounds: new Box3().setFromObject(board) };
+  return { scene, graph, signalLamps, bounds: new Box3().setFromObject(board) };
 }
 
 /** Lane centrelines with direction arrows, labelled gateways, open road ends, and driveways. */

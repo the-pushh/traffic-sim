@@ -1,8 +1,9 @@
-import { PCFSoftShadowMap, PerspectiveCamera, Timer, WebGLRenderer } from 'three';
+import { PCFSoftShadowMap, PerspectiveCamera, Timer, Vector3, WebGLRenderer } from 'three';
 import { createDock } from '../components/dock';
 import { createFirstVisitTip } from '../components/firstVisitTip';
 import { attachJoystickControl, setJoystickEnabled } from '../components/joystickControl';
 import { createScenePill } from '../components/scenePill';
+import { createVehicleTooltip } from '../components/vehicleTooltip';
 import { RunController } from '../simulation/runController';
 import '../styles/main.css';
 import { CameraJoystick } from '../three/controls/cameraJoystick';
@@ -10,8 +11,16 @@ import { fitCameraToViewport } from '../three/controls/cameraViewport';
 import { ObserverCamera } from '../three/controls/observerCamera';
 import { attachViewportInput } from '../three/controls/viewportInput';
 import { AssetLoadError } from '../three/loaders/assetLoader';
-import { testNetwork } from '../scenes/testNetwork';
+import { signalTest } from '../scenes/signalTest';
+import { aspectAt } from '../simulation/traffic/signals';
+import { createAssetLoader } from '../three/loaders/assetLoader';
 import { createSceneView, SceneDefinitionError } from '../three/scene/createSceneView';
+import { createTrafficLayer, VEHICLE_MODEL_NAMES } from '../three/scene/trafficLayer';
+import { TrafficSession } from './trafficSession';
+
+/** The scene the app opens on until the scene carousel arrives (T11). */
+const currentScene = signalTest;
+const LAMP_COLOURS = { green: '#3fbf6a', amber: '#f2b63c', red: '#d64545' } as const;
 
 const ZOOM_STEP = 0.8;
 
@@ -38,7 +47,7 @@ app.innerHTML = `
       <button type="button" data-action="reset-view" disabled class="primary">Reset View</button>
     </div>
     <div class="bottom-stack"></div>
-    <div class="status" role="status" aria-live="polite"><p>Loading the road network…</p></div>
+    <div class="status" role="status" aria-live="polite"><p>Loading roads and vehicles…</p></div>
   </main>
 `;
 
@@ -49,7 +58,7 @@ const bottomStack = app.querySelector<HTMLElement>('.bottom-stack')!;
 // Run controls: created once, inert until the scene has loaded.
 const run = new RunController();
 const tip = createFirstVisitTip(bottomStack, () => run.duration);
-const pill = createScenePill(bottomStack, testNetwork.name);
+const pill = createScenePill(bottomStack, currentScene.name);
 const dock = createDock(bottomStack, run, { onPlay: () => tip.dismiss() });
 bottomStack.inert = true;
 
@@ -101,6 +110,8 @@ function setCameraControlsEnabled(enabled: boolean) {
   setJoystickEnabled(joystickElement, enabled);
 }
 
+let tooltip: ReturnType<typeof createVehicleTooltip> | null = null;
+
 async function start() {
   setCameraControlsEnabled(false);
   detachInput?.();
@@ -108,9 +119,31 @@ async function start() {
   observer = null;
   status.hidden = false;
   status.className = 'status';
-  status.innerHTML = '<p>Loading the road network…</p>';
+  status.innerHTML = '<p>Loading roads and vehicles…</p>';
   try {
-    const { scene, bounds } = await createSceneView(testNetwork, import.meta.env.BASE_URL);
+    const load = createAssetLoader(import.meta.env.BASE_URL);
+    const [view, vehicleModels] = await Promise.all([
+      createSceneView(currentScene, import.meta.env.BASE_URL),
+      Promise.all(VEHICLE_MODEL_NAMES.map((name) => load.model(`models/vehicles/${name}.glb`))),
+    ]);
+    const { scene, bounds, graph, signalLamps } = view;
+    const traffic = createTrafficLayer(graph, new Map(VEHICLE_MODEL_NAMES.map((name, i) => [name, vehicleModels[i]])));
+    scene.add(traffic.group);
+    const session = new TrafficSession(currentScene, graph, run);
+    tooltip ??= createVehicleTooltip(viewport, renderer.domElement);
+    if (import.meta.env.DEV) {
+      // Dev-only hook for the browser check: where each vehicle is on screen, and why it is doing what it does.
+      (window as unknown as { __trafficDebug: unknown }).__trafficDebug = {
+        vehicles: () =>
+          traffic.group.children.map((object) => {
+            const p = object.getWorldPosition(new Vector3()).project(camera);
+            const rect = renderer.domElement.getBoundingClientRect();
+            const v = session.simulation.vehicle(object.userData.vehicleId);
+            return { x: rect.left + ((p.x + 1) / 2) * rect.width, y: rect.top + ((1 - p.y) / 2) * rect.height, reason: v.reason, speed: v.speed };
+          }),
+        counts: () => session.simulation.counts,
+      };
+    }
     observer = ObserverCamera.framing(camera, bounds, { coveredBottom });
     const joystick = new CameraJoystick(observer);
     const detachViewport = attachViewportInput(renderer.domElement, observer);
@@ -124,7 +157,10 @@ async function start() {
       timer.update(time);
       const delta = Math.min(timer.getDelta(), 0.1);
       joystick.update(delta);
-      run.tick(delta * TIME_SCALE); // Simulation steps are consumed here once traffic exists (T3).
+      session.advance(run.tick(delta * TIME_SCALE));
+      traffic.sync(session.simulation);
+      for (const lamp of signalLamps) lamp.material.color.set(LAMP_COLOURS[aspectAt(lamp.timing, session.simulation.time)]);
+      tooltip!.update(camera, traffic.group, session.simulation);
       syncRunUi();
       renderer.render(scene, camera);
     });

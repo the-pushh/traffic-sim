@@ -26,6 +26,14 @@ export interface PiecePlacement {
   flow?: Record<string, PortFlow>;
 }
 
+/** Fixed-time signal cycle in seconds: green, then amber, then red, shifted by `offset`. */
+export interface SignalTiming {
+  green: number;
+  amber: number;
+  red: number;
+  offset: number;
+}
+
 /** A traffic control on one approach to a piece: the port traffic arrives through. */
 export interface ControlPlacement {
   type: 'signal' | 'stop' | 'yield';
@@ -33,6 +41,8 @@ export interface ControlPlacement {
   piece: number;
   /** The piece's port id for the approach. */
   port: string;
+  /** Signals only; defaults apply when omitted. */
+  timing?: SignalTiming;
 }
 
 /** How trips are spread over the scene; behaviour arrives with the traffic engine (T3, T6). */
