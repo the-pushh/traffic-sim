@@ -356,6 +356,17 @@
         ],
         "result": "pass: drawer with six groups; a dragged straight previews at exactly the placement the drop makes ('✓ Connects here'); an invalid drop says '✕ Off the board' and changes nothing; Escape cancels; undo/redo; click selects and Remove works; signal green retimed from the inspector; a stop sign placed on an approach; parts locked while running and unlocked when paused; an edit while paused keeps the run (same counts, vehicles kept). No page errors. Screenshots 23-editor-dropped.png and 24-editor-signal.png inspected.",
         "previews": "artifacts/3d/previews/ (git-ignored)"
+      },
+      {
+        "date": "2026-11-12",
+        "check": "T13 verification and delivery (#15)",
+        "command": "npm test (254/254), npm run build, npm run dev then node scripts/verify-browser.mjs; node scripts/verify-browser.mjs https://traffic-sim-one.vercel.app/",
+        "browser": "Google Chrome 157 on macOS, headless, 1440x900",
+        "assets": [
+          "all scene assets of the five scenes; road and control GLBs as editor previews"
+        ],
+        "result": "pass (exit code gated on these checks): production cycles all five scenes and all four presets run (clock passes 0:01) with no page errors; dev server: Main Street retimed (Junction 1 green 8 s) gives the same arrivals and different peak queues side by side on the results card; Blank board built from the drawer (31 drops, each previewed valid) into a signalised crossroads, 90 s run reaches the results card with 70 due, 43 entered, 11 finished, and Save stores the 31-piece layout. Screenshots 25-before-after.png, 26-blank-board-built.png, 27-blank-board-results.png inspected.",
+        "previews": "artifacts/3d/previews/ (git-ignored)"
       }
     ]
   },

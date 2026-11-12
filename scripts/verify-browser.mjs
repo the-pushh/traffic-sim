@@ -422,6 +422,141 @@ if (isDevServer) {
   await page3.close();
 }
 
+// Final verification (T13).
+const openPage = async (target) => {
+  const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(String(e)));
+  await page.goto(target);
+  await page.waitForSelector('.status', { state: 'hidden', timeout: 60000 });
+  return { page, errors };
+};
+// Every preset runs: cycle the pill and play each one for a moment (also against the deployed app).
+const presetRunChecks = {};
+{
+  const { page, errors } = await openPage(url);
+  const ran = {};
+  for (let i = 0; i < 5; i++) {
+    const name = (await page.locator('.scene-name').textContent())?.trim();
+    if (name !== 'Blank board') {
+      await page.getByRole('button', { name: 'Play' }).click();
+      ran[name] = await page
+        .waitForFunction(() => {
+          const [m, s] = (document.querySelector('.clock')?.textContent ?? '').split(' / ')[0].split(':').map(Number);
+          return m * 60 + s >= 1;
+        }, null, { timeout: 8000 })
+        .then(() => true, () => false);
+      await page.getByRole('button', { name: 'Pause' }).click();
+      await page.getByRole('button', { name: 'Restart run' }).click();
+    }
+    await page.getByRole('button', { name: 'Next scene' }).click();
+    await page.waitForSelector('.status', { state: 'hidden', timeout: 60000 });
+  }
+  presetRunChecks.allFourPresetsRun = ['Main Street', 'Market Roundabout', 'School Run', 'Flyover Bottleneck'].every((n) => ran[n] === true);
+  presetRunChecks.noPageErrors = errors.length === 0;
+  presetRunChecks.recorded = { ran, errors: errors.slice(0, 3) };
+  await page.close();
+}
+
+// Dev server only: a before/after edit, and a player's own scenario on the Blank board, through the UI.
+const scenarioChecks = {};
+if (isDevServer) {
+  const fast = new URL(url);
+  fast.searchParams.set('timeScale', '15');
+  const { page, errors } = await openPage(fast.toString());
+  await page.evaluate(() => localStorage.clear());
+  await page.reload();
+  await page.waitForSelector('.status', { state: 'hidden', timeout: 30000 });
+  const finishRun = () => page.waitForFunction(() => document.querySelector('.dock')?.dataset.state === 'ended', null, { timeout: 60000 });
+  /** Each results row's cells, by its heading: { 'Trips due · entered · finished': ['11 · 11 · 2', '11 · 11 · 1'], ... }. */
+  const resultRows = () =>
+    page.evaluate(() =>
+      Object.fromEntries(
+        [...document.querySelectorAll('.results-card tbody tr:not(.group)')].map((r) => [r.querySelector('th')?.textContent?.trim(), [...r.querySelectorAll('td')].map((td) => td.textContent?.trim())]),
+      ),
+    );
+  const trips = (cell) => (cell ?? '').split('·').map((n) => Number(n.trim()));
+
+  // Before/after: run Main Street, shorten the first junction's arterial green, run again with the same traffic.
+  // The light is selected through the debug hook (a click on a small 3D sign is covered by the T12 editor checks);
+  // the timing inspector and Apply are the real UI.
+  await page.getByRole('button', { name: 'Play' }).click();
+  await finishRun();
+  await page.evaluate(() => window.__trafficDebug.select({ kind: 'control', index: 0 }));
+  await page.locator('[data-timing="green"]').fill('8');
+  await page.getByRole('button', { name: 'Apply timing' }).click();
+  await page.waitForTimeout(800);
+  await page.getByRole('button', { name: 'Play' }).click();
+  await finishRun();
+  await page.waitForTimeout(200);
+  const rows = await resultRows();
+  const queues = Object.entries(rows).filter(([heading]) => heading?.startsWith('Junction'));
+  const [thisRun, previousRun] = [0, 1].map((i) => trips(rows['Trips due · entered · finished']?.[i]));
+  scenarioChecks.beforeAfterSameArrivals = thisRun[0] === previousRun[0] && thisRun[1] === previousRun[1];
+  scenarioChecks.beforeAfterEditChangesQueues = queues.length > 0 && queues.some(([, [now, before]]) => now !== before);
+  scenarioChecks.beforeAfterResultsLabelled = ((await page.locator('.results-card').textContent()) ?? '').includes('Previous run');
+  scenarioChecks.recorded = { beforeAfterQueues: Object.fromEntries(queues) };
+  await page.locator('.bottom-stack').screenshot({ path: `${outDir}/25-before-after.png` });
+
+  // The Blank board: a signalised crossroads in the middle with roads out to all four edges.
+  await page.getByRole('button', { name: 'Previous scene' }).click();
+  await page.getByRole('button', { name: 'Discard and switch' }).click();
+  await page.waitForSelector('.status', { state: 'hidden', timeout: 30000 });
+  scenarioChecks.onBlankBoard = (await page.locator('.scene-name').textContent())?.trim() === 'Blank board';
+  await page.getByRole('button', { name: 'Parts' }).click();
+  /** Drag a part from the drawer to tile (x, z); answers whether the preview said valid just before release. */
+  const drop = async (part, x, z) => {
+    const box = await page.locator(`[data-part="${part}"]`).boundingBox();
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.down();
+    const target = await page.evaluate(([x, z]) => window.__trafficDebug.screenOf(x, z), [x, z]);
+    for (let i = 1; i <= 6; i++) await page.mouse.move(box.x + ((target.x - box.x) * i) / 6, box.y + ((target.y - box.y) * i) / 6);
+    await page.waitForTimeout(250);
+    await page.mouse.move(target.x + 1, target.y);
+    const valid = await page.evaluate(() => window.__trafficDebug.preview()?.valid === true);
+    await page.mouse.up();
+    await page.waitForTimeout(350);
+    return valid;
+  };
+  const CENTRE = 8; // the crossroads tile
+  const EDGE = 15; // tiles 1..14 are inside the edge stubs' reach on the 16-tile board
+  const APPROACH = 0.45; // from the crossroads centre to where each road enters it, tiles
+  const drops = [];
+  for (let x = 1; x < EDGE; x++) drops.push(await drop(x === CENTRE ? 'crossroad' : 'straight', x + 0.5, CENTRE + 0.5));
+  await page.keyboard.press('r'); // a quarter turn for the north–south arm
+  for (let z = 1; z < EDGE; z++) if (z !== CENTRE) drops.push(await drop('straight', CENTRE + 0.5, z + 0.5));
+  for (let i = 0; i < 3; i++) await page.keyboard.press('r');
+  const c = CENTRE + 0.5;
+  for (const [x, z] of [[c, c - APPROACH], [c + APPROACH, c], [c, c + APPROACH], [c - APPROACH, c]]) drops.push(await drop('signal', x, z));
+  scenarioChecks.everyDropValid = drops.length === 31 && drops.every(Boolean);
+  const built = await page.evaluate(() => ({ pieces: window.__trafficDebug.scene().pieces.length, controls: window.__trafficDebug.scene().controls.length }));
+  const blankPieces = 4; // the board's edge stubs
+  scenarioChecks.networkBuilt = built.pieces === blankPieces + 27 && built.controls === 4;
+  await page.screenshot({ path: `${outDir}/26-blank-board-built.png` });
+  // 90 s: in 30 s no trip has time to cross the 16-tile board through one default-timed light.
+  await page.getByRole('button', { name: '90 s' }).click();
+  await page.getByRole('button', { name: 'Play' }).click();
+  await finishRun();
+  await page.waitForTimeout(200);
+  const scenarioRows = await resultRows();
+  const [due, entered, finished] = trips(scenarioRows['Trips due · entered · finished']?.[0]);
+  scenarioChecks.scenarioRunsToResults = ((await page.locator('.results-card .run-label').first().textContent()) ?? '').includes('Blank board') && finished > 0;
+  scenarioChecks.recorded.blankBoardTrips = { due, entered, finished };
+  await page.screenshot({ path: `${outDir}/27-blank-board-results.png` });
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  scenarioChecks.scenarioSaved = await page
+    .getByRole('button', { name: 'Save', exact: true })
+    .waitFor({ state: 'hidden', timeout: 5000 })
+    .then(
+      () => page.evaluate((count) => JSON.parse(localStorage.getItem('traffic-sim:scene:blank-board') ?? 'null')?.pieces?.length === count, blankPieces + 27),
+      () => false,
+    );
+  scenarioChecks.noPageErrors = errors.length === 0;
+  scenarioChecks.recorded.errors = errors.slice(0, 3);
+  await page.evaluate(() => localStorage.clear());
+  await page.close();
+}
+
 // Presets (T8+): open each other preset on the dev server (?scene=), check it loads, has traffic and queues, and screenshot it.
 const presetChecks = {};
 if (isDevServer) {
@@ -511,11 +646,15 @@ const result = {
   presetChecks,
   carouselChecks,
   editorChecks,
+  presetRunChecks,
+  scenarioChecks,
   blockedAtEntries,
 };
 writeFileSync(`${outDir}/result.json`, JSON.stringify(result, null, 2));
 console.log(JSON.stringify(result, null, 2));
 
+/** Every pass/fail flag in a group of checks holds (`recorded` holds values, not checks). */
+const passed = (checks) => Object.entries(checks).every(([name, value]) => name === 'recorded' || value === true);
 const ok =
   consoleErrors.length === 0 &&
   !assetRequests.some((r) => !r.startsWith('200') && !r.startsWith('304')) &&
@@ -535,5 +674,7 @@ const ok =
   retryFocused &&
   resetDisabledDuringFailure &&
   retryRecovered &&
-  Object.values(runChecks).every(Boolean);
+  Object.values(runChecks).every(Boolean) &&
+  passed(presetRunChecks) &&
+  passed(scenarioChecks);
 process.exit(ok ? 0 : 1);

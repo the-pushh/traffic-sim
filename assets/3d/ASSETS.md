@@ -82,6 +82,17 @@ Classified from the City Kit Roads previews and measured GLB bounds (2026-11-11)
 
 **Coverage target:** 22 types → 60% needs **14**. Updated after T4 measured the pieces (rows 9–11 are a lay-by bay, not merge/diverge lanes). The planned presets use **18 (82%)**: 1 straight, 2 bend, 3 curve, 4 crossroads, 5 T-junction, 7 roundabout, 8 road split (two-to-one merge), 9–11 lay-by road and tapers (School Run drop-off bay), 12 straight ramp, 14 bridge, 15 road end, 16 crossing, 17 driveway, 19 traffic light, 20 stop sign, 21 yield (warning sign). Without the drop-off bay it is 15 (68%). Merges come from the road split's lane drop and yield-controlled T-junctions. The final count is confirmed once the presets are built.
 
+**Final count (T13, 2026-11-12), measured from the four built presets: 15 of 22 (68%), above the 14 needed.**
+
+| Preset | Element types it uses |
+| --- | --- |
+| Main Street | 1 straight, 4 crossroads, 19 traffic light |
+| Market Roundabout | 1 straight, 5 T-junction, 7 roundabout, 16 crossing, 19 traffic light |
+| School Run | 1 straight, 4 crossroads, 5 T-junction, 10 lay-by start, 11 lay-by end, 16 crossing, 17 driveway, 19 traffic light, 20 stop sign, 21 yield |
+| Flyover Bottleneck | 1 straight, 2 bend, 4 crossroads, 5 T-junction, 8 road split, 12 ramp, 14 bridge (with supports), 19 traffic light, 21 yield |
+
+Planned but not used by a preset as built: 3 wide curve, 9 lay-by road (middle; the bay is one tile, start and end only) and 15 road end (no preset needed a dead end). Never planned: 6 curved T-junction, 13 curved ramp, 18 paved square, 22 lane closure. Several of these are still offered in the editor's parts drawer.
+
 ## Vehicle types (for the behaviour model)
 
 Classified from the Car Kit previews and measured bounds (2026-11-12). The models are stylised and **not to scale with each other** (sedan 2.55 units long, garbage truck 3.45), so the simulation uses realistic per-type lengths and each model is scaled to its type's length.
