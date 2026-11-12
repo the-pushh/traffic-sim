@@ -362,6 +362,20 @@ if (isDevServer) {
   await page3.getByRole('button', { name: 'Redo' }).click();
   await page3.waitForTimeout(400);
   editorChecks.redoReapplies = (await pieces()) === startCount + 1;
+  // Keyboard placement: Enter on a part aims it at the middle; arrows move it; Enter drops.
+  const beforeKeys = await pieces();
+  await page3.locator('[data-part="crossroad"]').focus();
+  await page3.keyboard.press('Enter');
+  await page3.waitForTimeout(400);
+  await page3.keyboard.press('ArrowUp');
+  await page3.keyboard.press('ArrowUp');
+  const keyPreview = await page3.evaluate(() => JSON.parse(JSON.stringify(window.__trafficDebug.preview())));
+  await page3.locator('[data-part="crossroad"]').press('Enter');
+  await page3.waitForTimeout(500);
+  const keyPlaced = await page3.evaluate(() => window.__trafficDebug.scene().pieces.at(-1));
+  editorChecks.keyboardPlacement = keyPreview?.valid === true && (await pieces()) === beforeKeys + 1 && JSON.stringify(keyPreview.placement) === JSON.stringify(keyPlaced);
+  await page3.getByRole('button', { name: 'Undo' }).click();
+  await page3.waitForTimeout(400);
   // Clicking a piece selects it: the inspector shows it and can remove it.
   const stub = await page3.evaluate(() => window.__trafficDebug.screenOf(1.5, 8.5));
   await page3.mouse.click(stub.x, stub.y);
@@ -386,10 +400,10 @@ if (isDevServer) {
   editorChecks.signalTimingChanges = (await page3.evaluate(() => window.__trafficDebug.scene().controls[0].timing.green)) === 20;
   await page3.screenshot({ path: `${outDir}/24-editor-signal.png` });
   // A stop sign dropped on a side street's approach to the first junction.
-  const controlsBefore = await page3.evaluate(() => window.__trafficDebug.scene().controls.length);
+  const stopsBefore = await page3.evaluate(() => window.__trafficDebug.scene().controls.filter((c) => c.type === 'stop').length);
   await page3.evaluate(() => window.__trafficDebug.select(null));
   const stop = await dragPart('stop', 3.5, 9.1);
-  editorChecks.controlPlacedOnApproach = stop.preview?.valid === true && (await page3.evaluate(() => window.__trafficDebug.scene().controls.length)) >= controlsBefore;
+  editorChecks.controlPlacedOnApproach = stop.preview?.valid === true && (await page3.evaluate(() => window.__trafficDebug.scene().controls.filter((c) => c.type === 'stop').length)) === stopsBefore + 1;
   await page3.getByRole('button', { name: 'Play' }).click();
   await page3.waitForTimeout(1500);
   editorChecks.partsLockedWhileRunning = await page3.evaluate(() => [...document.querySelectorAll('[data-part]')].every((b) => b.disabled));

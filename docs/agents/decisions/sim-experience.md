@@ -250,3 +250,10 @@ Owner agreed the spec and the T1–T13 ticket breakdown and authorised implement
   - Paused mid-run, the run carries on over the edited network (`TrafficSimulation.continueFrom`). The clock, counts and arrivals continue; vehicles stay put and reroute; vehicles on removed road leave and count as blocked.
   - In Ready, or after a run ends, it starts afresh from Ready.
 - An edit makes the scene unsaved: Save and Reset apply, as in T11.
+- **Review fixes:**
+  - Entry letters follow position round the board, so an edit that adds or removes an edge road moves them. Each edit's demand (entries, destinations, peaks) is moved to stay on the same road ends, and carried-over vehicles keep heading for the same end.
+  - Vehicles keep as much of their route as still exists, with their commitment and crossing reservations, so a vehicle committed to a junction clears it.
+  - Controls can be moved (drag the selected sign) and replaced (inspector). Their preview stands and faces exactly as the placed sign will.
+  - The selection gets a pink outline on the map.
+  - Keyboard placement: Enter on a part, arrow keys move it a tile, R rotates, Enter drops, Escape cancels.
+  - A release over a panel drops nothing; the preview hides and says "Drop it on the map". Pointer capture is released, so touch and pen drags reach the map.

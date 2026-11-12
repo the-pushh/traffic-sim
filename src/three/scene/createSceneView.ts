@@ -112,13 +112,11 @@ export async function createSceneView(definition: SceneDefinition, baseUrl: stri
   const signalLamps: { timing: SignalTiming; lamp: Mesh; base: Vector3; material: MeshBasicMaterial }[] = [];
   const lampGeometry = new SphereGeometry(0.22, 16, 12);
   definition.controls.forEach((control, index) => {
-    const { centre, facing } = portPose(definition.pieces[control.piece], control.port);
-    // Beside the approach, on the arriving traffic's right, facing that traffic.
-    const right = rightOf([-facing[0], -facing[1]]);
     const sign = byName.get(CONTROL_MODELS[control.type])!.clone();
     sign.scale.setScalar(TILE_SIZE);
-    sign.position.copy(world([centre[0] + right[0] * 0.55 - facing[0] * 0.05, centre[1] - ROAD_SURFACE, centre[2] + right[1] * 0.55 - facing[1] * 0.05]));
-    sign.rotation.y = Math.atan2(facing[0], facing[1]);
+    const pose = signPose(definition.pieces, control);
+    sign.position.copy(pose.position);
+    sign.rotation.y = pose.rotationY;
     sign.userData.controlIndex = index;
     controls.add(sign);
     if (control.type === 'signal') {
@@ -178,6 +176,16 @@ export async function createSceneView(definition: SceneDefinition, baseUrl: stri
     });
   };
   return { scene, graph, updateSignals, updateBlocked, bounds: new Box3().setFromObject(board), dispose };
+}
+
+/** Where a control's sign stands: beside the approach, on the arriving traffic's right, facing that traffic (world units). */
+export function signPose(pieces: SceneDefinition['pieces'], control: { piece: number; port: string }) {
+  const { centre, facing } = portPose(pieces[control.piece], control.port);
+  const right = rightOf([-facing[0], -facing[1]]);
+  return {
+    position: world([centre[0] + right[0] * 0.55 - facing[0] * 0.05, centre[1] - ROAD_SURFACE, centre[2] + right[1] * 0.55 - facing[1] * 0.05]),
+    rotationY: Math.atan2(facing[0], facing[1]),
+  };
 }
 
 /** Lane centrelines with direction arrows, labelled gateways, open road ends, and driveways. */

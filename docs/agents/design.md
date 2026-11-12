@@ -51,7 +51,7 @@ Offer **Edit this map** on every preset and **Start from scratch** in the picker
 
 ### Parts drawer and drag-and-drop placement
 
-Group parts by purpose so players can find straight roads, curves, junctions, U-turns, ramps, flyover sections, signals, yield controls, and vehicle entry and exit markers. Show a thumbnail for each part and its lane count where applicable. Offer road pieces with different widths and lane counts.
+Group parts by purpose so players can find straight roads, curves, junctions, U-turns, ramps, flyover sections, signals, yield controls, and vehicle entry and exit markers. Show a thumbnail for each part and its lane count where applicable. *As built in T12:* parts are grouped (Roads, Curves, Junctions, Ends, Flyovers, Controls) with text labels and a lane note on each. Picture thumbnails are still open. Entry and exit points appear automatically where a road meets the board edge, so they aren't separate parts. Offer road pieces with different widths and lane counts.
 
 Let players **drag a part from the drawer onto the map**. While dragging, show a **translucent 3D preview** at the position, rotation, and height where the piece would land. As the piece approaches a compatible road endpoint, snap the preview into alignment and highlight the connection. Provide a way to rotate the piece before placing it. Use the same preview when moving a piece already on the map.
 
@@ -62,7 +62,7 @@ Distinguish valid and invalid placements with an outline or icon as well as colo
 - Let players select, move, rotate, and remove pieces, and undo or redo edits. Make selection visible against light and dark surfaces with an outline or label. Provide a way to clear selection.
 - Show travel direction and the connections each piece creates. Roads crossing at different heights connect through explicit ramps or links.
 - Let players change traffic demand, entry and exit points, and junction controls. If an entry has no route to its intended exit, highlight it and explain what needs to be connected.
-- Pause traffic while players edit the layout. Pressing **Play** after a layout change starts a fresh run on the edited network.
+- Pause traffic while players edit the layout. Pressing **Play** after a layout change starts a fresh run on the edited network. *Changed 2026-11-12 by the owner (round 5, Q5):* edits are allowed while paused mid-run and the simulation auto-adjusts. Play then continues the same run on the edited network: committed vehicles clear, trips reroute, blocked trips are shown. An edit in Ready or after a run ends starts afresh from Ready.
 
 **Reset** restores the selected scene’s starting layout, traffic controls, and demand, and clears the current run. **Save as new scene** saves the edited layout, controls, and demand as a separate scene in the picker. Reopening it loads that saved setup, ready for a new run. The original preset stays available. *Changed 2026-11-11 by the owner:* **Save** (shown only with unsaved edits) overrides the scene with the player's network in this browser, and **Reset** returns to the designer's network. Leaving a scene with unsaved edits asks first ("Leaving resets the road network to default.").
 

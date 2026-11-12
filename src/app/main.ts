@@ -1,6 +1,7 @@
 import { type Group, type Object3D, PCFSoftShadowMap, PerspectiveCamera, Timer, WebGLRenderer } from 'three';
 import type { SceneDefinition } from '../simulation/network/scene';
 import { createEditor } from './editor';
+import { demandFollowsEntries } from '../editor/edits';
 import { createDock } from '../components/dock';
 import { createFirstVisitTip } from '../components/firstVisitTip';
 import { createResultsCard } from '../components/resultsCard';
@@ -318,9 +319,12 @@ async function show(mode: 'open' | 'edit'): Promise<boolean> {
   }
 }
 
-/** The player edited the map: it becomes the scene on screen (unsaved) and the traffic adapts. */
-async function applyEdit(scene: SceneDefinition) {
-  store.edit(scene);
+/**
+ * The player edited the map: it becomes the scene on screen (unsaved) and the traffic adapts.
+ * Entry letters follow position, so a new edit's demand is moved to stay on the same road ends.
+ */
+async function applyEdit(scene: SceneDefinition, fromHistory = false) {
+  store.edit(fromHistory ? scene : demandFollowsEntries(store.current(), scene));
   await start('edit');
 }
 
@@ -332,7 +336,7 @@ const editor = createEditor({
   scene: () => store.current(),
   view: () => currentView?.scene ?? null,
   model: (name) => createAssetLoader(import.meta.env.BASE_URL).model(`models/roads/${name}.glb`),
-  apply: (scene) => applyEdit(scene).then(() => undefined),
+  apply: (scene, fromHistory) => applyEdit(scene, fromHistory).then(() => undefined),
   canEdit: () => run.state !== 'running',
 });
 dock.element.append(editor.toggle);

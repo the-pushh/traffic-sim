@@ -260,3 +260,24 @@ describe('routing: carrying a paused run over to an edited network', () => {
     expect(next.arrivals).toEqual(s.arrivals);
   });
 });
+
+describe('routing: carrying over keeps commitments', () => {
+  it('lets a vehicle part-way through a junction keep its path, commitment and crossings after an unrelated edit', () => {
+    const s = sim({ seed: 4, demand: { tripsPerMinute: 30, entries: { [WEST]: 1, [EAST]: 1 }, destinations: { [WEST]: 1, [EAST]: 1 } } });
+    const committed = () => s.allVehicles().find((v) => v.committedJunction !== null && graph.lanes[v.route[v.routeIndex]].piece === FIRST_T);
+    for (let i = 0; i < 60 * 30 && !committed(); i++) s.step(STEP);
+    const v = committed()!;
+    expect(v).toBeDefined();
+    const path = v.route.slice(v.routeIndex).map((l) => graph.lanes[l].points[0].join());
+    // An edit far away: a lone straight in a corner. The network is otherwise the same.
+    const edited: PiecePlacement[] = [...pieces, { piece: 'straight', at: [0.5, 0.5], rotation: 0 }];
+    const editedGraph = buildLaneGraph(edited);
+    const next = TrafficSimulation.continueFrom(s, editedGraph, { seed: 4, controls: resolveControls(edited, editedGraph, []), demand: { tripsPerMinute: 30, entries: { [WEST]: 1, [EAST]: 1 }, destinations: { [WEST]: 1, [EAST]: 1 } } });
+    const after = next.vehicle(v.id);
+    expect(after.committedJunction).not.toBeNull();
+    expect(after.route.slice(after.routeIndex).map((l) => editedGraph.lanes[l].points[0].join())).toEqual(path);
+    // Still heading for the same road end, even though the new corner road renamed the letters.
+    const exit = (g: typeof graph, label: string) => g.gateways.find((gw) => gw.label === label)!.at.join();
+    expect(exit(editedGraph, after.destination)).toBe(exit(graph, v.destination));
+  });
+});

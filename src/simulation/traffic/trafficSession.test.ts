@@ -128,3 +128,16 @@ describe('traffic session: edits', () => {
     expect(session.results().scene).toBe('Signal test');
   });
 });
+
+describe('traffic session: edits in Ready', () => {
+  it('warms the edited network up afresh, staying in Ready', () => {
+    const run = new RunController();
+    const session = new TrafficSession(signalTest, graph, run);
+    const withoutLight = { ...signalTest, pieces: signalTest.pieces.map((p) => (p.piece === 'crossing' ? { ...p, piece: 'straight' } : p)), controls: [] };
+    session.edit(withoutLight, buildLaneGraph(withoutLight.pieces));
+    expect(run.state).toBe('ready');
+    expect(session.simulation.allVehicles().length).toBeGreaterThan(0);
+    expect(session.simulation.counts.due).toBe(0);
+    expect(session.approaches).toEqual([]);
+  });
+});

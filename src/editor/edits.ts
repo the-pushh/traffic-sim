@@ -1,5 +1,7 @@
+import { buildLaneGraph } from '../simulation/network/buildLaneGraph';
 import { PIECES } from '../simulation/network/pieces';
 import type { ControlPlacement, PiecePlacement, QuarterTurn, SceneDefinition, SignalTiming } from '../simulation/network/scene';
+import { DEFAULT_SIGNAL_TIMING } from '../simulation/traffic/signals';
 import type { PartId } from './parts';
 import { placePart, type PlacementResult } from './placement';
 
@@ -56,8 +58,51 @@ export function removeControl(scene: SceneDefinition, index: number): SceneDefin
   return { ...scene, controls: scene.controls.filter((_, i) => i !== index) };
 }
 
+/** Swap a control for another kind on the same approach (a signal gets the default timing). */
+export function replaceControl(scene: SceneDefinition, index: number, type: ControlPlacement['type']): SceneDefinition {
+  return {
+    ...scene,
+    controls: scene.controls.map((c, i) => (i !== index ? c : type === 'signal' ? { type, piece: c.piece, port: c.port, timing: c.timing ?? { ...DEFAULT_SIGNAL_TIMING } } : { type, piece: c.piece, port: c.port })),
+  };
+}
+
+/** Move a control to the approach nearest `pointer`, as dropping it there would; a signal keeps its timing. */
+export function moveControl(scene: SceneDefinition, index: number, request: { pointer: [number, number] }): PlacementResult {
+  const control = scene.controls[index];
+  const result = placePart(removeControl(scene, index), { part: control.type, pointer: request.pointer, rotation: 0 });
+  if (!result.valid || !result.scene || control.type !== 'signal' || !control.timing) return result;
+  const placed = { ...result.control!, timing: { ...control.timing } };
+  return { ...result, control: placed, scene: { ...result.scene, controls: [...result.scene.controls.slice(0, -1), placed] } };
+}
+
 export function setSignalTiming(scene: SceneDefinition, index: number, timing: SignalTiming): SceneDefinition {
   return { ...scene, controls: scene.controls.map((c, i) => (i === index ? { ...c, timing: { ...timing } } : c)) };
+}
+
+/**
+ * Entry and exit points are lettered by where they sit round the board (A from the
+ * north-west), so an edit that adds or removes one moves the letters. Keep each demand
+ * weight on the same road end (and driveway) as before; drop those for ends that are gone.
+ */
+export function demandFollowsEntries(before: SceneDefinition, after: SceneDefinition): SceneDefinition {
+  const ends = (scene: SceneDefinition) => {
+    const graph = buildLaneGraph(scene.pieces);
+    return [...graph.gateways, ...graph.accessPoints].map((g) => ({ label: g.label, key: `${g.at[0]},${g.at[1]}` }));
+  };
+  const newLabel = new Map(ends(after).map((e) => [e.key, e.label]));
+  const rename = new Map(ends(before).flatMap((e) => (newLabel.has(e.key) ? [[e.label, newLabel.get(e.key)!] as const] : [])));
+  const relabel = (weights: Record<string, number> | undefined) =>
+    weights && Object.fromEntries(Object.entries(weights).flatMap(([label, w]) => (rename.has(label) ? [[rename.get(label)!, w]] : [])));
+  const demand = after.demand;
+  return {
+    ...after,
+    demand: {
+      ...demand,
+      gateways: relabel(demand.gateways)!,
+      ...(demand.destinations && { destinations: relabel(demand.destinations) }),
+      ...(demand.peaks && { peaks: demand.peaks.map((p) => ({ ...p, entries: relabel(p.entries)!, destinations: relabel(p.destinations)! })) }),
+    },
+  };
 }
 
 /** Undo and redo for a scene being edited: each entry is a whole scene, as the store keeps them. */

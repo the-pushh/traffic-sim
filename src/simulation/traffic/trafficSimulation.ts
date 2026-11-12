@@ -377,9 +377,10 @@ export class TrafficSimulation {
       ),
     ];
     // Base streams come first, so adding a peak doesn't change when the other trips arrive.
+    const known = new Set([...graph.gateways, ...graph.accessPoints].map((g) => g.label));
     this.entries = streams
       .map((stream, i) => ({ ...stream, i }))
-      .filter((stream) => stream.weight > 0)
+      .filter((stream) => stream.weight > 0 && known.has(stream.label))
       .map(({ label, weight, tripsPerMinute, destinations, window, i }) => {
         const arrivals = this.random.fork('entries', i);
         const ratePerSecond = (tripsPerMinute * weight) / 60 || 0;
@@ -426,6 +427,14 @@ export class TrafficSimulation {
     // Lanes on pieces the edit didn't touch keep their exact course: match them by where they start and end.
     const key = (lane: LaneGraph['lanes'][number]) => [lane.points[0], lane.points[lane.points.length - 1]].map((p) => p.map((c) => c.toFixed(4)).join(',')).join('>');
     const byCourse = new Map(graph.lanes.map((lane) => [key(lane), lane.id]));
+    const mapLane = (lane: number | null) => (lane === null ? null : (byCourse.get(key(previous.graph.lanes[lane])) ?? null));
+    // Entry and exit letters follow position round the board, so an edit can move them: go by where they are.
+    const endKey = (at: [number, number]) => `${at[0]},${at[1]}`;
+    const labelAt = new Map([...graph.gateways, ...graph.accessPoints].map((g) => [endKey(g.at), g.label]));
+    const sameEnd = (label: string) => {
+      const old = previous.gateways.get(label);
+      return old ? labelAt.get(endKey(old.at)) : undefined;
+    };
     for (const old of previous.vehicles.values()) {
       const lane = byCourse.get(key(previous.graph.lanes[old.route[old.routeIndex]]));
       if (lane === undefined) {
@@ -441,40 +450,66 @@ export class TrafficSimulation {
         if (mapped === undefined || !graph.lanes[mapped].next.includes(behind[0] ?? lane)) break;
         behind.unshift(mapped);
       }
+      // Ahead, as much of its route as still exists in one piece: a vehicle committed to a junction clears it.
+      const ahead = [lane];
+      for (let i = old.routeIndex + 1; i < old.route.length; i++) {
+        const mapped = mapLane(old.route[i]);
+        if (mapped === null || !graph.lanes[ahead[ahead.length - 1]].next.includes(mapped)) break;
+        ahead.push(mapped);
+      }
+      const destination = sameEnd(old.destination);
       const v: VehicleState = {
         ...old,
-        decisions: new Map(old.decisions),
+        destination: destination ?? old.destination,
+        // Decisions tied to old lane numbers (stop signs) would be misread on the new network.
+        decisions: new Map([...old.decisions].filter(([k]) => !k.startsWith('stop:'))),
         random: old.random.copy(),
-        route: [...behind, lane],
+        route: [...behind, ...ahead],
         routeIndex: behind.length,
-        committedJunction: null,
-        committedThrough: null,
+        committedJunction: mapLane(old.committedJunction),
+        committedThrough: mapLane(old.committedThrough),
         stoppedAt: null,
         waitingSince: Infinity,
         stranded: false,
       };
       next.vehicles.set(v.id, v);
-      next.planOnward(v);
+      const end = v.route[v.route.length - 1];
+      if (destination === undefined) {
+        // Its exit was removed.
+        if (next.enteredAt.has(v.id)) next.markBlocked(v);
+        next.planOnward(v, v.route.length - 1);
+      } else if (!next.gateway(destination).exits.has(end)) next.planOnward(v, v.route.length - 1);
+      else if (v.blocked) next.unmarkBlocked(v);
+    }
+    // Crossings held part-way through a junction stay held.
+    for (const [, held] of previous.crossings) {
+      const v = next.vehicles.get(held.vehicle.id);
+      const lane = mapLane(held.lane);
+      if (!v || lane === null) continue;
+      for (const c of next.conflicts.get(lane) ?? []) {
+        if (c.kind === 'cross' && Math.abs(c.at * METRES_PER_TILE - held.at) < 0.01) next.crossings.set(next.crossingKey(lane, c.lane), { vehicle: v, lane, at: held.at });
+      }
     }
     next.indexRears();
     return next;
   }
 
   /** Route a vehicle on from where it is to its destination; if it can't get there, another exit, or wait as blocked. */
-  private planOnward(v: VehicleState) {
-    const here = v.route[v.routeIndex];
-    const targets = this.gateway(v.destination).exits;
+  private planOnward(v: VehicleState, from = v.routeIndex) {
+    v.route = v.route.slice(0, from + 1);
+    const here = v.route[from];
+    const targets = this.gateways.get(v.destination)?.exits ?? new Set<number>();
     const extra = this.queueCost(this.routeSensitivityOf(v));
     const starts = this.graph.lanes[here].next;
-    const onward = targets.has(here) ? { lanes: [] } : this.router.path(starts, targets, extra);
+    const onward = !this.gateways.has(v.destination) ? null : targets.has(here) ? { lanes: [] } : this.router.path(starts, targets, extra);
     if (onward) {
-      v.route = [...v.route.slice(0, v.routeIndex + 1), ...onward.lanes];
+      v.route = [...v.route, ...onward.lanes];
       this.unmarkBlocked(v);
       return;
     }
     this.markBlocked(v);
     const elsewhere = this.exitLanes.has(here) ? { lanes: [] } : this.router.path(starts, this.exitLanes, extra);
-    if (elsewhere) v.route = [...v.route.slice(0, v.routeIndex + 1), ...elsewhere.lanes];
+    if (elsewhere) v.route = [...v.route, ...elsewhere.lanes];
     else v.stranded = true; // stops at the end of the lane it's on
   }
 
@@ -737,7 +772,7 @@ export class TrafficSimulation {
     // Peak trips draw from their own sequence, so adding a peak leaves every other trip as it was.
     const random = entry.window ? this.random.fork('peak-trips', this.peakTripCount++) : this.random.fork('trips', this.tripCount++);
     const destinations = entry.destinations ?? this.demand?.destinations ?? Object.fromEntries(this.graph.gateways.filter((g) => g.label !== from).map((g) => [g.label, 1]));
-    const reachable = Object.fromEntries(Object.entries(destinations).filter(([to, w]) => w > 0 && !this.sameRoad(from, to) && this.designedRoute(from, to)));
+    const reachable = Object.fromEntries(Object.entries(destinations).filter(([to, w]) => w > 0 && this.gateways.has(to) && !this.sameRoad(from, to) && this.designedRoute(from, to)));
     if (!Object.keys(reachable).length) return null;
     const to = random.weighted(reachable);
     const type = random.weighted({ ...DEFAULT_VEHICLE_MIX, ...this.demand?.vehicleMix } as Record<VehicleTypeId, number>);
