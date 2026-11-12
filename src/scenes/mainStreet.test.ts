@@ -1,22 +1,20 @@
 import { describe, expect, it } from 'vitest';
 import { buildLaneGraph } from '../simulation/network/buildLaneGraph';
 import { BOARD_TILES, validateScene } from '../simulation/network/scene';
-import { resolveControls } from '../simulation/traffic/signals';
-import { TRIPS_PER_MINUTE } from '../simulation/traffic/intensity';
 import { TrafficSimulation } from '../simulation/traffic/trafficSimulation';
 import { mainStreet } from './mainStreet';
+import { runScene, simulateScene, STEP } from './sceneTesting';
 
-const STEP = 1 / 30;
 const graph = buildLaneGraph(mainStreet.pieces);
-const controls = resolveControls(mainStreet.pieces, graph, mainStreet.controls);
 
-function simulate(intensity: keyof typeof TRIPS_PER_MINUTE, seed: number) {
-  return new TrafficSimulation(graph, { seed, controls, demand: { tripsPerMinute: TRIPS_PER_MINUTE[intensity], entries: mainStreet.demand.gateways, destinations: mainStreet.demand.destinations } });
-}
+const simulate = (intensity: Parameters<typeof simulateScene>[1], seed: number) => simulateScene(mainStreet, intensity, seed);
 const xOf = (s: TrafficSimulation, id: number) => {
   const v = s.vehicle(id);
   return mainStreet.pieces[graph.lanes[v.route[v.routeIndex]].piece].at;
 };
+
+/** Scene runs simulate minutes of traffic: allow longer than Vitest's default. */
+const SLOW_TEST = 30_000;
 
 describe('Main Street preset', () => {
   it('is a valid scene that fits the board, with arterial and side-street entries and an open connection', () => {
@@ -36,23 +34,14 @@ describe('Main Street preset', () => {
   it('works as soon as it opens: traffic flows at Medium and nobody is stuck for long', () => {
     for (const seed of [1, 2, 3]) {
       const s = simulate('medium', seed);
-      const stoppedSince = new Map<number, number>();
-      let longestStop = 0;
-      for (let i = 0; i < 240 * 30; i++) {
-        s.step(STEP);
-        for (const v of s.allVehicles()) {
-          if (v.speed > 0.1) stoppedSince.delete(v.id);
-          else if (!stoppedSince.has(v.id)) stoppedSince.set(v.id, s.time);
-          else longestStop = Math.max(longestStop, s.time - stoppedSince.get(v.id)!);
-        }
-      }
+      const longestStop = runScene(s, 240);
       const { due, entered, finished } = s.counts;
       expect(entered).toBeGreaterThan(due * 0.8);
       expect(finished).toBeGreaterThan(due * 0.5);
       // Side-street turners into the short block can miss a green or two, but nobody is stuck.
       expect(longestStop).toBeLessThan(130);
     }
-  });
+  }, SLOW_TEST);
 
   it('sometimes lets an eastbound group through all three lights without stopping', () => {
     // At High, queues released by the first light leave as groups.
@@ -76,7 +65,7 @@ describe('Main Street preset', () => {
       return times.some((t, i) => i + 2 < times.length && times[i + 2] - t < 10);
     };
     expect([1, 2, 3, 4].filter(groupGetsThrough).length).toBeGreaterThanOrEqual(2);
-  });
+  }, SLOW_TEST);
 
   it('has a short block that fills and backs eastbound traffic up into the junction before it', () => {
     // Moments when the eastbound short block (one tile, two lanes) holds traffic and a driver
@@ -100,5 +89,5 @@ describe('Main Street preset', () => {
       }
     }
     expect(heldBack).toBeGreaterThan(30 * 5); // vehicle-seconds × 30 steps
-  });
+  }, SLOW_TEST);
 });

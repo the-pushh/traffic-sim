@@ -245,6 +245,7 @@ await runPage.close();
 // Presets (T8+): open each other preset on the dev server (?scene=), check it loads, has traffic and queues, and screenshot it.
 const presetChecks = {};
 if (isDevServer) {
+  // Presets other than Main Street (src/scenes/presets.ts); add each new preset here as it lands.
   for (const [id, name] of [['market-roundabout', 'Market Roundabout']]) {
     const presetPage = await browser.newPage({ viewport: { width: 1440, height: 900 } });
     const presetUrl = new URL(url);
@@ -267,6 +268,14 @@ if (isDevServer) {
       traffic: (await presetPage.evaluate(() => window.__trafficDebug.vehicles().length)) > 0,
       queueAtApproach: queued,
     };
+    const target = (await presetPage.evaluate(() => window.__trafficDebug.vehicles())).find((v) => v.x > 100 && v.x < 1300 && v.y > 80 && v.y < 650);
+    if (target) {
+      await presetPage.mouse.move(target.x, target.y);
+      await presetPage.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+    }
+    const tag = target ? await presetPage.locator('.vehicle-tooltip').textContent() : null;
+    presetChecks[id].hoverShowsReason = /^[A-Z][A-Za-z ]+ · (Steady|Cautious|Assertive|Cooperative|Impatient) · .+$/.test(tag ?? '');
+    presetChecks[id].hoverTag = tag;
     await presetPage.screenshot({ path: `${outDir}/20-${id}.png` });
     await presetPage.close();
   }

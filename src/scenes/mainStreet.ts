@@ -1,4 +1,5 @@
 import type { ControlPlacement, PiecePlacement, PortFlow, SceneDefinition, SignalTiming } from '../simulation/network/scene';
+import { range } from './layout';
 
 /** Westbound carriageway (north row) and eastbound carriageway (south row) of the arterial. */
 const WESTBOUND_ROW = 7.5;
@@ -25,7 +26,6 @@ const GREEN_STARTS = [0, 5, 3];
 const arterialTiming = (start: number): SignalTiming => ({ green: ARTERIAL_GREEN, amber: AMBER, red: SIDE_GREEN + AMBER, offset: -start });
 const sideTiming = (start: number): SignalTiming => ({ green: SIDE_GREEN, amber: AMBER, red: ARTERIAL_GREEN + AMBER, offset: -(start + ARTERIAL_GREEN + AMBER) });
 
-const range = (from: number, to: number) => Array.from({ length: to - from }, (_, i) => from + i);
 
 const pieces: PiecePlacement[] = [];
 const controls: ControlPlacement[] = [];

@@ -22,7 +22,7 @@ import { exposeTrafficDebug } from './devHooks';
 import { TrafficSession } from '../simulation/traffic/trafficSession';
 
 /**
- * The scene the app opens on: Main Street. Until the scene carousel (T11), the dev server
+ * The scene the app opens on: the first preset (Main Street). Until the scene carousel (T11), the dev server
  * can open another preset with `?scene=<id>` for checking it in the browser.
  */
 function openingScene() {
