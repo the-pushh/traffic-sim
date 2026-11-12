@@ -1,8 +1,9 @@
 import type { LaneGraph } from '../network/buildLaneGraph';
-import type { SceneDefinition } from '../network/scene';
+import { laneSpeedLimits, type SceneDefinition } from '../network/scene';
 import { type Approach, describeApproaches, QueueTracker, type RunResults, summariseRun } from '../measures/measures';
 import type { Intensity, RunController, RunDuration, RunState } from '../runController';
 import { TRIPS_PER_MINUTE } from './intensity';
+import { sceneDemand } from './sceneDemand';
 import { type ApproachControl, resolveControls } from './signals';
 import { TrafficSimulation } from './trafficSimulation';
 import { STEPS_PER_SECOND } from '../runController';
@@ -80,7 +81,8 @@ export class TrafficSession {
     this.simulation = new TrafficSimulation(this.graph, {
       seed: seedFor(this.scene.id),
       controls: this.controls,
-      demand: { tripsPerMinute: TRIPS_PER_MINUTE[this.run.intensity], entries: this.scene.demand.gateways, destinations: this.scene.demand.destinations },
+      speedLimits: laneSpeedLimits(this.scene.pieces, this.graph),
+      demand: sceneDemand(this.scene.demand, TRIPS_PER_MINUTE[this.run.intensity], WARM_UP_SECONDS),
     });
     for (let i = 0; i < WARM_UP_SECONDS * STEPS_PER_SECOND; i++) this.simulation.step(STEP);
     // Measures cover the run itself, not the warm-up.

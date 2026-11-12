@@ -1,3 +1,4 @@
+import type { LaneGraph } from './buildLaneGraph';
 import { rotate } from './geometry';
 import { PIECES } from './pieces';
 
@@ -24,6 +25,18 @@ export interface PiecePlacement {
   level?: number;
   /** Per-port one-way flow, keyed by the piece's port id. Defaults to two-way. */
   flow?: Record<string, PortFlow>;
+  /** Speed limit on this piece, km/h. Defaults to the urban 50 km/h. */
+  speedLimit?: number;
+}
+
+/** The default urban speed limit, km/h. */
+export const DEFAULT_SPEED_LIMIT_KMH = 50;
+/** Speed limits a scene may set, km/h. */
+const SPEED_LIMIT_RANGE: [number, number] = [10, 120];
+
+/** Each lane's speed limit in m/s, from the piece it belongs to. */
+export function laneSpeedLimits(pieces: PiecePlacement[], graph: LaneGraph): number[] {
+  return graph.lanes.map((lane) => (pieces[lane.piece]?.speedLimit ?? DEFAULT_SPEED_LIMIT_KMH) / 3.6);
 }
 
 /** Fixed-time signal cycle in seconds: green, then amber, then red, shifted by `offset`. */
@@ -51,6 +64,12 @@ export interface DemandPattern {
   gateways: Record<string, number>;
   /** Relative share of trips leaving by each gateway; defaults to every reachable exit equally. */
   destinations?: Record<string, number>;
+  /**
+   * Extra trips during part of each run, e.g. a school's drop-off: `from`–`to` are seconds
+   * into the run, and `rate` scales the intensity's trips per minute at each entry.
+   * Labels may be gateways (A, B, …) or driveways (P1, P2, …).
+   */
+  peaks?: { from: number; to: number; rate: number; entries: Record<string, number>; destinations: Record<string, number> }[];
 }
 
 export interface SceneDefinition {
@@ -84,6 +103,8 @@ export function validateScene(scene: SceneDefinition): string[] {
       return bx >= -1e-9 && bz >= -1e-9 && bx <= BOARD_TILES + 1e-9 && bz <= BOARD_TILES + 1e-9;
     });
     if (!onBoard) errors.push(`Piece ${i}: ${placement.piece} at (${placement.at.join(', ')}) is off the ${BOARD_TILES} × ${BOARD_TILES} board`);
+    if (placement.speedLimit !== undefined && !(placement.speedLimit >= SPEED_LIMIT_RANGE[0] && placement.speedLimit <= SPEED_LIMIT_RANGE[1]))
+      errors.push(`Piece ${i}: speed limit must be ${SPEED_LIMIT_RANGE[0]}–${SPEED_LIMIT_RANGE[1]} km/h`);
     for (const id of Object.keys(placement.flow ?? {})) {
       if (!def.ports.some((p) => p.id === id)) errors.push(`Piece ${i}: ${placement.piece} has no road end "${id}" for a one-way setting`);
     }

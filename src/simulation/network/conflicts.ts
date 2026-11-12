@@ -1,3 +1,4 @@
+import { pointAlongLane } from './laneGeometry';
 import type { Lane, LaneGraph, Point3 } from './buildLaneGraph';
 
 export type Turn = 'straight' | 'left' | 'right' | 'u-turn';
@@ -120,6 +121,13 @@ export function findConflicts(graph: LaneGraph): Map<number, Conflict[]> {
           const interior = passing.at > 0.05 && passing.at < a.length - 0.05 && passing.otherAt > 0.05 && passing.otherAt < b.length - 0.05;
           if (passing.distance < CLEARANCE && interior) hit = { at: passing.at, otherAt: passing.otherAt };
         }
+        if (!hit) {
+          // One lane ending right where another starts (a narrow driveway's way in and way out): they share that spot.
+          const [aEnd, bEnd] = [a.points[a.points.length - 1], b.points[b.points.length - 1]];
+          const close = (p: Point3, q: Point3) => !near(p, q) && Math.hypot(p[0] - q[0], p[1] - q[1], p[2] - q[2]) < CLEARANCE;
+          if (close(aEnd, b.points[0])) hit = { at: a.length, otherAt: 0 };
+          else if (close(a.points[0], bEnd)) hit = { at: 0, otherAt: b.length };
+        }
         if (hit) {
           result.get(a.id)!.push({ lane: b.id, kind: 'cross', at: hit.at, otherAt: hit.otherAt });
           result.get(b.id)!.push({ lane: a.id, kind: 'cross', at: hit.otherAt, otherAt: hit.at });
@@ -128,4 +136,30 @@ export function findConflicts(graph: LaneGraph): Map<number, Conflict[]> {
     }
   }
   return result;
+}
+
+/**
+ * Where two lanes leave the same point (a split, or a lay-by peeling off): how far along
+ * `lane` it gets before it is at least `separation` away from `other`, in tiles. A
+ * vehicle on `lane` blocks the split until its rear is past this.
+ */
+export function splitClearance(lane: Lane, other: Lane, separation: number): number {
+  const step = 0.05;
+  for (let along = 0; along <= lane.length; along += step) {
+    const { point } = pointAlongLane(lane, along);
+    if (distanceToPolyline(point, other.points) >= separation) return along;
+  }
+  return lane.length;
+}
+
+function distanceToPolyline(p: Point3, line: Point3[]): number {
+  let best = Infinity;
+  for (let i = 1; i < line.length; i++) {
+    const [a, b] = [line[i - 1], line[i]];
+    const [dx, dz] = [b[0] - a[0], b[2] - a[2]];
+    const lengthSq = dx * dx + dz * dz || 1;
+    const t = Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[2] - a[2]) * dz) / lengthSq));
+    best = Math.min(best, Math.hypot(p[0] - (a[0] + t * dx), p[2] - (a[2] + t * dz)));
+  }
+  return best;
 }

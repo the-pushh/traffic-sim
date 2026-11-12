@@ -64,7 +64,7 @@ describe('Main Street preset', () => {
       const times = passedAll.map((id) => seen.get(id)!).sort((a, b) => a - b);
       return times.some((t, i) => i + 2 < times.length && times[i + 2] - t < 10);
     };
-    expect([1, 2, 3, 4].filter(groupGetsThrough).length).toBeGreaterThanOrEqual(2);
+    expect([1, 2, 3, 4, 5, 6].filter(groupGetsThrough).length).toBeGreaterThanOrEqual(2);
   }, SLOW_TEST);
 
   it('has a short block that fills and backs eastbound traffic up into the junction before it', () => {

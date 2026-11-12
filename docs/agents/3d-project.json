@@ -308,6 +308,19 @@
         ],
         "result": "pass: pill 'Market Roundabout', no failed requests, traffic and a live queue on an approach; screenshot 20-market-roundabout.png inspected (roundabout, crossing signals on the east arm, open north arm marker, queue badge).",
         "previews": "artifacts/3d/previews/ (git-ignored)"
+      },
+      {
+        "date": "2026-11-12",
+        "check": "T9 School Run (#11)",
+        "command": "npm test (210/210), npm run build, npm run dev then npm run verify:browser (opens ?scene=school-run)",
+        "browser": "Google Chrome 157 on macOS, headless, 1440x900",
+        "assets": [
+          "road-straight, road-crossroad, road-intersection, road-crossing, road-driveway-single, road-side-entry, road-side-exit GLBs",
+          "signal and stop-sign models",
+          "vehicles"
+        ],
+        "result": "pass: pill 'School Run', no failed requests, traffic, live queue, hover tag; screenshot 20-school-run.png inspected (divided main road with signal, links, shortcut with all-way stop, lay-by, school driveway marker, open south arm).",
+        "previews": "artifacts/3d/previews/ (git-ignored)"
       }
     ]
   },

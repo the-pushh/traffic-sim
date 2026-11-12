@@ -1,5 +1,5 @@
 import type { LaneGraph } from '../network/buildLaneGraph';
-import { type Conflict, findConflicts, type Turn, turnBetween, turnOf } from '../network/conflicts';
+import { type Conflict, findConflicts, splitClearance, type Turn, turnBetween, turnOf } from '../network/conflicts';
 import { junctionClusters } from '../network/junctions';
 import { type Driver, type ProfileId, sampleDriver } from './drivers';
 import { Random } from './random';
@@ -41,10 +41,22 @@ const CURVE_ACCELERATION = 2.5;
 const COURTESY_RANGE = 70;
 /** Speed a courteous driver slows to while letting someone out, m/s. */
 const COURTESY_SPEED = 3;
+/** How far ahead drivers look for a lower speed limit (or a curve), metres. */
+const LIMIT_LOOKAHEAD = 120;
+/** A crossing stays reserved until the holder's rear is this far past it, metres (vehicles have width). */
+const CROSSING_CLEAR = 2;
+/** Drivers pull out of a driveway at no more than this, m/s. */
+const DRIVEWAY_SPEED = 3;
+/** A car waiting to pull out has its front this far into the driveway's lane, metres. */
+const DRIVEWAY_MOUTH = 0.5;
+/** How far over the speed limit ahead a driver lets themselves drift before braking firmly, m/s. */
+const CAP_TOLERANCE = 0.1;
 /** A driver this close to the stop line (beyond the stop margin) is waiting at it, metres. */
 const AT_THE_LINE = 1.5;
-/** Where lanes split, a vehicle on the other branch blocks the split until its rear is this far along, metres. */
+/** Where lanes split, a vehicle on the other branch blocks the split until its rear is at least this far along, metres… */
 const DIVERGE_CLEARANCE = 3;
+/** …and until the branches are this far apart, centre to centre, tiles (2.2 m: a car's width and a little). */
+const SPLIT_SEPARATION = 0.25;
 /** Gateways closer than this (tiles) are one road: the two carriageways of a divided road are 1 tile apart. */
 const SAME_ROAD = 1.5;
 /** Usual extra time lost at a stop sign and at a yield, seconds (for route choice). */
@@ -119,6 +131,8 @@ export interface VehicleState {
   blockedBy: string;
   /** Count of junctions passed: identifies the stretch of road the vehicle is on. */
   stretch: number;
+  /** How far over (or under) the limit this driver drives on this stretch: their speed factor, capped. */
+  limitFactor: number;
   /** When the driver next weighs up another route while held up. */
   routeCheckAt: number;
   /** Cut off from every exit by a closure: the route stops short of it and the vehicle waits there. */
@@ -134,8 +148,20 @@ export interface Demand {
   entries: Record<string, number>;
   /** Relative share of trips to each exit gateway; defaults to every reachable exit equally. */
   destinations?: Record<string, number>;
+  /** Extra trips during a time window (e.g. a school's drop-off peak), on top of the rest. */
+  peaks?: DemandPeak[];
   vehicleMix?: Partial<Record<VehicleTypeId, number>>;
   profileMix?: Partial<Record<ProfileId, number>>;
+}
+
+/** A burst of extra trips between `from` and `to` (simulation seconds), with their own entries and destinations (gateway or driveway labels). */
+export interface DemandPeak {
+  from: number;
+  to: number;
+  /** Trips per minute at an entry with weight 1. */
+  tripsPerMinute: number;
+  entries: Record<string, number>;
+  destinations: Record<string, number>;
 }
 
 export const DEFAULT_VEHICLE_MIX: Record<VehicleTypeId, number> = { compact: 20, sedan: 30, suv: 15, pickup: 10, van: 10, boxTruck: 8, heavyTruck: 5, tractor: 2 };
@@ -161,6 +187,8 @@ export interface SimulationOptions {
   /** Signals only; shorthand kept for signal-only scenes. */
   signals?: SignalControl[];
   demand?: Demand;
+  /** Speed limit of each lane, m/s (see `laneSpeedLimits`); defaults to 50 km/h everywhere. */
+  speedLimits?: number[];
 }
 
 /** A trip waiting at an entry; its vehicle and driver are fixed when it arrives. */
@@ -172,6 +200,8 @@ interface PendingTrip {
   counted: boolean;
   /** The route it will take (null: no way through), and when it was chosen; refreshed while it waits. */
   routed?: { lanes: number[] | null; at: number };
+  /** Pulling out of a driveway: the waiting vehicle, kept while it waits so its patience and place in turn carry over. */
+  waitingAtDriveway?: VehicleState;
 }
 
 interface Entry {
@@ -180,6 +210,10 @@ interface Entry {
   arrivals: Random;
   nextArrival: number;
   waiting: PendingTrip[];
+  /** Where this stream's trips go, if not the demand's own destinations. */
+  destinations?: Record<string, number>;
+  /** When this stream runs (a peak); always, if absent. */
+  window?: [number, number];
 }
 
 export interface NewVehicle {
@@ -234,6 +268,12 @@ export class TrafficSimulation {
   private readonly junctionOf: number[];
   /** Highest comfortable speed through each lane, from its tightest curve, m/s. */
   private readonly curveSpeed: number[];
+  /** Each lane's speed limit, m/s. */
+  private readonly speedLimit: number[];
+  /** For lanes that start a trip (no lane before them), the other such lanes starting at the same point, e.g. out of a driveway. */
+  private readonly sharedStarts: Map<number, number[]>;
+  /** Cache of `splitClear`, metres, by "lane>other". */
+  private readonly splitClearances = new Map<string, number>();
   /** For each lane, the other lanes that end at the same merge point. */
   private readonly mergesWith: Map<number, number[]>;
   /** Simulated seconds since the simulation started. */
@@ -245,6 +285,7 @@ export class TrafficSimulation {
   private readonly queueDelay: number[];
   private queueDelayAt = -1;
   private tripCount = 0;
+  private peakTripCount = 0;
   private entered = 0;
   private finished = 0;
   private due = 0;
@@ -253,7 +294,7 @@ export class TrafficSimulation {
   private blockedAt: Record<string, number> = {};
   private readonly exitLanes: ReadonlySet<number>;
   /** Each gateway's entry lanes and its exit lanes as a set, by label. */
-  private readonly gateways: Map<string, { entryLanes: number[]; exits: ReadonlySet<number> }>;
+  private readonly gateways: Map<string, { at: [number, number]; entryLanes: number[]; exits: ReadonlySet<number> }>;
   /** Every trip that has arrived at an entry, in order: what Restart must replay exactly. */
   readonly arrivals: { at: number; from: string; to: string; type: VehicleTypeId; profile: ProfileId }[] = [];
   /** Seconds each finished trip took from entering the board to leaving it. */
@@ -282,19 +323,45 @@ export class TrafficSimulation {
     this.turns = graph.lanes.map(turnOf);
     this.junctionOf = junctionClusters(graph, this.conflicts);
     this.curveSpeed = graph.lanes.map((lane) => Math.sqrt(CURVE_ACCELERATION * tightestRadius(lane.points) * METRES_PER_TILE));
-    this.router = new Router(graph, graph.lanes.map((lane) => this.freeFlowTime(lane.id)));
+    this.speedLimit = options.speedLimits ?? graph.lanes.map(() => DEFAULT_SPEED_LIMIT);
+    const starts = graph.lanes.filter((l) => l.previous.length === 0);
+    const samePoint = (a: number, b: number) => Math.hypot(...[0, 1, 2].map((k) => graph.lanes[a].points[0][k] - graph.lanes[b].points[0][k])) < 1e-6;
+    this.sharedStarts = new Map(starts.map((l) => [l.id, starts.filter((o) => o.id !== l.id && samePoint(o.id, l.id)).map((o) => o.id)]));
+    this.router = new Router(
+      graph,
+      graph.lanes.map((lane) => this.freeFlowTime(lane.id)),
+      (from, to) => this.uTurnAcrossJunction(from, to),
+    );
     this.queueDelay = graph.lanes.map(() => 0);
     this.exitLanes = new Set(graph.gateways.flatMap((g) => g.exitLanes));
-    this.gateways = new Map(graph.gateways.map((g) => [g.label, { entryLanes: g.entryLanes, exits: new Set(g.exitLanes) }]));
+    // Gateways and driveways alike: trips start and end at either.
+    this.gateways = new Map([...graph.gateways, ...graph.accessPoints].map((g) => [g.label, { at: g.at, entryLanes: g.entryLanes, exits: new Set(g.exitLanes) }]));
     this.mergesWith = new Map(graph.lanes.map((l) => [l.id, this.conflicts.get(l.id)!.filter((c) => c.kind === 'merge').map((c) => c.lane)]));
     this.demand = options.demand;
-    this.entries = Object.entries(options.demand?.entries ?? {})
-      .filter(([, weight]) => weight > 0)
-      .map(([label, weight], i) => {
+    const demand = options.demand;
+    const streams: { label: string; weight: number; tripsPerMinute: number; destinations?: Record<string, number>; window?: [number, number] }[] = [
+      ...Object.entries(demand?.entries ?? {}).map(([label, weight]) => ({ label, weight, tripsPerMinute: demand!.tripsPerMinute })),
+      ...(demand?.peaks ?? []).flatMap((peak) =>
+        Object.entries(peak.entries).map(([label, weight]) => ({ label, weight, tripsPerMinute: peak.tripsPerMinute, destinations: peak.destinations, window: [peak.from, peak.to] as [number, number] })),
+      ),
+    ];
+    // Base streams come first, so adding a peak doesn't change when the other trips arrive.
+    this.entries = streams
+      .map((stream, i) => ({ ...stream, i }))
+      .filter((stream) => stream.weight > 0)
+      .map(({ label, weight, tripsPerMinute, destinations, window, i }) => {
         const arrivals = this.random.fork('entries', i);
-        const ratePerSecond = (options.demand!.tripsPerMinute * weight) / 60 || 0;
-        return { label, ratePerSecond, arrivals, nextArrival: ratePerSecond > 0 ? arrivals.exponential(ratePerSecond) : Infinity, waiting: [] };
+        const ratePerSecond = (tripsPerMinute * weight) / 60 || 0;
+        const entry: Entry = { label, ratePerSecond, arrivals, nextArrival: Infinity, waiting: [], destinations, window };
+        entry.nextArrival = ratePerSecond > 0 ? this.scheduleFrom(entry, window?.[0] ?? 0) : Infinity;
+        return entry;
       });
+  }
+
+  /** The stream's next arrival after `time`, or Infinity once its window has closed. */
+  private scheduleFrom(entry: Entry, time: number) {
+    const next = Math.max(time, entry.window?.[0] ?? 0) + entry.arrivals.exponential(entry.ratePerSecond);
+    return entry.window && next > entry.window[1] ? Infinity : next;
   }
 
   get counts(): TripCounts {
@@ -370,7 +437,7 @@ export class TrafficSimulation {
   step(dt: number) {
     this.releaseCrossings();
     this.indexRears();
-    this.arriveAndEnter();
+    this.arriveAndEnter(dt);
     const all = [...this.vehicles.values()];
     // Decide every vehicle's acceleration from the same snapshot, then move them all.
     const leaders = new Map<VehicleState, Obstacle | null>();
@@ -392,7 +459,9 @@ export class TrafficSimulation {
       const signal = controls.get(v) ?? null;
       const carAccel = this.idmAcceleration(v, car);
       const signalAccel = signal ? this.idmAcceleration(v, signal) : Infinity;
-      v.acceleration = Math.min(carAccel, signalAccel, v.courtesyBraking > 0 ? -v.courtesyBraking : Infinity);
+      // Over the limit for the road ahead (a lower speed limit): brake at the comfortable rate the limit profile was laid out for.
+      const capAccel = v.speed > this.limitAhead(v) + CAP_TOLERANCE ? -v.driver.comfortBraking : Infinity;
+      v.acceleration = Math.min(carAccel, signalAccel, capAccel, v.courtesyBraking > 0 ? -v.courtesyBraking : Infinity);
       v.reason = describe(v, signalAccel < carAccel ? signal : car);
     }
     this.time += dt;
@@ -419,7 +488,13 @@ export class TrafficSimulation {
   }
 
   private place(type: VehicleType, driver: Driver, destination: string, route: number[], position: number, speed: number) {
-    const id = this.nextId++;
+    return this.insert(this.build(type, driver, destination, route, position, speed));
+  }
+
+  /** A new vehicle, not yet on the board: it gets its id (and its own decisions) when inserted. */
+  private build(type: VehicleType, driver: Driver, destination: string, route: number[], position: number, speed: number): VehicleState {
+    // Until inserted it's a newcomer: it loses ties to everyone already on the board.
+    const id = Number.MAX_SAFE_INTEGER;
     const v: VehicleState = {
       id,
       type,
@@ -440,18 +515,26 @@ export class TrafficSimulation {
       heldUp: 0,
       speedCap: Infinity,
       decisions: new Map(),
-      random: this.random.fork('decisions', id),
+      // Provisionally the stream of the next id: the same one it gets when inserted straight away.
+      random: this.random.fork('decisions', this.nextId),
       blockedBy: '',
       stretch: 0,
+      limitFactor: 1,
       routeCheckAt: 0,
       stranded: false,
       blocked: false,
     };
     this.setPreferredSpeed(v);
+    return v;
+  }
+
+  private insert(v: VehicleState) {
+    // A vehicle that waited (at a driveway) keeps the decisions it already made; others are inserted at once.
+    v.id = this.nextId++;
     this.advanceAlongRoute(v);
-    this.vehicles.set(id, v);
+    this.vehicles.set(v.id, v);
     this.indexRear(v);
-    return id;
+    return v.id;
   }
 
   private finish(v: VehicleState) {
@@ -470,16 +553,16 @@ export class TrafficSimulation {
    * enters once its driver's minimum gap fits behind whatever is ahead, at a speed
    * that keeps their preferred following distance.
    */
-  private arriveAndEnter() {
+  private arriveAndEnter(dt: number) {
     for (const entry of this.entries) {
       while (this.time >= entry.nextArrival) {
-        const trip = this.newTrip(entry.label);
+        const trip = this.newTrip(entry);
         if (trip) {
           this.arrivals.push({ at: this.time, from: entry.label, to: trip.to, type: trip.type, profile: trip.driver.profile });
           this.due++;
           entry.waiting.push(trip);
         }
-        entry.nextArrival += entry.arrivals.exponential(entry.ratePerSecond);
+        entry.nextArrival = this.scheduleFrom(entry, entry.nextArrival);
       }
       const trip = entry.waiting[0];
       if (!trip) continue;
@@ -498,14 +581,33 @@ export class TrafficSimulation {
       // overlapping its footprint counts; then measure from its front.
       const fromEdge = this.leaderAhead(route, 0, 0, null);
       const ahead = fromEdge && { ...fromEdge, gap: fromEdge.gap - type.length };
-      const preferred = Math.min(type.maxSpeed, DEFAULT_SPEED_LIMIT * trip.driver.speedFactor);
+      const preferred = Math.min(type.maxSpeed, this.speedLimit[route[0]] * trip.driver.speedFactor);
       let speed = preferred * 0.7;
       if (ahead) {
         if (ahead.gap < trip.driver.minGap + 0.5) continue; // entrance full: the trip keeps waiting
         speed = Math.min(speed, (ahead.gap - trip.driver.minGap) / trip.driver.headway, ahead.speed + 1);
       }
-      entry.waiting.shift();
-      const id = this.place(type, trip.driver, trip.to, route, type.length, Math.max(0, speed));
+      let id: number;
+      if (this.isJunctionLane(route[0])) {
+        // A driveway opens straight into a junction: wait at its mouth and pull out only when
+        // it's safe, like any driver at a line (patience builds and turns are taken as usual).
+        let v = trip.waitingAtDriveway;
+        if (!v || v.route[0] !== route[0]) {
+          v = this.build(type, trip.driver, trip.to, route, DRIVEWAY_MOUTH, 0);
+          v.waitingSince = this.time;
+          trip.waitingAtDriveway = v;
+        } else v.heldUp += dt;
+        const junction = { index: 0, lane: route[0], distance: 0 };
+        if (this.conflictAreaOccupied(v, junction) || this.exitFull(v, 0) || !this.safeToEnter(v, junction) || !this.reserveCrossings(v, 0)) continue;
+        v.committedJunction = route[0];
+        v.waitingSince = Infinity;
+        v.speed = Math.min(Math.max(0, speed), DRIVEWAY_SPEED);
+        entry.waiting.shift();
+        id = this.insert(v);
+      } else {
+        entry.waiting.shift();
+        id = this.place(type, trip.driver, trip.to, route, type.length, Math.max(0, speed));
+      }
       if (trip.counted) {
         this.enteredAt.set(id, this.time);
         this.entered++;
@@ -514,9 +616,11 @@ export class TrafficSimulation {
   }
 
   /** Draw a trip's destination, vehicle and driver from its own seeded generator. */
-  private newTrip(from: string): PendingTrip | null {
-    const random = this.random.fork('trips', this.tripCount++);
-    const destinations = this.demand?.destinations ?? Object.fromEntries(this.graph.gateways.filter((g) => g.label !== from).map((g) => [g.label, 1]));
+  private newTrip(entry: Entry): PendingTrip | null {
+    const from = entry.label;
+    // Peak trips draw from their own sequence, so adding a peak leaves every other trip as it was.
+    const random = entry.window ? this.random.fork('peak-trips', this.peakTripCount++) : this.random.fork('trips', this.tripCount++);
+    const destinations = entry.destinations ?? this.demand?.destinations ?? Object.fromEntries(this.graph.gateways.filter((g) => g.label !== from).map((g) => [g.label, 1]));
     const reachable = Object.fromEntries(Object.entries(destinations).filter(([to, w]) => w > 0 && !this.sameRoad(from, to) && this.designedRoute(from, to)));
     if (!Object.keys(reachable).length) return null;
     const to = random.weighted(reachable);
@@ -536,7 +640,7 @@ export class TrafficSimulation {
 
   /** Whether two gateways are the same road (one label, or the two carriageways of a divided road): no trip turns back the way it came. */
   private sameRoad(a: string, b: string) {
-    const [ga, gb] = [this.graph.gateways.find((g) => g.label === a)!, this.graph.gateways.find((g) => g.label === b)!];
+    const [ga, gb] = [this.gateway(a), this.gateway(b)];
     return Math.hypot(ga.at[0] - gb.at[0], ga.at[1] - gb.at[1]) < SAME_ROAD;
   }
 
@@ -723,6 +827,7 @@ export class TrafficSimulation {
       v.position -= this.laneLength[leaving];
       v.routeIndex++;
       const entering = v.route[v.routeIndex];
+      if (this.speedLimit[entering] !== this.speedLimit[leaving]) this.setCruisingSpeed(v);
       if (this.graph.lanes[entering].piece !== this.graph.lanes[leaving].piece) {
         // Into a new piece: any stop at the previous line is done with.
         v.stoppedAt = null;
@@ -775,11 +880,11 @@ export class TrafficSimulation {
       // Where lanes split: someone who took the other branch is still in the way until
       // their rear is clear of the split.
       if (i > index || position <= 0) {
-        const split = i > 0 ? this.graph.lanes[route[i - 1]].next : [];
+        const split = i > 0 ? this.graph.lanes[route[i - 1]].next : (this.sharedStarts.get(route[i]) ?? []);
         for (const sibling of split) {
           if (sibling === route[i]) continue;
           for (const rear of this.rearsByLane.get(sibling) ?? []) {
-            if (rear.vehicle === self || rear.position >= DIVERGE_CLEARANCE) continue;
+            if (rear.vehicle === self || rear.position >= this.splitClear(sibling, route[i])) continue;
             const gap = travelled + Math.max(0, rear.position);
             if (!best || gap < best.gap) best = { gap, speed: rear.vehicle.speed, kind: 'car', vehicle: rear.vehicle };
           }
@@ -792,12 +897,13 @@ export class TrafficSimulation {
         for (const otherLane of this.mergesWith.get(route[i]) ?? []) {
           for (const other of this.vehicles.values()) {
             if (other === self) continue;
-            // Only drivers already in the junction (or committed to it) take their turn at the merge.
-            const inJunction = this.junctionOf[other.route[other.routeIndex]] === this.junctionOf[otherLane];
-            if (!inJunction && other.committedJunction === null) continue;
             const theirs = this.distanceToPoint(other, otherLane, this.laneLength[otherLane]);
             // Still counts until its rear has cleared the merge point (long vehicles curve in for a while).
             if (theirs === null || theirs + other.type.length < 0) continue;
+            // Only drivers already in the junction (or committed to it) take their turn at the merge;
+            // one straddling the merge point is in the way regardless.
+            const inJunction = this.junctionOf[other.route[other.routeIndex]] === this.junctionOf[otherLane];
+            if (!inJunction && other.committedJunction === null && theirs >= 0) continue;
             const ahead = theirs < toMerge || (theirs === toMerge && other.id < self.id);
             if (!ahead) continue;
             const gap = toMerge - theirs - other.type.length;
@@ -811,13 +917,37 @@ export class TrafficSimulation {
     return null;
   }
 
-  /** Highest speed now that still lets the driver slow comfortably to each curve's speed ahead. */
+  /** How far along `lane` (metres) a vehicle's rear must be before it's clear of `other`, which leaves the same point. */
+  private splitClear(lane: number, other: number) {
+    const key = `${lane}>${other}`;
+    let clear = this.splitClearances.get(key);
+    if (clear === undefined) {
+      // Measure how far the branches run side by side (a lay-by peeling away, turning lanes
+      // fanning out at a junction's entrance); exits off a roundabout's ring open up quickly.
+      const leavesRing = this.entryLaneOf(lane) === null; // starts within its piece: an exit off a ring
+      clear = leavesRing ? DIVERGE_CLEARANCE : Math.max(DIVERGE_CLEARANCE, splitClearance(this.graph.lanes[lane], this.graph.lanes[other], SPLIT_SEPARATION) * METRES_PER_TILE);
+      this.splitClearances.set(key, clear);
+    }
+    return clear;
+  }
+
+  /** Highest speed now that still lets the driver slow comfortably to a lower speed limit ahead, as they keep limits. */
+  private limitAhead(v: VehicleState) {
+    return this.slowestAhead(v, (lane) => this.speedLimit[lane] * v.limitFactor);
+  }
+
+  /** Highest speed now that still lets the driver slow comfortably to each curve's speed (or lower limit) ahead. */
   private curveLimit(v: VehicleState) {
-    let limit = this.curveSpeed[v.route[v.routeIndex]];
+    return this.slowestAhead(v, (lane) => Math.min(this.curveSpeed[lane], this.speedLimit[lane] * v.limitFactor));
+  }
+
+  /** The highest speed now from which the driver can slow comfortably to each lane's `highest` speed before reaching it. */
+  private slowestAhead(v: VehicleState, highest: (lane: number) => number) {
+    let limit = highest(v.route[v.routeIndex]);
     let distance = this.laneLength[v.route[v.routeIndex]] - v.position;
-    for (let i = v.routeIndex + 1; i < v.route.length && distance <= 120; i++) {
+    for (let i = v.routeIndex + 1; i < v.route.length && distance <= LIMIT_LOOKAHEAD; i++) {
       const lane = v.route[i];
-      limit = Math.min(limit, Math.sqrt(this.curveSpeed[lane] ** 2 + 2 * v.driver.comfortBraking * distance));
+      limit = Math.min(limit, Math.sqrt(highest(lane) ** 2 + 2 * v.driver.comfortBraking * distance));
       distance += this.laneLength[lane];
     }
     return limit;
@@ -951,8 +1081,9 @@ export class TrafficSimulation {
         this.crossings.delete(key);
         continue;
       }
-      const toPoint = this.distanceToPoint(vehicle, lane, at);
-      if (toPoint === null || toPoint + vehicle.type.length < 0) this.crossings.delete(key);
+      // Held until the rear is well clear of the crossing: a vehicle has width.
+      const toPoint = this.distanceToPoint(vehicle, lane, at, CROSSING_CLEAR + 1);
+      if (toPoint === null || toPoint + vehicle.type.length < -CROSSING_CLEAR) this.crossings.delete(key);
     }
   }
 
@@ -1015,8 +1146,8 @@ export class TrafficSimulation {
           if (relation === 'go' && other.committedJunction === null && this.junctionOf[other.route[other.routeIndex]] !== this.junctionOf[conflict.lane]) continue;
           // They're hanging back to let us out.
           if (other.decisions.get(`courtesy:${v.id}`) === true && other.committedJunction === null) continue;
-          // Queued right by the merge with priority: no space to pull in ahead of it.
-          if (other.speed < STOPPED && relation === 'yield' && conflict.kind === 'merge' && toConflict < 8 && toConflict > -other.type.length) return this.block(v, `queued at merge: ${other.id}`);
+          // Queued (or crawling in the queue) right by the merge with priority: no space to pull in ahead of it.
+          if (other.speed < HELD_UP && relation === 'yield' && conflict.kind === 'merge' && toConflict < 8 && toConflict > -other.type.length) return this.block(v, `queued at merge: ${other.id}`);
           if (other.speed < STOPPED) {
             // Not coming yet. Waiting at its own line with neither of us having priority:
             // whoever arrived first goes (ties by order).
@@ -1077,12 +1208,12 @@ export class TrafficSimulation {
    * route (negative once the front has passed it); null if the lane isn't on its route
    * from its rear bumper onwards.
    */
-  private distanceToPoint(v: VehicleState, lane: number, at: number): number | null {
+  private distanceToPoint(v: VehicleState, lane: number, at: number, behind = 1): number | null {
     const index = v.route.indexOf(lane);
     if (index < 0) return null;
     const pointProgress = this.lengthOf(v.route, 0, index) + at;
     const frontProgress = this.lengthOf(v.route, 0, v.routeIndex) + v.position;
-    if (pointProgress < frontProgress - v.type.length - 1) return null; // already behind it
+    if (pointProgress < frontProgress - v.type.length - behind) return null; // already behind it
     return pointProgress - frontProgress;
   }
 
@@ -1133,8 +1264,13 @@ export class TrafficSimulation {
   /** Preferred speed on the current stretch: up to the limit, or modestly over it if the driver decides to speed here. */
   private setPreferredSpeed(v: VehicleState) {
     const speeding = v.driver.speedFactor > 1 && this.decide(v, `speed:${v.stretch}`);
-    const factor = speeding ? Math.min(v.driver.speedFactor, 1.15) : Math.min(v.driver.speedFactor, 1);
-    v.preferredSpeed = Math.min(v.type.maxSpeed, DEFAULT_SPEED_LIMIT * factor);
+    v.limitFactor = speeding ? Math.min(v.driver.speedFactor, 1.15) : Math.min(v.driver.speedFactor, 1);
+    this.setCruisingSpeed(v);
+  }
+
+  /** The speed this driver wants on the lane they're on: its limit, adjusted by how they drive. */
+  private setCruisingSpeed(v: VehicleState) {
+    v.preferredSpeed = Math.min(v.type.maxSpeed, this.speedLimit[v.route[v.routeIndex]] * v.limitFactor);
   }
 
   /**
@@ -1294,11 +1430,21 @@ export class TrafficSimulation {
   }
 
   /**
+   * Whether moving from `from` to `to` turns back across a junction made of several tiles,
+   * e.g. from one carriageway of a divided road into the other going the opposite way.
+   */
+  private uTurnAcrossJunction(from: number, to: number) {
+    const [a, b] = [this.graph.lanes[from], this.graph.lanes[to]];
+    if (a.piece === b.piece || this.junctionOf[from] < 0 || this.junctionOf[from] !== this.junctionOf[to]) return false;
+    return turnBetween(a, b) === 'u-turn';
+  }
+
+  /**
    * Seconds to drive a lane with no traffic: at the speed limit or the lane's curve
    * speed, plus the usual wait at its control (half the red time on average for a signal).
    */
   private freeFlowTime(lane: number) {
-    const time = this.laneLength[lane] / Math.min(DEFAULT_SPEED_LIMIT, this.curveSpeed[lane]);
+    const time = this.laneLength[lane] / Math.min(this.speedLimit[lane], this.curveSpeed[lane]);
     const control = this.controlOnLane.get(lane);
     if (!control) return time;
     if (control.type === 'signal') {

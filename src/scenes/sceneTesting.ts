@@ -1,6 +1,7 @@
 import { buildLaneGraph } from '../simulation/network/buildLaneGraph';
-import type { SceneDefinition } from '../simulation/network/scene';
+import { laneSpeedLimits, type SceneDefinition } from '../simulation/network/scene';
 import { TRIPS_PER_MINUTE } from '../simulation/traffic/intensity';
+import { sceneDemand } from '../simulation/traffic/sceneDemand';
 import { resolveControls } from '../simulation/traffic/signals';
 import { TrafficSimulation } from '../simulation/traffic/trafficSimulation';
 
@@ -13,7 +14,9 @@ export function simulateScene(scene: SceneDefinition, intensity: keyof typeof TR
   return new TrafficSimulation(graph, {
     seed,
     controls: resolveControls(scene.pieces, graph, controls),
-    demand: { tripsPerMinute: TRIPS_PER_MINUTE[intensity], entries: scene.demand.gateways, destinations: scene.demand.destinations },
+    speedLimits: laneSpeedLimits(scene.pieces, graph),
+    // No warm-up here: run time and simulation time are the same.
+    demand: sceneDemand(scene.demand, TRIPS_PER_MINUTE[intensity], 0),
   });
 }
 

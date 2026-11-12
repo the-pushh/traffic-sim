@@ -79,7 +79,7 @@ F  ........|.......
 ```
 
 - Two routes between the west and east areas: the **wide main road** (rows 3–4) with a signalised junction at column 8, and the **narrow shortcut** (row B, slower speed limit) with a stop-controlled junction `X` at column 8. Links at columns 1 and E join them.
-- School at column A: driveway `d` (peak of local trips), a pedestrian crossing `z` on the shortcut, and a lay-by **drop-off bay** beside the school (kit pieces `road-side-exit`, `road-side`, `road-side-entry`; added after T4).
+- School frontage from column A: a pedestrian crossing `z` (A), the school driveway `d` (B, peak of local trips) and a lay-by **drop-off bay** (C–D, kit pieces `road-side-exit` and `road-side-entry`). As built in T9: the lay-by needs two tiles, so the frontage spans columns A–D.
 - Open connection `o` south of the T at column 4; free space for another junction control or a traffic-calming element.
 
 ## 4. Flyover Bottleneck (redrawn 2026-11-12)
