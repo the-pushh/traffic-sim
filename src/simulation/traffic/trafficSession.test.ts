@@ -93,3 +93,38 @@ describe('traffic session: continuing after the end', () => {
     expect(session.results().due).toBeLessThan(first.due);
   });
 });
+
+describe('traffic session: edits', () => {
+  // Signal test with its crossing replaced by plain road: the light is gone.
+  const withoutLight = { ...signalTest, pieces: signalTest.pieces.map((p) => (p.piece === 'crossing' ? { ...p, piece: 'straight' } : p)), controls: [] };
+
+  it('carries a paused run on over the edited network', () => {
+    const run = new RunController();
+    const session = new TrafficSession(signalTest, graph, run);
+    run.play();
+    session.advance(run.tick(10));
+    run.pause();
+    const before = { time: session.simulation.time, due: session.simulation.counts.due, vehicles: session.simulation.allVehicles().length };
+    session.edit(withoutLight, buildLaneGraph(withoutLight.pieces));
+    expect(run.state).toBe('paused');
+    expect(session.simulation.time).toBe(before.time);
+    expect(session.simulation.counts.due).toBe(before.due);
+    expect(session.simulation.allVehicles()).toHaveLength(before.vehicles);
+    expect(session.approaches).toEqual([]);
+    run.play();
+    session.advance(run.tick(5));
+    expect(session.simulation.allVehicles().every((v) => v.reason !== 'Red light')).toBe(true);
+  });
+
+  it('starts afresh from Ready when edited before a run or after it ends', () => {
+    const run = new RunController();
+    const session = new TrafficSession(signalTest, graph, run);
+    run.play();
+    session.advance(run.tick(30));
+    expect(run.state).toBe('ended');
+    session.edit(withoutLight, buildLaneGraph(withoutLight.pieces));
+    expect(run.state).toBe('ready');
+    expect(session.simulation.counts.due).toBe(0);
+    expect(session.results().scene).toBe('Signal test');
+  });
+});

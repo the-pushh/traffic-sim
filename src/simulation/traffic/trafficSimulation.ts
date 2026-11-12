@@ -395,6 +395,89 @@ export class TrafficSimulation {
     return entry.window && next > entry.window[1] ? Infinity : next;
   }
 
+  /**
+   * Carry a paused run over to an edited network: the clock, counts, arrivals and trips
+   * waiting outside go on exactly as they would have; each vehicle stays where it is (its
+   * lane is found by position) and is routed afresh to its destination on the new network,
+   * leaving by another exit or waiting short of a gap if it can't get there. Vehicles on
+   * road that was removed leave the board and count as blocked. `options` must describe the
+   * same demand as the run being continued.
+   */
+  static continueFrom(previous: TrafficSimulation, graph: LaneGraph, options: SimulationOptions): TrafficSimulation {
+    const next = new TrafficSimulation(graph, options);
+    next.time = previous.time;
+    next.tripCount = previous.tripCount;
+    next.peakTripCount = previous.peakTripCount;
+    next.nextId = previous.nextId;
+    next.due = previous.due;
+    next.entered = previous.entered;
+    next.finished = previous.finished;
+    next.blocked = previous.blocked;
+    next.blockedAt = { ...previous.blockedAt };
+    next.travelTimes = [...previous.travelTimes];
+    for (const [id, at] of previous.enteredAt) next.enteredAt.set(id, at);
+    next.arrivals.push(...previous.arrivals);
+    // Same demand, same streams: take over their state (next arrival times, generators, trips waiting).
+    next.entries.forEach((entry, i) => {
+      const old = previous.entries[i];
+      if (!old || old.label !== entry.label) return;
+      Object.assign(entry, { arrivals: old.arrivals.copy(), nextArrival: old.nextArrival, waiting: old.waiting.map((t) => ({ ...t, routed: undefined, waitingAtDriveway: undefined })) });
+    });
+    // Lanes on pieces the edit didn't touch keep their exact course: match them by where they start and end.
+    const key = (lane: LaneGraph['lanes'][number]) => [lane.points[0], lane.points[lane.points.length - 1]].map((p) => p.map((c) => c.toFixed(4)).join(',')).join('>');
+    const byCourse = new Map(graph.lanes.map((lane) => [key(lane), lane.id]));
+    for (const old of previous.vehicles.values()) {
+      const lane = byCourse.get(key(previous.graph.lanes[old.route[old.routeIndex]]));
+      if (lane === undefined) {
+        // Its road was removed from under it.
+        if (previous.enteredAt.has(old.id) && !old.blocked) next.blocked++;
+        next.enteredAt.delete(old.id);
+        continue;
+      }
+      // The lanes behind it that still exist (its rear may be on them), then where it is.
+      const behind: number[] = [];
+      for (let i = old.routeIndex - 1; i >= 0; i--) {
+        const mapped = byCourse.get(key(previous.graph.lanes[old.route[i]]));
+        if (mapped === undefined || !graph.lanes[mapped].next.includes(behind[0] ?? lane)) break;
+        behind.unshift(mapped);
+      }
+      const v: VehicleState = {
+        ...old,
+        decisions: new Map(old.decisions),
+        random: old.random.copy(),
+        route: [...behind, lane],
+        routeIndex: behind.length,
+        committedJunction: null,
+        committedThrough: null,
+        stoppedAt: null,
+        waitingSince: Infinity,
+        stranded: false,
+      };
+      next.vehicles.set(v.id, v);
+      next.planOnward(v);
+    }
+    next.indexRears();
+    return next;
+  }
+
+  /** Route a vehicle on from where it is to its destination; if it can't get there, another exit, or wait as blocked. */
+  private planOnward(v: VehicleState) {
+    const here = v.route[v.routeIndex];
+    const targets = this.gateway(v.destination).exits;
+    const extra = this.queueCost(this.routeSensitivityOf(v));
+    const starts = this.graph.lanes[here].next;
+    const onward = targets.has(here) ? { lanes: [] } : this.router.path(starts, targets, extra);
+    if (onward) {
+      v.route = [...v.route.slice(0, v.routeIndex + 1), ...onward.lanes];
+      this.unmarkBlocked(v);
+      return;
+    }
+    this.markBlocked(v);
+    const elsewhere = this.exitLanes.has(here) ? { lanes: [] } : this.router.path(starts, this.exitLanes, extra);
+    if (elsewhere) v.route = [...v.route.slice(0, v.routeIndex + 1), ...elsewhere.lanes];
+    else v.stranded = true; // stops at the end of the lane it's on
+  }
+
   get counts(): TripCounts {
     const waiting = this.entries.reduce((n, e) => n + e.waiting.filter((t) => t.counted).length, 0);
     return { due: this.due, entered: this.entered, finished: this.finished, waiting, blocked: this.blocked };

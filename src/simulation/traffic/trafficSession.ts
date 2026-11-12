@@ -33,22 +33,55 @@ function seedFor(sceneId: string) {
 export class TrafficSession {
   simulation!: TrafficSimulation;
   /** The scene's controlled approaches, in the simulation's control order. */
-  readonly approaches: Approach[];
-  private readonly controls: ApproachControl[];
-  private readonly queues: QueueTracker;
+  approaches!: Approach[];
+  private controls!: ApproachControl[];
+  private queues!: QueueTracker;
   private builtFor = -1;
   private readonly queueBuffer: number[] = [];
   private lastState: RunState = 'ready';
 
   constructor(
-    private readonly scene: SceneDefinition,
-    private readonly graph: LaneGraph,
+    private scene: SceneDefinition,
+    private graph: LaneGraph,
     private readonly run: RunController,
   ) {
+    this.useNetwork(scene, graph);
+    this.rebuild();
+  }
+
+  /**
+   * The player edited the network. Paused mid-run, the traffic carries on over the new
+   * network (vehicles stay put and reroute; trips with no way through are blocked). Before a
+   * run or after one ends, it starts afresh from Ready.
+   */
+  edit(scene: SceneDefinition, graph: LaneGraph) {
+    const peaks = new Map(this.approaches.map((a, i) => [a.name, this.queues.peak[i]]));
+    this.useNetwork(scene, graph);
+    if (this.run.state === 'paused' || this.run.state === 'running') {
+      this.simulation = TrafficSimulation.continueFrom(this.simulation, graph, this.options());
+      // Approaches that are still there keep their peak queue for this run.
+      this.approaches.forEach((a, i) => (this.queues.peak[i] = peaks.get(a.name) ?? 0));
+      return;
+    }
+    if (this.run.state === 'ended') this.run.restart();
+    this.rebuild();
+  }
+
+  private useNetwork(scene: SceneDefinition, graph: LaneGraph) {
+    this.scene = scene;
+    this.graph = graph;
     this.controls = resolveControls(scene.pieces, graph, scene.controls);
     this.approaches = describeApproaches(scene.pieces, graph, this.controls);
     this.queues = new QueueTracker(this.controls.length);
-    this.rebuild();
+  }
+
+  private options() {
+    return {
+      seed: seedFor(this.scene.id),
+      controls: this.controls,
+      speedLimits: laneSpeedLimits(this.scene.pieces, this.graph),
+      demand: sceneDemand(this.scene.demand, TRIPS_PER_MINUTE[this.run.intensity], WARM_UP_SECONDS),
+    };
   }
 
   /** Call once per frame with the steps the run controller granted. */
@@ -78,12 +111,7 @@ export class TrafficSession {
 
   private rebuild() {
     this.builtFor = this.run.freshStarts;
-    this.simulation = new TrafficSimulation(this.graph, {
-      seed: seedFor(this.scene.id),
-      controls: this.controls,
-      speedLimits: laneSpeedLimits(this.scene.pieces, this.graph),
-      demand: sceneDemand(this.scene.demand, TRIPS_PER_MINUTE[this.run.intensity], WARM_UP_SECONDS),
-    });
+    this.simulation = new TrafficSimulation(this.graph, this.options());
     for (let i = 0; i < WARM_UP_SECONDS * STEPS_PER_SECOND; i++) this.simulation.step(STEP);
     // Measures cover the run itself, not the warm-up.
     this.simulation.resetCounts();

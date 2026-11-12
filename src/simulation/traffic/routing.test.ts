@@ -228,3 +228,35 @@ describe('junctions ahead of a queue', () => {
     expect(enteredJunction).toBe(false);
   });
 });
+
+describe('routing: carrying a paused run over to an edited network', () => {
+  it('keeps the clock, counts and arrivals, keeps vehicles where they are, and reroutes or blocks them on the new network', () => {
+    const s = sim({ seed: 3, demand: { tripsPerMinute: 30, entries: { [WEST]: 1 }, destinations: { [EAST]: 1 } } });
+    run(s, 25);
+    const before = { time: s.time, counts: { ...s.counts }, arrivals: s.arrivals.length };
+    const where = new Map(s.allVehicles().map((v) => [v.id, graph.lanes[v.route[v.routeIndex]]]));
+    // The edit: remove the main road just past the first junction (as removing that piece would).
+    const edited = pieces.filter((_, i) => i !== FIRST_T + 1);
+    const editedGraph = buildLaneGraph(edited);
+    const next = TrafficSimulation.continueFrom(s, editedGraph, { seed: 3, controls: resolveControls(edited, editedGraph, []), demand: { tripsPerMinute: 30, entries: { [WEST]: 1 }, destinations: { [EAST]: 1 } } });
+    expect(next.time).toBe(before.time);
+    expect(next.counts.due).toBe(before.counts.due);
+    expect(next.arrivals).toHaveLength(before.arrivals);
+    for (const v of next.allVehicles()) {
+      const lane = editedGraph.lanes[v.route[v.routeIndex]];
+      const was = where.get(v.id)!;
+      // Same spot on the board as before the edit.
+      expect(lane.points[0]).toEqual(was.points[0]);
+      // Its route is connected on the new network.
+      for (let i = v.routeIndex + 1; i < v.route.length; i++) expect(editedGraph.lanes[v.route[i - 1]].next).toContain(v.route[i]);
+    }
+    // Vehicles that were on the removed piece have gone, counted as blocked.
+    const onRemoved = [...where.values()].filter((lane) => pieces[lane.piece] === pieces[FIRST_T + 1]).length;
+    expect(next.allVehicles()).toHaveLength(where.size - onRemoved);
+    expect(next.counts.blocked).toBeGreaterThanOrEqual(onRemoved);
+    // Arrivals go on exactly as they would have.
+    run(next, 20);
+    run(s, 20);
+    expect(next.arrivals).toEqual(s.arrivals);
+  });
+});
