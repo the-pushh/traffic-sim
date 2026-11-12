@@ -11,7 +11,9 @@ const SLOTS = ['map', 'emissiveMap', 'normalMap', 'roughnessMap', 'metalnessMap'
  */
 export function createTextureSharing() {
   const shared = new Map<string, Texture>();
-  const keyOf = (folder: string, t: Texture) => `${folder}|${t.name}|${t.offset.toArray()}|${t.repeat.toArray()}|${t.rotation}|${t.flipY}|${t.colorSpace}`;
+  // Everything that changes how the image is sampled: only identical settings share.
+  const keyOf = (folder: string, t: Texture) =>
+    [folder, t.name, t.offset.toArray(), t.repeat.toArray(), t.center.toArray(), t.rotation, t.channel, t.wrapS, t.wrapT, t.magFilter, t.minFilter, t.flipY, t.colorSpace].join('|');
 
   return function share<T extends Object3D>(model: T, folder: string): T {
     model.traverse((object) => {

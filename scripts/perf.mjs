@@ -1,18 +1,33 @@
 // Performance benchmark: what loads the computer while each preset runs.
 //
 //   npm run build && npx vite preview --port 4173 &
-//   node scripts/perf.mjs [url] [--label name] [--quick]
+//   npm run perf -- [url] [--label name] [--quick] [--throttle 6]
 //
 // For every preset at Medium and Congested load it plays the run and, over a fixed window,
-// records main-thread time per frame (Chrome's own task accounting), frame-to-frame times,
-// WebGL draw calls and triangles per frame, style/layout time, the JS heap, and a CPU
-// profile summed by function. Results go to artifacts/perf/<label>.json and a table prints.
+// records main-thread time per animation frame (Chrome's own task accounting), GPU time
+// (timer queries), frame-to-frame times, WebGL draw calls and triangles, style/layout time,
+// the JS heap, and a CPU profile summed by function. It also measures the idle map (Ready)
+// and, with --throttle N, a run with the CPU slowed N times (does the resolution step down,
+// and does the frame rate hold?). Results go to artifacts/perf/<label>.json; a table prints.
+// Simulation step time on its own: `npm run perf:sim`.
 import { chromium } from 'playwright-core';
 import { mkdirSync, writeFileSync } from 'node:fs';
 
 const args = process.argv.slice(2);
-const url = args.find((a) => !a.startsWith('--') && args[args.indexOf(a) - 1] !== '--label') ?? 'http://localhost:4173/';
-const label = args.includes('--label') ? args[args.indexOf('--label') + 1] : 'run';
+const option = (name) => {
+  const i = args.indexOf(name);
+  return i >= 0 && args[i + 1] && !args[i + 1].startsWith('--') ? args[i + 1] : null;
+};
+const url = args.find((a, i) => !a.startsWith('--') && !['--label', '--throttle'].includes(args[i - 1])) ?? 'http://localhost:4173/';
+const label = option('--label') ?? 'run';
+const THROTTLE = Number(option('--throttle') ?? 0);
+const IDLE_MS = 5000;
+
+const reachable = await fetch(url).then((r) => r.ok, () => false);
+if (!reachable) {
+  console.error(`Nothing is serving ${url}. Start it first: npm run build && npx vite preview --port 4173`);
+  process.exit(1);
+}
 const QUICK = args.includes('--quick'); // only the two heaviest cases, for comparing changes
 const WARM_MS = 2000;
 const MEASURE_MS = 8000;
@@ -22,6 +37,12 @@ const LOADS = [
 ];
 
 const browser = await chromium.launch({ channel: 'chrome', args: ['--ignore-gpu-blocklist', '--enable-gpu-rasterization'] });
+// Close Chrome even when a step fails.
+process.on('uncaughtException', async (error) => {
+  console.error(error);
+  await browser.close().catch(() => {});
+  process.exit(1);
+});
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 2 });
 
 // Count WebGL draw calls and triangles per animation frame, and frame-to-frame times.
@@ -100,6 +121,31 @@ const gpu = await page.evaluate(() => {
   return info ? gl.getParameter(info.UNMASKED_RENDERER_WEBGL) : 'unknown';
 });
 
+// The idle map (Ready, nothing moving): what it costs to leave the app open.
+const idle = await (async () => {
+  await page.waitForTimeout(1000);
+  await page.evaluate(() => {
+    window.__perf.frames = [];
+    window.__perf.gpuMs = [];
+    window.__perf.recording = true;
+  });
+  const before = await metrics();
+  await page.waitForTimeout(IDLE_MS);
+  const after = await metrics();
+  const { frames, gpuMs } = await page.evaluate(async () => {
+    window.__perf.recording = false;
+    await new Promise((r) => setTimeout(r, 300));
+    return { frames: window.__perf.frames, gpuMs: window.__perf.gpuMs };
+  });
+  const perSecond = (v) => Math.round(v / (IDLE_MS / 1000));
+  return {
+    mainThreadMsPerSecond: perSecond((after.TaskDuration - before.TaskDuration) * 1000),
+    drawCallsPerSecond: perSecond(frames.reduce((a, f) => a + f.draws, 0)),
+    framesDrawnPerSecond: perSecond(frames.filter((f) => f.draws > 0).length),
+    gpuMsPerSecond: perSecond(gpuMs.reduce((a, b) => a + b, 0)),
+  };
+})();
+
 const percentile = (values, p) => {
   const sorted = [...values].sort((a, b) => a - b);
   return sorted[Math.min(sorted.length - 1, Math.floor((p / 100) * sorted.length))] ?? 0;
@@ -168,6 +214,8 @@ for (let s = 0; s < 5; s++) {
         mainThreadMsPerFrame: per('TaskDuration'),
         scriptMsPerFrame: per('ScriptDuration'),
         styleLayoutMsPerFrame: round(per('RecalcStyleDuration') + per('LayoutDuration'), 2),
+        framesDrawnPerSecond: round(frames.filter((f) => f.draws > 0).length / (MEASURE_MS / 1000)),
+        drawCallsPerSecond: Math.round(frames.reduce((a, f) => a + f.draws, 0) / (MEASURE_MS / 1000)),
         drawCallsPerFrame: round(frames.reduce((a, f) => a + f.draws, 0) / n),
         trianglesPerFrame: Math.round(frames.reduce((a, f) => a + f.triangles, 0) / n),
         heapMB: round(after.JSHeapUsedSize / 1e6),
@@ -183,14 +231,35 @@ for (let s = 0; s < 5; s++) {
   if (s < 4) results.push({ sceneSwitchMs: Date.now() - t, to: (await page.locator('.scene-name').textContent())?.trim() });
 }
 
+// A slower computer: the CPU slowed THROTTLE times, Main Street at Congested.
+let throttled = null;
+if (THROTTLE > 1) {
+  const slow = await browser.newPage({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 2 });
+  await slow.goto(url);
+  await slow.waitForSelector('.status', { state: 'hidden', timeout: 120000 });
+  const width = () => slow.evaluate(() => document.querySelector('canvas').width);
+  const before = await width();
+  const slowCdp = await slow.context().newCDPSession(slow);
+  await slowCdp.send('Emulation.setCPUThrottlingRate', { rate: THROTTLE });
+  await slow.locator('.intensity input').focus();
+  await slow.keyboard.press('End');
+  await slow.locator('.dock [data-action="play-pause"]').click();
+  await slow.waitForTimeout(8000);
+  const fps = await slow.evaluate(() => new Promise((r) => { let n = 0; const s = performance.now(); const l = () => { n++; performance.now() - s < 2000 ? requestAnimationFrame(l) : r(n / 2); }; requestAnimationFrame(l); }));
+  throttled = { cpuSlowdown: THROTTLE, canvasWidthBefore: before, canvasWidthAfter: await width(), fps: round(fps) };
+  await slow.close();
+}
+
 await browser.close();
 mkdirSync('artifacts/perf', { recursive: true });
-const report = { label, url, date: new Date().toISOString(), gpu, viewport: '1440x900 @2x', firstLoadMs, results };
+const report = { label, url, date: new Date().toISOString(), gpu, viewport: '1440x900 @2x', firstLoadMs, idle, results, throttled };
 writeFileSync(`artifacts/perf/${label}.json`, JSON.stringify(report, null, 2));
 
 console.log(`\n${label} · ${url} · GPU ${gpu} · first load ${firstLoadMs} ms\n`);
-console.log('scene · load | fps | frame p50/p95 ms | GPU ms/s | main ms/frame | script | style+layout | draws | triangles | heap MB');
+console.log(`idle (Ready): ${JSON.stringify(idle)}`);
+console.log('scene · load | frames/s (drawn) | frame p50/p95 ms | GPU ms/s | main ms/frame | script | style+layout | draws/s | draws per drawn frame | heap MB');
 for (const r of results.filter((r) => r.scene)) {
-  console.log(`${r.scene} · ${r.load} | ${r.fps} | ${r.frameMsP50}/${r.frameMsP95} | ${r.gpuMsPerSecond} | ${r.mainThreadMsPerFrame} | ${r.scriptMsPerFrame} | ${r.styleLayoutMsPerFrame} | ${r.drawCallsPerFrame} | ${r.trianglesPerFrame} | ${r.heapMB}`);
+  console.log(`${r.scene} · ${r.load} | ${r.fps} (${r.framesDrawnPerSecond}) | ${r.frameMsP50}/${r.frameMsP95} | ${r.gpuMsPerSecond} | ${r.mainThreadMsPerFrame} | ${r.scriptMsPerFrame} | ${r.styleLayoutMsPerFrame} | ${r.drawCallsPerSecond} | ${round(r.drawCallsPerSecond / Math.max(1, r.framesDrawnPerSecond))} | ${r.heapMB}`);
 }
 for (const r of results.filter((r) => r.to)) console.log(`switch to ${r.to}: ${r.sceneSwitchMs} ms`);
+if (throttled) console.log(`CPU ×${throttled.cpuSlowdown}: canvas ${throttled.canvasWidthBefore} → ${throttled.canvasWidthAfter} px wide, ${throttled.fps} fps`);

@@ -1,4 +1,4 @@
-import { type Group, Matrix4, type Object3D, PCFSoftShadowMap, PerspectiveCamera, Timer, WebGLRenderer } from 'three';
+import { type Group, type Object3D, PCFSoftShadowMap, PerspectiveCamera, Timer, WebGLRenderer } from 'three';
 import type { SceneDefinition } from '../simulation/network/scene';
 import { createEditor } from './editor';
 import { demandFollowsEntries } from '../editor/edits';
@@ -25,6 +25,7 @@ import { createQueueLabels } from '../three/scene/queueLabels';
 import { createTrafficLayer, VEHICLE_MODEL_NAMES } from '../three/scene/trafficLayer';
 import { createVehiclePicker } from '../three/scene/vehiclePicker';
 import { exposeTrafficDebug } from './devHooks';
+import { DrawOnDemand } from '../three/render/drawOnDemand';
 import { ResolutionGovernor } from '../three/render/resolutionGovernor';
 import { TrafficSession } from '../simulation/traffic/trafficSession';
 
@@ -140,34 +141,12 @@ const MAX_FRAME_GAP_MS = 100;
 let drewLast = false;
 let lastFrameTime = 0;
 
-// ---- Drawing on demand ----
-// The map is drawn when traffic moves, the camera moves, the editor shows something new,
-// or something asks (`requestRender`); otherwise the last frame stays on screen.
-let renderRequested = true;
-const requestRender = () => {
-  renderRequested = true;
-};
-const drawnView = new Matrix4();
-const drawnProjection = new Matrix4();
-let drawnTraffic: { simulation: unknown; time: number; state: string } | null = null;
-/** True when this frame would look different from the last one drawn (and records it as drawn). */
+// ---- Drawing on demand: an idle map isn't drawn at all ----
+const draws = new DrawOnDemand();
+const requestRender = () => draws.request();
 function frameChanged(current: TrafficSession): boolean {
   camera.updateMatrixWorld();
-  const traffic = { simulation: current.simulation, time: current.simulation.time, state: run.state };
-  const changed =
-    renderRequested ||
-    !camera.matrixWorld.equals(drawnView) ||
-    !camera.projectionMatrix.equals(drawnProjection) ||
-    traffic.simulation !== drawnTraffic?.simulation ||
-    traffic.time !== drawnTraffic.time ||
-    traffic.state !== drawnTraffic.state;
-  if (changed) {
-    renderRequested = false;
-    drawnView.copy(camera.matrixWorld);
-    drawnProjection.copy(camera.projectionMatrix);
-    drawnTraffic = traffic;
-  }
-  return changed;
+  return draws.changed({ view: camera.matrixWorld, projection: camera.projectionMatrix, traffic: current.simulation, time: current.simulation.time, state: run.state });
 }
 
 /** Fraction of the screen height covered by the scene pill and dock (the tip is temporary and not counted). */
@@ -186,6 +165,8 @@ function resize() {
   requestRender();
 }
 new ResizeObserver(resize).observe(viewport);
+// A lost and restored GPU context leaves the canvas blank until it's drawn again.
+renderer.domElement.addEventListener('webglcontextrestored', requestRender);
 resize();
 
 
@@ -341,13 +322,15 @@ async function show(mode: 'open' | 'edit'): Promise<boolean> {
       syncRunUi();
       const editorChanged = editor.sync();
       // Draw only when something on the map changed: an idle map costs nothing.
+      // Slow frames show up as long gaps while the map is being drawn; idle gaps show the screen's pace.
+      if (lastFrameTime) {
+        const gap = Math.min(time - lastFrameTime, MAX_FRAME_GAP_MS);
+        if (drewLast) resolution.frame(gap);
+        else resolution.idle(gap);
+        useResolution(); // before drawing: changing the resolution clears the canvas
+      }
       const drew = frameChanged(current) || editorChanged;
       if (drew) renderer.render(scene, camera);
-      // While the map is being drawn, slow frames show up as long gaps between frames.
-      if ((drew || drewLast) && lastFrameTime) {
-        resolution.frame(Math.min(time - lastFrameTime, MAX_FRAME_GAP_MS));
-        useResolution();
-      }
       drewLast = drew;
       lastFrameTime = time;
     });

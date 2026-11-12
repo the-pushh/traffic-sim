@@ -11,7 +11,8 @@
     "test:watch": "vitest",
     "verify:browser": "node scripts/verify-browser.mjs",
     "verify:browser:headed": "node scripts/verify-browser.mjs --headed",
-    "perf": "node scripts/perf.mjs"
+    "perf": "node scripts/perf.mjs",
+    "perf:sim": "PERF=1 vitest run src/simulation/traffic/simulationStep.perf.test.ts --reporter=verbose"
   },
   "dependencies": {
     "@phosphor-icons/core": "^2.1.1",
