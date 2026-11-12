@@ -13,6 +13,7 @@
     "verify:browser:headed": "node scripts/verify-browser.mjs --headed"
   },
   "dependencies": {
+    "@phosphor-icons/core": "^2.1.1",
     "three": "^0.187.0"
   },
   "devDependencies": {

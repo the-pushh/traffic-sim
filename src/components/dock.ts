@@ -5,6 +5,7 @@ import {
   RUN_DURATIONS,
   type RunController,
 } from '../simulation/runController';
+import { icon } from './icons';
 
 export const INTENSITY_LABELS: Record<Intensity, string> = {
   'almost-empty': 'Almost empty',
@@ -12,14 +13,6 @@ export const INTENSITY_LABELS: Record<Intensity, string> = {
   medium: 'Medium',
   high: 'High',
   congested: 'Congested',
-};
-
-const ICONS = {
-  play: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l10.5-6.5z" fill="currentColor"/></svg>',
-  pause:
-    '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z" fill="currentColor"/></svg>',
-  restart:
-    '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5a7 7 0 1 1-6.6 4.7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M4 4.5v5h5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
 };
 
 export interface DockCallbacks {
@@ -33,8 +26,8 @@ export function formatClock(seconds: number) {
 }
 
 /**
- * The floating simulation dock: Play/Pause, Restart, clock and progress, intensity,
- * and run duration. Call `sync()` each frame; it only touches the DOM on changes.
+ * The floating simulation dock: Play/Pause, Restart, clock and progress with the run
+ * length beside them, then intensity. Other modules add sections with `addSection`. Call `sync()` each frame; it only touches the DOM on changes.
  */
 export function createDock(container: HTMLElement, run: RunController, callbacks: DockCallbacks = {}) {
   const dock = document.createElement('div');
@@ -42,26 +35,27 @@ export function createDock(container: HTMLElement, run: RunController, callbacks
   dock.setAttribute('role', 'toolbar');
   dock.setAttribute('aria-label', 'Simulation');
   dock.innerHTML = `
-    <div class="dock-section">
+    <div class="dock-section dock-run">
       <button type="button" class="icon-button primary" data-action="play-pause"></button>
-      <button type="button" class="icon-button" data-action="restart" aria-label="Restart run" title="Restart run">${ICONS.restart}</button>
+      <button type="button" class="icon-button" data-action="restart" aria-label="Restart run" title="Restart run">${icon('restart')}</button>
       <div class="timeline">
         <span class="clock" aria-live="off"></span>
         <div class="progress" role="progressbar" aria-label="Run progress" aria-valuemin="0"><div class="progress-fill"></div></div>
       </div>
+      <div class="duration" role="group" aria-label="Run length">
+        <span class="dock-icon">${icon('clock')}</span>
+        ${RUN_DURATIONS.map((d) => `<button type="button" class="segment" data-duration="${d}">${d} s</button>`).join('')}
+      </div>
     </div>
     <div class="dock-divider" aria-hidden="true"></div>
-    <div class="dock-section">
+    <div class="dock-section dock-traffic">
+      <span class="dock-icon">${icon('gauge')}</span>
       <label class="intensity">
         <span class="dock-label">Intensity <strong class="intensity-name"></strong><span class="lock-hint" id="dock-lock-hint" hidden> · locked during the run</span></span>
         <input type="range" min="0" max="${INTENSITIES.length - 1}" step="1" list="intensity-ticks" />
         <datalist id="intensity-ticks">${INTENSITIES.map((_, i) => `<option value="${i}"></option>`).join('')}</datalist>
       </label>
-      <div class="duration" role="group" aria-label="Run length">
-        ${RUN_DURATIONS.map((d) => `<button type="button" class="segment" data-duration="${d}">${d} s</button>`).join('')}
-      </div>
     </div>
-
   `;
   container.append(dock);
 
@@ -113,7 +107,7 @@ export function createDock(container: HTMLElement, run: RunController, callbacks
     const running = run.state === 'running';
     if (running !== shownRunning) {
       shownRunning = running;
-      playPause.innerHTML = running ? ICONS.pause : ICONS.play;
+      playPause.innerHTML = running ? icon('pause') : icon('play');
       playPause.setAttribute('aria-label', running ? 'Pause' : 'Play');
       playPause.title = running ? 'Pause' : 'Play';
     }
@@ -144,5 +138,15 @@ export function createDock(container: HTMLElement, run: RunController, callbacks
   }
 
   sync();
-  return { sync, element: dock };
+  return {
+    sync,
+    element: dock,
+    /** Add a section at the end, after a divider (the editor's Parts button). */
+    addSection(section: HTMLElement) {
+      const divider = document.createElement('div');
+      divider.className = 'dock-divider';
+      divider.setAttribute('aria-hidden', 'true');
+      dock.append(divider, section);
+    },
+  };
 }

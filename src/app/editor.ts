@@ -8,6 +8,7 @@ import { PARTS, partById, type PartGroup, type PartId } from '../editor/parts';
 import { placePart, type PlacementResult } from '../editor/placement';
 import { CONTROL_MODELS } from '../three/scene/controlModels';
 import { signPose } from '../three/scene/createSceneView';
+import { icon } from '../components/icons';
 
 /** What the editor needs from the app around it. */
 export interface EditorHost {
@@ -86,7 +87,7 @@ export function createEditor(host: EditorHost) {
   const toggle = document.createElement('button');
   toggle.type = 'button';
   toggle.className = 'parts-toggle';
-  toggle.textContent = 'Parts';
+  toggle.innerHTML = `<span class="parts-toggle-icons">${icon('wrench')}${icon('hammer')}</span><span>Parts</span>`;
   toggle.setAttribute('aria-expanded', 'false');
   toggle.addEventListener('click', () => {
     drawer.hidden = !drawer.hidden;

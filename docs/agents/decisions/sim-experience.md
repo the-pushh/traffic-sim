@@ -291,3 +291,9 @@ Owner agreed the spec and the T1–T13 ticket breakdown and authorised implement
   - Travel time is subtracted before rounding (21.2 → 21.6 s is ±0, not ▲ 1).
   - The longest queue is compared by size even if it moved. The tooltip says where it was ("5 at Junction 1 · westbound").
 - **Look:** better is a filled accent badge ▲/▼ n, worse an outlined pink badge, and unchanged a plain ±0. Shape and colour both carry the verdict, and screen readers hear "Better than the previous run (…)" instead of the arrows. Contrast: the better badge is white on `--color-accent-strong` (6.0:1 in light mode) and ink on the accent in dark mode (6.6:1); the worse badge text is 5.3:1 (light) and 9.2:1 (dark).
+
+## Dock icons (P2, #32) — 2026-11-13
+
+- **Icons:** [Phosphor](https://phosphoricons.com) via `@phosphor-icons/core` 2.1.1 (MIT licence), imported as raw SVG at build time (`src/components/icons.ts`). Icons take `currentColor` and are hidden from screen readers; each control keeps its text label or `aria-label`. Play and Pause use the fill weight; the rest use bold.
+- **Dock order:** Play/Pause, Restart, then the clock and progress bar with the run length (clock icon, 30/60/90 s) beside them | Intensity (gauge icon) | Parts (wrench and hammer).
+- The camera panel's zoom and theme buttons use Phosphor plus, minus, moon and sun.
