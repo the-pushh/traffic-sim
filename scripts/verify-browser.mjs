@@ -459,6 +459,30 @@ const openPage = async (target) => {
   await page.waitForSelector('.status', { state: 'hidden', timeout: 60000 });
   return { page, errors };
 };
+// Dock (P2): Phosphor icons, the run length beside the progress bar, an icon per section.
+const dockChecks = {};
+{
+  const { page } = await openPage(url);
+  dockChecks.layout = await page.evaluate(() => {
+    const run = document.querySelector('.dock-run');
+    const has = (selector, ...names) => names.every((n) => document.querySelector(`${selector} .icon-${n}`));
+    return (
+      !!run?.querySelector('.timeline') &&
+      !!run.querySelector('.duration') && // run length sits with Play and the progress bar
+      has('[data-action="play-pause"]', 'play') &&
+      has('[data-action="restart"]', 'restart') &&
+      has('.duration', 'clock') &&
+      has('.dock-traffic', 'gauge') &&
+      has('.parts-toggle', 'wrench', 'hammer') &&
+      has('[data-action="zoom-in"]', 'plus') &&
+      [...document.querySelectorAll('svg.icon')].every((svg) => svg.getAttribute('aria-hidden') === 'true')
+    );
+  });
+  dockChecks.labelsUnchanged = (await page.getByRole('button', { name: 'Parts' }).count()) === 1 && (await page.getByRole('button', { name: 'Restart run' }).count()) === 1;
+  await page.locator('.dock').screenshot({ path: `${outDir}/30-dock-icons.png` });
+  await page.close();
+}
+
 // Background (P4): faint vertical colour columns, no radial glows.
 const backgroundChecks = {};
 {
@@ -729,6 +753,7 @@ const result = {
   presetChecks,
   carouselChecks,
   editorChecks,
+  dockChecks,
   backgroundChecks,
   pressChecks,
   presetRunChecks,
@@ -760,6 +785,7 @@ const ok =
   resetDisabledDuringFailure &&
   retryRecovered &&
   Object.values(runChecks).every(Boolean) &&
+  passed(dockChecks) &&
   passed(backgroundChecks) &&
   passed(pressChecks) &&
   passed(presetRunChecks) &&

@@ -2,6 +2,7 @@ import { type Group, type Object3D, PCFSoftShadowMap, PerspectiveCamera, Timer, 
 import type { SceneDefinition } from '../simulation/network/scene';
 import { createEditor } from './editor';
 import { demandFollowsEntries } from '../editor/edits';
+import { icon } from '../components/icons';
 import { createDock } from '../components/dock';
 import { createFirstVisitTip } from '../components/firstVisitTip';
 import { createResultsCard } from '../components/resultsCard';
@@ -53,8 +54,8 @@ app.innerHTML = `
         <div class="joystick-knob"></div>
       </div>
       <span id="joystick-help" class="visually-hidden">Drag the knob or hold arrow keys. Left and right orbit around the view; up tilts toward overhead, down toward an angled view.</span>
-      <button type="button" data-action="zoom-in" disabled aria-label="Zoom in" title="Zoom in">+</button>
-      <button type="button" data-action="zoom-out" disabled aria-label="Zoom out" title="Zoom out">−</button>
+      <button type="button" data-action="zoom-in" disabled aria-label="Zoom in" title="Zoom in">${icon('plus')}</button>
+      <button type="button" data-action="zoom-out" disabled aria-label="Zoom out" title="Zoom out">${icon('minus')}</button>
       <button type="button" data-action="reset-view" disabled class="primary">Reset View</button>
       <button type="button" data-action="theme" class="theme-toggle"></button>
     </div>
@@ -156,7 +157,7 @@ function currentTheme(): 'light' | 'dark' {
 }
 function showTheme() {
   const next = currentTheme() === 'dark' ? 'light' : 'dark';
-  themeToggle.textContent = next === 'dark' ? '☾' : '☀';
+  themeToggle.innerHTML = icon(next === 'dark' ? 'moon' : 'sun');
   themeToggle.setAttribute('aria-label', `Switch to ${next} mode`);
   themeToggle.title = `Switch to ${next} mode`;
 }

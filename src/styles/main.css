@@ -327,6 +327,45 @@ button.primary {
   height: 20px;
 }
 
+/* Phosphor icons: sized by their context, coloured by the text. */
+.icon {
+  display: block;
+  flex: none;
+  width: 18px;
+  height: 18px;
+}
+
+/* A section's icon in the dock: clock for run length, gauge for intensity. */
+.dock-icon {
+  display: grid;
+  place-items: center;
+  color: var(--color-text-muted);
+}
+
+.duration .dock-icon {
+  margin: 0 var(--space-1) 0 var(--space-2);
+}
+
+.dock-traffic {
+  gap: var(--space-2);
+}
+
+.parts-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.parts-toggle-icons {
+  display: inline-flex;
+  gap: 1px;
+}
+
+.camera-controls button[data-action^='zoom'] .icon,
+.theme-toggle .icon {
+  margin: 0 auto;
+}
+
 .timeline {
   display: grid;
   gap: var(--space-1);
@@ -376,6 +415,7 @@ button.primary {
 
 .duration {
   display: flex;
+  align-items: center;
 }
 
 .duration .segment {
@@ -393,7 +433,7 @@ button.primary {
   margin-left: -1px;
 }
 
-.duration .segment:first-child {
+.duration .segment:first-of-type {
   border-radius: var(--radius) 0 0 var(--radius);
 }
 
@@ -746,7 +786,7 @@ button:active:not(:disabled) {
 }
 
 .duration .segment,
-.duration .segment:first-child,
+.duration .segment:first-of-type,
 .duration .segment:last-child {
   border-radius: calc(var(--radius) - 2px);
   background: transparent;
@@ -891,6 +931,7 @@ button.primary:hover:not(:disabled),
 .parts-toggle {
   align-self: center;
 }
+
 
 .parts-drawer {
   width: min(760px, 100%);
