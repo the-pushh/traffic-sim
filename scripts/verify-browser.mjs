@@ -136,6 +136,7 @@ const settingsDisabled = () =>
 const settingsEnabled = () =>
   runPage.evaluate(() => [document.querySelector('.intensity input'), ...document.querySelectorAll('[data-duration]')].every((c) => !c.disabled));
 const runChecks = {};
+let blockedAtEntries = null;
 let hoverTag = null;
 runChecks.noHeaderAndViewFillsWindow = await runPage.evaluate(() => {
   const view = document.querySelector('.viewport').getBoundingClientRect();
@@ -202,6 +203,15 @@ if (isDevServer) {
     hoverTag = tag;
   } else runChecks.hoverTagShowsTypeProfileReason = false;
   await runPage.screenshot({ path: `${outDir}/14-traffic-paused.png` });
+  // Routing (T6): close the road in from the west edge; trips there have no way through and are counted as blocked.
+  await runPage.evaluate(() => window.__trafficDebug.closePieces([0]));
+  await runPage.getByRole('button', { name: 'Play' }).click();
+  runChecks.blockedTripsCountedAtEntry = await runPage
+    .waitForFunction(() => Object.values(window.__trafficDebug.blocked()).some((n) => n > 0) && window.__trafficDebug.counts().blocked > 0, null, { timeout: 8000, polling: 100 })
+    .then(() => true, () => false);
+  await runPage.getByRole('button', { name: 'Pause' }).click();
+  blockedAtEntries = await runPage.evaluate(() => window.__trafficDebug.blocked());
+  await runPage.screenshot({ path: `${outDir}/15-blocked-entry.png` });
   await runPage.getByRole('button', { name: 'Restart run' }).click();
 }
 await runPage.reload();
@@ -256,6 +266,7 @@ const result = {
   retryRecovered,
   runChecks,
   hoverTag: hoverTag,
+  blockedAtEntries,
 };
 writeFileSync(`${outDir}/result.json`, JSON.stringify(result, null, 2));
 console.log(JSON.stringify(result, null, 2));

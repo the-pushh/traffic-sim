@@ -52,6 +52,8 @@ export interface SceneView {
   graph: LaneGraph;
   /** Show every traffic light's aspect at simulation time `t`. */
   updateSignals(t: number): void;
+  /** Show how many trips each entry has turned away for want of a way through (hidden at zero). */
+  updateBlocked(byEntry: Readonly<Record<string, number>>): void;
   /** World-space bounds of the board, for camera framing. */
   bounds: Box3;
 }
@@ -65,6 +67,7 @@ const LANE_COLOR = '#dfe9ff';
 const GATEWAY_COLOR = '#2f6fd6';
 const OPEN_END_COLOR = '#f2c14e';
 const ACCESS_COLOR = '#e07a5f';
+const BLOCKED_COLOR = '#c62f2f';
 
 const world = (p: Point3, lift = 0) => {
   const [x, y, z] = boardToWorld([p[0], p[1] + ROAD_SURFACE, p[2]]);
@@ -128,6 +131,25 @@ export async function createSceneView(definition: SceneDefinition, baseUrl: stri
 
   scene.add(createLaneOverlay(graph));
 
+  // Blocked-trip counts, shown above each entry's label.
+  const blockedBadges = new Map<string, Sprite>();
+  for (const gateway of graph.gateways) {
+    if (!gateway.entryLanes.length) continue;
+    const badge = textSprite('0', BLOCKED_COLOR);
+    badge.position.copy(world([gateway.at[0], 0, gateway.at[1]], 3.2));
+    badge.visible = false;
+    badge.name = `blocked-${gateway.label}`;
+    scene.add(badge);
+    blockedBadges.set(gateway.label, badge);
+  }
+  const updateBlocked = (byEntry: Readonly<Record<string, number>>) => {
+    for (const [label, badge] of blockedBadges) {
+      const count = byEntry[label] ?? 0;
+      badge.visible = count > 0;
+      if (count > 0) badge.material = badgeMaterial(count > 99 ? '99+' : String(count), BLOCKED_COLOR);
+    }
+  };
+
   const updateSignals = (t: number) => {
     for (const { timing, lamp, base, material } of signalLamps) {
       const aspect = aspectAt(timing, t);
@@ -136,7 +158,7 @@ export async function createSceneView(definition: SceneDefinition, baseUrl: stri
     }
   };
   updateSignals(0);
-  return { scene, graph, updateSignals, bounds: new Box3().setFromObject(board) };
+  return { scene, graph, updateSignals, updateBlocked, bounds: new Box3().setFromObject(board) };
 }
 
 /** Lane centrelines with direction arrows, labelled gateways, open road ends, and driveways. */
@@ -206,16 +228,20 @@ const badgeMaterials = new Map<string, SpriteMaterial>();
 
 /** A round badge with a character, always facing the camera. Badges with the same text and colour share one texture. */
 function textSprite(text: string, color: string) {
+  const sprite = new Sprite(badgeMaterial(text, color));
+  sprite.scale.setScalar(1.8);
+  sprite.renderOrder = 1;
+  return sprite;
+}
+
+function badgeMaterial(text: string, color: string) {
   const key = `${text}|${color}`;
   let material = badgeMaterials.get(key);
   if (!material) {
     material = new SpriteMaterial({ map: badgeTexture(text, color), depthTest: false });
     badgeMaterials.set(key, material);
   }
-  const sprite = new Sprite(material);
-  sprite.scale.setScalar(1.8);
-  sprite.renderOrder = 1;
-  return sprite;
+  return material;
 }
 
 function badgeTexture(text: string, color: string) {
@@ -228,7 +254,7 @@ function badgeTexture(text: string, color: string) {
   ctx.arc(size / 2, size / 2, size / 2 - 4, 0, Math.PI * 2);
   ctx.fill();
   ctx.fillStyle = '#ffffff';
-  ctx.font = `bold ${size * 0.55}px system-ui, sans-serif`;
+  ctx.font = `bold ${size * (text.length > 2 ? 0.38 : 0.55)}px system-ui, sans-serif`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillText(text, size / 2, size / 2 + 4);
