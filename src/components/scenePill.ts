@@ -1,8 +1,13 @@
+/** How long "Couldn't save" shows before Save returns, ms. */
+const SAVE_FAILED_MS = 3000;
+
 /** What the pill shows: the scene's name, whether its arrows work, and which of Save and Reset apply. */
 export interface PillState {
   name: string;
   /** Arrows are locked while a run is under way (running or paused). */
   canSwitch: boolean;
+  /** Save and Reset work whenever edits do: not while the run is going (paused is fine). */
+  canEdit: boolean;
   /** The scene on screen has edits that aren't saved. */
   unsaved: boolean;
   /** The scene on screen differs from the designer's network. */
@@ -50,7 +55,21 @@ export function createScenePill(container: HTMLElement, actions: PillActions) {
       }
       button('save').hidden = !state.unsaved;
       button('reset').hidden = !state.differsFromDesign;
-      button('save').disabled = button('reset').disabled = !state.canSwitch;
+      button('save').disabled = button('reset').disabled = !state.canEdit;
+    },
+    /** Put keyboard focus back on a control after the scene reloads. */
+    focus(action: 'previous' | 'next') {
+      button(action).focus();
+    },
+    /** Say the browser wouldn't keep the save (storage full or blocked); Save stays offered. */
+    saveFailed() {
+      const save = button('save');
+      save.textContent = 'Couldn’t save';
+      save.title = 'This browser wouldn’t keep the scene (storage full or blocked)';
+      setTimeout(() => {
+        save.textContent = 'Save';
+        save.title = '';
+      }, SAVE_FAILED_MS);
     },
   };
 }

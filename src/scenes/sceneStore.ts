@@ -3,7 +3,8 @@ import { type SceneDefinition, validateScene } from '../simulation/network/scene
 /** Where saved scenes live: browser storage in the app, memory in tests. */
 export interface SceneStorage {
   get(key: string): string | null;
-  set(key: string, value: string): void;
+  /** Whether it was kept (false when the browser's storage is full or blocked). */
+  set(key: string, value: string): boolean;
   remove(key: string): void;
 }
 
@@ -12,7 +13,10 @@ export function memoryStorage(): SceneStorage {
   const items = new Map<string, string>();
   return {
     get: (key) => items.get(key) ?? null,
-    set: (key, value) => void items.set(key, value),
+    set: (key, value) => {
+      items.set(key, value);
+      return true;
+    },
     remove: (key) => void items.delete(key),
   };
 }
@@ -24,15 +28,28 @@ export function browserStorage(): SceneStorage {
     localStorage.setItem(probe, probe);
     localStorage.removeItem(probe);
     return {
-      get: (key) => localStorage.getItem(key),
+      get: (key) => {
+        try {
+          return localStorage.getItem(key);
+        } catch {
+          return null;
+        }
+      },
       set: (key, value) => {
         try {
           localStorage.setItem(key, value);
+          return true;
         } catch {
-          // Full or blocked: the scene stays as it is for this visit.
+          return false; // full or blocked
         }
       },
-      remove: (key) => localStorage.removeItem(key),
+      remove: (key) => {
+        try {
+          localStorage.removeItem(key);
+        } catch {
+          // Blocked: nothing was kept anyway.
+        }
+      },
     };
   } catch {
     return memoryStorage();
@@ -40,7 +57,17 @@ export function browserStorage(): SceneStorage {
 }
 
 const keyFor = (id: string) => `traffic-sim:scene:${id}`;
-const same = (a: SceneDefinition, b: SceneDefinition) => JSON.stringify(a) === JSON.stringify(b);
+/** A scene as text with its fields in a fixed order, so the order an editor writes them in doesn't count as a change. */
+function canonical(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`;
+  if (value && typeof value === 'object')
+    return `{${Object.keys(value)
+      .filter((k) => (value as Record<string, unknown>)[k] !== undefined)
+      .sort()
+      .map((k) => `${JSON.stringify(k)}:${canonical((value as Record<string, unknown>)[k])}`)
+      .join(',')}}`;
+  return JSON.stringify(value);
+}
 
 /**
  * The scenes the pill cycles through, each as the designer made it unless the player has
@@ -52,6 +79,9 @@ export class SceneStore {
   /** The scene on screen as last saved (or as designed), and with the player's edits. */
   private savedVersion: SceneDefinition;
   private working: SceneDefinition;
+  /** Worked out when the scene changes, not on every look (the pill asks every frame). */
+  private unsaved = false;
+  private changedFromDesign = false;
 
   constructor(
     private readonly designs: readonly SceneDefinition[],
@@ -60,16 +90,12 @@ export class SceneStore {
   ) {
     this.index = Math.max(0, designs.findIndex((d) => d.id === openWith));
     this.savedVersion = this.working = this.loadSaved(this.design());
+    this.compare();
   }
 
   /** The scene on screen, with any unsaved edits. */
   current(): SceneDefinition {
     return this.working;
-  }
-
-  /** Where the scene is in the cycle, for "2 of 5" style labels. */
-  position() {
-    return { index: this.index, count: this.designs.length };
   }
 
   /** Move to the next scene (wrapping round), dropping unsaved edits to this one. */
@@ -85,28 +111,38 @@ export class SceneStore {
   /** Replace the scene on screen with the player's edited version (not saved yet). */
   edit(scene: SceneDefinition) {
     this.working = scene;
+    this.compare();
   }
 
   /** Whether the scene on screen has edits that haven't been saved. */
   isUnsaved() {
-    return !same(this.working, this.savedVersion);
+    return this.unsaved;
   }
 
   /** Whether the scene on screen (saved or not) differs from the designer's network. */
   differsFromDesign() {
-    return !same(this.working, this.design());
+    return this.changedFromDesign;
   }
 
-  /** Keep the scene on screen as this scene from now on, in this browser. */
-  save() {
-    this.storage.set(keyFor(this.working.id), JSON.stringify(this.working));
+  /** Keep the scene on screen as this scene from now on, in this browser; false if the browser wouldn't keep it. */
+  save(): boolean {
+    if (!this.storage.set(keyFor(this.working.id), JSON.stringify(this.working))) return false;
     this.savedVersion = this.working;
+    this.compare();
+    return true;
   }
 
   /** Go back to the designer's network, forgetting any saved version. */
   reset() {
     this.storage.remove(keyFor(this.design().id));
     this.savedVersion = this.working = this.design();
+    this.compare();
+  }
+
+  private compare() {
+    const working = canonical(this.working);
+    this.unsaved = working !== canonical(this.savedVersion);
+    this.changedFromDesign = working !== canonical(this.design());
   }
 
   private design() {
@@ -116,6 +152,7 @@ export class SceneStore {
   private open(index: number) {
     this.index = index;
     this.savedVersion = this.working = this.loadSaved(this.design());
+    this.compare();
     return this.working;
   }
 

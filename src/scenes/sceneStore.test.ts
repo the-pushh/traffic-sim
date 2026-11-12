@@ -66,4 +66,42 @@ describe('scene store', () => {
     storage.set('traffic-sim:scene:a', '{not json');
     expect(new SceneStore([A, B], storage).current()).toEqual(A);
   });
+
+  it('hides Save again when an edit is undone, and ignores the order fields were written in', () => {
+    const store = new SceneStore([A, B], memoryStorage());
+    store.edit(edited(A));
+    store.edit({ ...A });
+    expect(store.isUnsaved()).toBe(false);
+    // The same scene with its fields in a different order is no edit.
+    const reordered = { demand: A.demand, controls: A.controls, pieces: A.pieces.map((p) => ({ rotation: p.rotation, at: p.at, piece: p.piece })), name: A.name, id: A.id };
+    store.edit(reordered as SceneDefinition);
+    expect(store.isUnsaved()).toBe(false);
+    expect(store.differsFromDesign()).toBe(false);
+  });
+
+  it('keeps each scene’s saved version to itself', () => {
+    const storage = memoryStorage();
+    const store = new SceneStore([A, B], storage);
+    store.edit(edited(A));
+    store.save();
+    expect(store.next()).toEqual(B);
+    expect(store.differsFromDesign()).toBe(false);
+  });
+
+  it('resets unsaved edits even when nothing was saved', () => {
+    const store = new SceneStore([A, B], memoryStorage());
+    store.edit(edited(A));
+    store.reset();
+    expect(store.current()).toEqual(A);
+    expect(store.isUnsaved()).toBe(false);
+  });
+
+  it('says so when the browser won’t keep a save, and still counts the edits as unsaved', () => {
+    const full = { ...memoryStorage(), set: () => false };
+    const store = new SceneStore([A, B], full);
+    store.edit(edited(A));
+    expect(store.save()).toBe(false);
+    expect(store.isUnsaved()).toBe(true);
+  });
 });
+

@@ -256,11 +256,16 @@ if (isDevServer) {
   const sceneName = async () => (await page2.locator('.scene-name').textContent())?.trim();
   await ready();
   const names = [await sceneName()];
+  const warmedUp = [(await page2.evaluate(() => window.__trafficDebug.vehicles().length)) > 0];
   for (let i = 0; i < 5; i++) {
     await page2.getByRole('button', { name: 'Next scene' }).click();
     await ready();
     names.push(await sceneName());
+    warmedUp.push((await page2.evaluate(() => window.__trafficDebug.vehicles().length)) > 0);
   }
+  // Every preset opens with warm-up traffic; the blank board (5th) has none until joined up.
+  carouselChecks.presetsOpenWithWarmUpTraffic = JSON.stringify(warmedUp) === JSON.stringify([true, true, true, true, false, true]);
+  carouselChecks.focusStaysOnArrow = await page2.evaluate(() => document.activeElement?.getAttribute('aria-label') === 'Next scene');
   carouselChecks.cyclesAllFiveScenes = JSON.stringify(names) === JSON.stringify(['Main Street', 'Market Roundabout', 'School Run', 'Flyover Bottleneck', 'Blank board', 'Main Street']);
   await page2.getByRole('button', { name: 'Previous scene' }).click();
   await ready();
@@ -279,6 +284,20 @@ if (isDevServer) {
   await page2.screenshot({ path: `${outDir}/22-leave-dialog.png` });
   await page2.getByRole('button', { name: 'Cancel' }).click();
   carouselChecks.cancelStays = !(await dialog.isVisible()) && (await sceneName()) === 'Main Street';
+  await page2.getByRole('button', { name: 'Next scene' }).click();
+  await page2.getByRole('button', { name: 'Discard and switch' }).click();
+  await ready();
+  await page2.getByRole('button', { name: 'Previous scene' }).click();
+  await ready();
+  carouselChecks.discardDropsEdits = (await sceneName()) === 'Main Street' && (await page2.getByRole('button', { name: 'Reset', exact: true }).isHidden());
+  // Edits are allowed while paused, and so is Save.
+  await page2.getByRole('button', { name: 'Play' }).click();
+  await page2.getByRole('button', { name: 'Pause' }).click();
+  await page2.evaluate(() => window.__trafficDebug.editScene());
+  carouselChecks.saveWorksWhilePaused = await page2
+    .waitForFunction(() => { const b = [...document.querySelectorAll('.pill-action')].find((x) => x.textContent === 'Save'); return b && !b.hidden && !b.disabled; }, null, { timeout: 2000 })
+    .then(() => true, () => false);
+  await page2.getByRole('button', { name: 'Restart run' }).click();
   await page2.getByRole('button', { name: 'Next scene' }).click();
   await page2.getByRole('button', { name: 'Save and switch' }).click();
   await ready();

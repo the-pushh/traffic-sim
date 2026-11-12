@@ -8,7 +8,18 @@ import type { TrafficSimulation } from '../simulation/traffic/trafficSimulation'
  * vehicle is on screen and why it is doing what it does, and closing pieces to check blocked
  * trips. Not included in production builds.
  */
-export function exposeTrafficDebug(canvas: HTMLCanvasElement, camera: Camera, traffic: Object3D, graph: LaneGraph, simulation: () => TrafficSimulation, queues: () => { approach: string; live: number }[], queueLabelsShown: () => number, store: SceneStore) {
+export interface TrafficDebugSources {
+  canvas: HTMLCanvasElement;
+  camera: Camera;
+  traffic: Object3D;
+  graph: LaneGraph;
+  simulation: () => TrafficSimulation;
+  queues: () => { approach: string; live: number }[];
+  queueLabelsShown: () => number;
+  store: SceneStore;
+}
+
+export function exposeTrafficDebug({ canvas, camera, traffic, graph, simulation, queues, queueLabelsShown, store }: TrafficDebugSources) {
   if (!import.meta.env.DEV) return;
   (window as unknown as { __trafficDebug: unknown }).__trafficDebug = {
     vehicles: () =>

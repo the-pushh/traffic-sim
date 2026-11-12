@@ -64,7 +64,7 @@ const viewport = app.querySelector<HTMLElement>('.viewport')!;
 const status = app.querySelector<HTMLElement>('.status')!;
 const bottomStack = app.querySelector<HTMLElement>('.bottom-stack')!;
 
-// Run controls: created once, inert until the scene has loaded.
+// Run controls: created once; inert while a scene loads.
 const run = new RunController();
 const tip = createFirstVisitTip(bottomStack, () => run.duration);
 const runUnderWay = () => run.state === 'running' || run.state === 'paused';
@@ -74,23 +74,30 @@ async function switchScene(direction: 'previous' | 'next') {
   if (runUnderWay()) return;
   if (store.isUnsaved()) {
     const choice = await leaveDialog.ask();
-    if (choice === 'cancel') return;
-    if (choice === 'save') store.save();
+    if (choice === 'cancel') return pill.focus(direction);
+    if (choice === 'save' && !store.save()) return pill.saveFailed();
   }
   if (direction === 'next') store.next();
   else store.previous();
-  void start();
+  // Loading makes the controls inert, which drops focus: put it back on the arrow used.
+  if (await start()) pill.focus(direction);
+}
+/** Keep the scene's edits in this browser, or say it didn't work. */
+function saveScene() {
+  if (!store.save()) pill.saveFailed();
 }
 const pill = createScenePill(bottomStack, {
   previous: () => void switchScene('previous'),
   next: () => void switchScene('next'),
-  save: () => store.save(),
-  reset: () => {
-    if (runUnderWay()) return;
-    store.reset();
-    void start();
-  },
+  save: saveScene,
+  reset: () => void resetScene(),
 });
+/** Back to the designer's network (it also clears the run). Allowed while paused, when edits are. */
+async function resetScene() {
+  if (run.state === 'running') return;
+  store.reset();
+  if (await start()) pill.focus('next');
+}
 const dock = createDock(bottomStack, run, { onPlay: () => tip.dismiss() });
 let session: TrafficSession | null = null;
 const results = createResultsCard(bottomStack, () => session!.results(), () => run.state);
@@ -105,7 +112,7 @@ function syncRunUi() {
 }
 
 function syncPill() {
-  pill.sync({ name: store.current().name, canSwitch: !runUnderWay(), unsaved: store.isUnsaved(), differsFromDesign: store.differsFromDesign() });
+  pill.sync({ name: store.current().name, canSwitch: !runUnderWay(), canEdit: run.state !== 'running', unsaved: store.isUnsaved(), differsFromDesign: store.differsFromDesign() });
 }
 
 // Transparent canvas: the page's --color-background token shows behind the scene.
@@ -187,9 +194,17 @@ function setCameraControlsEnabled(enabled: boolean) {
 let tooltip: ReturnType<typeof createVehicleTooltip> | null = null;
 
 /** Open the scene the store has on screen: its own layout, demand, warm-up traffic and camera, ready to play. */
-async function start() {
+let currentView: { dispose(): void; scene: { remove(...objects: unknown[]): unknown } } | null = null;
+let currentLayers: unknown[] = [];
+
+/** Open the scene the store has on screen; resolves true once it's showing. */
+async function start(): Promise<boolean> {
   const currentScene = store.current();
   renderer.setAnimationLoop(null);
+  // Free what the last scene built for itself (vehicles and badges are shared and stay).
+  currentView?.scene.remove(...currentLayers);
+  currentView?.dispose();
+  currentView = null;
   bottomStack.inert = true;
   // A new scene starts from Ready: fresh traffic, nothing measured yet.
   if (run.state !== 'ready') run.restart();
@@ -215,7 +230,18 @@ async function start() {
     scene.add(queueLabels.group);
     tooltip ??= createVehicleTooltip(viewport, renderer.domElement);
     const pickVehicle = createVehiclePicker(traffic.group);
-    exposeTrafficDebug(renderer.domElement, camera, traffic.group, graph, () => session!.simulation, () => session!.approaches.map((a, i) => ({ approach: a.name, live: session!.liveQueues()[i] })), queueLabels.visibleCount, store);
+    currentView = view;
+    currentLayers = [traffic.group, queueLabels.group];
+    exposeTrafficDebug({
+      canvas: renderer.domElement,
+      camera,
+      traffic: traffic.group,
+      graph,
+      simulation: () => session!.simulation,
+      queues: () => session!.approaches.map((a, i) => ({ approach: a.name, live: session!.liveQueues()[i] })),
+      queueLabelsShown: queueLabels.visibleCount,
+      store,
+    });
     observer = ObserverCamera.framing(camera, bounds, { coveredBottom });
     const joystick = new CameraJoystick(observer);
     const detachViewport = attachViewportInput(renderer.domElement, observer);
@@ -242,15 +268,27 @@ async function start() {
     status.hidden = true;
     setCameraControlsEnabled(true);
     bottomStack.inert = false;
+    return true;
   } catch (error) {
     console.error(error);
     const message = error instanceof AssetLoadError || error instanceof SceneDefinitionError ? error.message : 'Couldn’t start the 3D scene.';
     status.className = 'status error';
-    status.innerHTML = `<p></p><button type="button" class="primary">Retry</button>`;
+    status.innerHTML = `<p></p><button type="button" class="primary" data-action="retry">Retry</button>`;
     status.querySelector('p')!.textContent = message;
-    const retry = status.querySelector('button')!;
-    retry.addEventListener('click', start, { once: true });
+    const retry = status.querySelector<HTMLButtonElement>('[data-action="retry"]')!;
+    retry.addEventListener('click', () => void start(), { once: true });
+    // A saved version that won't open shouldn't trap the player: offer the designer's network.
+    if (store.differsFromDesign()) {
+      const reset = document.createElement('button');
+      reset.type = 'button';
+      reset.textContent = 'Reset to the designer’s network';
+      reset.addEventListener('click', () => void resetScene(), { once: true });
+      status.append(reset);
+    }
+    // The scene pill stays usable: another scene, or Reset, is always within reach.
+    bottomStack.inert = false;
     retry.focus();
+    return false;
   }
 }
 
