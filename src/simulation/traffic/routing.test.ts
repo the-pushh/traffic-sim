@@ -186,8 +186,45 @@ describe('routing: closed connections', () => {
     }
     expect(s.counts.blocked).toBeGreaterThanOrEqual(caught.length + farBack.length);
     expect(s.blockedAtEntries()[WEST]).toBeGreaterThan(0); // arrivals with no way through
+    const finishedBefore = s.counts.finished;
     s.setClosed([]);
     run(s, 30);
     for (const id of [...caught, ...farBack]) expect(s.has(id)).toBe(false);
+    // Once they reach their destination after all, they count as finished, not blocked.
+    expect(s.counts.finished - finishedBefore).toBeGreaterThanOrEqual(caught.length + farBack.length);
+    expect(s.counts.blocked).toBe(s.blockedAtEntries()[WEST]);
+  });
+
+  it('still reroutes or stops a vehicle clearing one closure before a further closure it can avoid', () => {
+    const s = sim({ seed: 2, demand: { tripsPerMinute: 30, entries: { [WEST]: 1 }, destinations: { [EAST]: 1 } } });
+    // A car about to cross the first junction: too close to stop, so it clears the closed road beyond…
+    const crossing = () => s.allVehicles().find((v) => pieceOf(s, v.id) === FIRST_T && graph.lanes[v.route[v.routeIndex + 1]]?.piece === AFTER_JUNCTION);
+    runUntil(s, () => s.time > 10 && crossing() !== undefined);
+    const car = crossing()!.id;
+    s.setClosed([...lanesOf(AFTER_JUNCTION), ...lanesOf(MAIN_LINK)]);
+    // …but with no way on past the second closure, it pulls up short of it instead of driving through.
+    run(s, 20);
+    expect(s.has(car)).toBe(true);
+    expect(pieceOf(s, car)).toBeLessThan(MAIN_LINK);
+    expect(s.vehicle(car).reason).toBe('Road closed ahead');
+  });
+});
+
+describe('junctions ahead of a queue', () => {
+  it('waits short of a junction while the queue back from a red light further on still reaches into it', () => {
+    const s = sim({ controls: [LONG_RED] });
+    // A queue from the crossing's red light whose last car has its rear in the first junction.
+    for (let i = 0; i < 6; i++) s.addVehicle({ type: 'sedan', profile: 'steady', from: WEST, to: EAST, position: 69.5 - i * 6.5, speed: 0 });
+    const car = s.addVehicle({ type: 'sedan', profile: 'cautious', from: WEST, to: EAST, position: 5, speed: 8 });
+    s.vehicle(car).driver.routeAwareness = 0; // stays on the main road
+    let enteredJunction = false;
+    let sawExitFull = false;
+    run(s, 25, () => {
+      const v = s.vehicle(car);
+      if (graph.lanes[v.route[v.routeIndex]].piece === FIRST_T) enteredJunction = true;
+      if (v.reason === 'Exit lane full') sawExitFull = true;
+    });
+    expect(sawExitFull).toBe(true);
+    expect(enteredJunction).toBe(false);
   });
 });

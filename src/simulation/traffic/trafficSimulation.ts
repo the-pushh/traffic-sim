@@ -51,6 +51,10 @@ const REROUTE_EVERY = 1;
 /** Another route must save at least this much, seconds, or this share of the time left, before a driver switches. */
 const REROUTE_SAVING = 3;
 const REROUTE_SHARE = 0.15;
+/** How much more a fully frustrated driver weighs queues than a calm one (sensitivity × (1 + this × impatience)). */
+const FRUSTRATED_ROUTE_WEIGHT = 4;
+/** A trip waiting at an entry reconsiders its route this often while the entrance is full, seconds. */
+const ENTRY_ROUTE_REFRESH = 1;
 
 /** Why a vehicle is doing what it does, as shown on hover. */
 export type Reason =
@@ -156,9 +160,8 @@ interface PendingTrip {
   to: string;
   /** False for trips that arrived before the counts were last reset (e.g. during warm-up). */
   counted: boolean;
-  /** The route it will take, and when it was chosen (refreshed while it waits). */
-  route?: number[] | null;
-  routedAt?: number;
+  /** The route it will take (null: no way through), and when it was chosen; refreshed while it waits. */
+  routed?: { lanes: number[] | null; at: number };
 }
 
 interface Entry {
@@ -218,7 +221,7 @@ export class TrafficSimulation {
   time = 0;
   private readonly entries: Entry[];
   private readonly demand?: Demand;
-  private readonly routes = new Map<string, number[] | null>();
+  private readonly designedRoutes = new Map<string, number[] | null>();
   private readonly router: Router;
   private readonly queueDelay: number[];
   private queueDelayAt = -1;
@@ -230,6 +233,8 @@ export class TrafficSimulation {
   /** Trips turned away at each entry because there was no way through, by gateway label. */
   private blockedAt: Record<string, number> = {};
   private readonly exitLanes: ReadonlySet<number>;
+  /** Each gateway's entry lanes and its exit lanes as a set, by label. */
+  private readonly gateways: Map<string, { entryLanes: number[]; exits: ReadonlySet<number> }>;
   /** Seconds each finished trip took from entering the board to leaving it. */
   travelTimes: number[] = [];
   private readonly enteredAt = new Map<number, number>();
@@ -256,6 +261,7 @@ export class TrafficSimulation {
     this.router = new Router(graph, graph.lanes.map((lane) => this.freeFlowTime(lane.id)));
     this.queueDelay = graph.lanes.map(() => 0);
     this.exitLanes = new Set(graph.gateways.flatMap((g) => g.exitLanes));
+    this.gateways = new Map(graph.gateways.map((g) => [g.label, { entryLanes: g.entryLanes, exits: new Set(g.exitLanes) }]));
     this.mergesWith = new Map(graph.lanes.map((l) => [l.id, this.conflicts.get(l.id)!.filter((c) => c.kind === 'merge').map((c) => c.lane)]));
     this.demand = options.demand;
     this.entries = Object.entries(options.demand?.entries ?? {})
@@ -307,7 +313,7 @@ export class TrafficSimulation {
 
   /** Place a vehicle directly (tests and set-ups); demand-driven trips enter through `step`. */
   addVehicle({ type, profile, from, to, position, speed = 0 }: NewVehicle): number {
-    const route = this.router.path(this.gateway(from).entryLanes, new Set(this.gateway(to).exitLanes))?.lanes;
+    const route = this.router.path(this.gateway(from).entryLanes, this.gateway(to).exits)?.lanes;
     if (!route) throw new Error(`No route from ${from} to ${to}`);
     const driver = sampleDriver(profile, this.random.fork('vehicles', this.nextId));
     return this.place(VEHICLE_TYPES[type], driver, to, route, position ?? VEHICLE_TYPES[type].length, speed);
@@ -486,7 +492,7 @@ export class TrafficSimulation {
   private newTrip(from: string): PendingTrip | null {
     const random = this.random.fork('trips', this.tripCount++);
     const destinations = this.demand?.destinations ?? Object.fromEntries(this.graph.gateways.filter((g) => g.label !== from).map((g) => [g.label, 1]));
-    const reachable = Object.fromEntries(Object.entries(destinations).filter(([to, w]) => w > 0 && this.cachedRoute(from, to)));
+    const reachable = Object.fromEntries(Object.entries(destinations).filter(([to, w]) => w > 0 && this.designedRoute(from, to)));
     if (!Object.keys(reachable).length) return null;
     const to = random.weighted(reachable);
     const type = random.weighted({ ...DEFAULT_VEHICLE_MIX, ...this.demand?.vehicleMix } as Record<VehicleTypeId, number>);
@@ -496,17 +502,22 @@ export class TrafficSimulation {
 
   /** A waiting trip's route, chosen with the queues its driver can see right now. */
   private routeForTrip(from: string, trip: PendingTrip) {
-    if (trip.route === undefined || this.time - trip.routedAt! >= 1) {
-      const delay = this.queueDelays();
-      trip.route = this.router.path(this.gateway(from).entryLanes, new Set(this.gateway(trip.to).exitLanes), (lane) => trip.driver.routeAwareness * delay[lane])?.lanes ?? null;
-      trip.routedAt = this.time;
+    if (!trip.routed || this.time - trip.routed.at >= ENTRY_ROUTE_REFRESH) {
+      const lanes = this.router.path(this.gateway(from).entryLanes, this.gateway(trip.to).exits, this.queueCost(trip.driver.routeAwareness))?.lanes ?? null;
+      trip.routed = { lanes, at: this.time };
     }
-    return trip.route;
+    return trip.routed.lanes;
+  }
+
+  /** Extra cost of each lane's queue to a driver with this route sensitivity, seconds. */
+  private queueCost(sensitivity: number) {
+    const delay = this.queueDelays();
+    return (lane: number) => sensitivity * delay[lane];
   }
 
   /** Trips turned away at each entry since counting started because there was no way through, by gateway label. */
   blockedAtEntries(): Readonly<Record<string, number>> {
-    return this.blockedAt;
+    return { ...this.blockedAt };
   }
 
   /**
@@ -515,30 +526,31 @@ export class TrafficSimulation {
    * reroute, and trips with no way through are blocked.
    */
   setClosed(lanes: Iterable<number>) {
-    this.router.closed = new Set(lanes);
-    for (const entry of this.entries) for (const trip of entry.waiting) trip.route = undefined;
+    this.router.close(lanes);
+    for (const entry of this.entries) for (const trip of entry.waiting) trip.routed = undefined;
     for (const v of this.vehicles.values()) this.rerouteAfterEdit(v);
   }
 
   private rerouteAfterEdit(v: VehicleState) {
     const closed = this.router.closed;
-    const fixed = this.unavoidableIndex(v);
-    const prefix = v.route.slice(0, fixed + 1);
-    // Too late to avoid a closed lane: carry on and clear it.
-    if (!v.stranded && prefix.slice(v.routeIndex).some((lane) => closed.has(lane))) return;
-    if (!v.stranded && !v.route.slice(fixed + 1).some((lane) => closed.has(lane))) {
+    let fixed = this.unavoidableIndex(v);
+    // Too late to avoid a closed lane: carry on and clear it, deciding again once past it.
+    if (v.route.slice(v.routeIndex, fixed + 1).some((lane) => closed.has(lane)))
+      while (fixed + 1 < v.route.length && closed.has(v.route[fixed + 1])) fixed++;
+    const affected = v.stranded || v.blocked || v.route.slice(fixed + 1).some((lane) => closed.has(lane));
+    if (!affected) {
       this.considerAnotherRoute(v); // unaffected, but the network changed: maybe there's a quicker way now
       return;
     }
-    const targets = new Set(this.gateway(v.destination).exitLanes);
-    const delay = this.queueDelays();
-    const weight = this.routeSensitivityOf(v);
-    const extra = (lane: number) => weight * delay[lane];
+    const prefix = v.route.slice(0, fixed + 1);
+    const extra = this.queueCost(this.routeSensitivityOf(v));
     const starts = this.graph.lanes[v.route[fixed]].next;
+    const targets = this.gateway(v.destination).exits;
     const onward = targets.has(v.route[fixed]) ? { lanes: [] } : this.router.path(starts, targets, extra);
     if (onward) {
       v.route = [...prefix, ...onward.lanes];
       v.stranded = false;
+      this.unmarkBlocked(v); // a way through again (e.g. reopened)
       return;
     }
     this.markBlocked(v);
@@ -566,6 +578,12 @@ export class TrafficSimulation {
     if (this.enteredAt.has(v.id)) this.blocked++;
   }
 
+  private unmarkBlocked(v: VehicleState) {
+    if (!v.blocked) return;
+    v.blocked = false;
+    if (this.enteredAt.has(v.id)) this.blocked--;
+  }
+
   /**
    * The last route index the vehicle can no longer avoid: what it has committed to, plus
    * any lane that starts within its emergency stopping distance, and never stopping
@@ -591,25 +609,25 @@ export class TrafficSimulation {
   /**
    * How much the queues a driver can see weigh in their choice of route right now: their
    * usual awareness, growing as they get frustrated and easing once they move again.
+   * Public as a test seam (like `acceptedGap`).
    */
   routeSensitivity(id: number) {
     return this.routeSensitivityOf(this.vehicle(id));
   }
 
   private routeSensitivityOf(v: VehicleState) {
-    return v.driver.routeAwareness * (1 + 4 * this.impatience(v));
+    return v.driver.routeAwareness * (1 + FRUSTRATED_ROUTE_WEIGHT * this.impatience(v));
   }
 
   /** A held-up driver switches to another route if it now looks clearly quicker. */
   private considerAnotherRoute(v: VehicleState) {
     v.routeCheckAt = this.time + REROUTE_EVERY;
-    if (v.stranded) return;
+    // Cut off from its destination: only an edit can change that (see `rerouteAfterEdit`).
+    if (v.stranded || v.blocked) return;
     const locked = this.lockedIndex(v);
-    const targets = new Set(this.gateway(v.destination).exitLanes);
+    const targets = this.gateway(v.destination).exits;
     if (targets.has(v.route[locked])) return;
-    const delay = this.queueDelays();
-    const weight = this.routeSensitivityOf(v);
-    const extra = (lane: number) => weight * delay[lane];
+    const extra = this.queueCost(this.routeSensitivityOf(v));
     const better = this.router.path(this.graph.lanes[v.route[locked]].next, targets, extra);
     if (!better) return;
     const current = this.router.costOf(v.route.slice(locked + 1), extra);
@@ -639,10 +657,11 @@ export class TrafficSimulation {
     return this.queueDelay;
   }
 
-  private cachedRoute(from: string, to: string): number[] | null {
+  /** The route the network was built to give this trip (cached), ignoring traffic and closures; null if none. */
+  private designedRoute(from: string, to: string): number[] | null {
     const key = `${from}>${to}`;
-    if (!this.routes.has(key)) this.routes.set(key, this.findRoute(from, to));
-    return this.routes.get(key)!;
+    if (!this.designedRoutes.has(key)) this.designedRoutes.set(key, this.router.path(this.gateway(from).entryLanes, this.gateway(to).exits, undefined, new Set())?.lanes ?? null);
+    return this.designedRoutes.get(key)!;
   }
 
   private lengthOf(route: number[], from: number, to: number) {
@@ -1158,17 +1177,8 @@ export class TrafficSimulation {
     return Math.max(-v.type.maxBraking, Math.min(v.type.maxAcceleration, accel));
   }
 
-  /**
-   * Quickest route with no traffic and nothing closed from a gateway's entry lanes to
-   * another gateway's exit lanes, or null: which trips the network was built to carry.
-   */
-  private findRoute(fromLabel: string, toLabel: string): number[] | null {
-    const from = this.gateway(fromLabel);
-    return this.router.path(from.entryLanes, new Set(this.gateway(toLabel).exitLanes), undefined, new Set())?.lanes ?? null;
-  }
-
   private gateway(label: string) {
-    const gateway = this.graph.gateways.find((g) => g.label === label);
+    const gateway = this.gateways.get(label);
     if (!gateway) throw new Error(`Unknown gateway ${label}`);
     return gateway;
   }

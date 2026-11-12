@@ -5,14 +5,23 @@ import type { LaneGraph } from '../network/buildLaneGraph';
  * optional extra (e.g. the queue a driver can see on it); closed lanes are never used.
  */
 export class Router {
-  /** Lanes no new path may use (e.g. a connection removed by an edit). */
-  closed: ReadonlySet<number> = new Set();
+  private closedLanes: ReadonlySet<number> = new Set();
 
   constructor(
     private readonly graph: LaneGraph,
     /** Seconds to drive each lane at the speed it allows, with no traffic. */
     readonly freeFlowTime: readonly number[],
   ) {}
+
+  /** Lanes no new path may use (e.g. a connection removed by an edit). */
+  get closed(): ReadonlySet<number> {
+    return this.closedLanes;
+  }
+
+  /** Replace the set of closed lanes. */
+  close(lanes: Iterable<number>) {
+    this.closedLanes = new Set(lanes);
+  }
 
   /**
    * The cheapest path that starts on one of `starts` and ends on one of `targets`, as
@@ -38,8 +47,8 @@ export class Router {
       if (reached > best.get(lane)!) continue; // stale entry
       if (targets.has(lane)) {
         const lanes = [lane];
-        while (cameFrom.get(lanes[0])! >= 0) lanes.unshift(cameFrom.get(lanes[0])!);
-        return { lanes, cost: reached };
+        while (cameFrom.get(lanes[lanes.length - 1])! >= 0) lanes.push(cameFrom.get(lanes[lanes.length - 1])!);
+        return { lanes: lanes.reverse(), cost: reached };
       }
       for (const next of this.graph.lanes[lane].next) {
         if (closed.has(next)) continue;
