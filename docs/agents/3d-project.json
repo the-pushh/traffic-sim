@@ -292,6 +292,22 @@
         ],
         "result": "pass: pill shows Main Street; live queue badges over the approaches; results card on Ended labelled 'Main Street · Medium · 30 s', with counts, average travel time with trip count, blocked trips and peak queue by approach; previous run shown beside the next; card hidden on a fresh start; no console errors. One headed run reported two false checks once and didn't reproduce in three reruns. Screenshots 14, 16, 17 inspected.",
         "previews": "artifacts/3d/previews/ (git-ignored)"
+      },
+      {
+        "date": "2026-11-12",
+        "check": "T8 Market Roundabout (#10)",
+        "command": "npm test, npm run build, npm run dev then npm run verify:browser and :headed (opens ?scene=market-roundabout)",
+        "browser": "Google Chrome 157 on macOS, headless and headed, 1440x900",
+        "assets": [
+          "public/models/roads/road-roundabout.glb",
+          "road-crossing.glb",
+          "road-intersection.glb",
+          "road-straight.glb",
+          "signal models",
+          "vehicles"
+        ],
+        "result": "pass: pill 'Market Roundabout', no failed requests, traffic and a live queue on an approach; screenshot 20-market-roundabout.png inspected (roundabout, crossing signals on the east arm, open north arm marker, queue badge).",
+        "previews": "artifacts/3d/previews/ (git-ignored)"
       }
     ]
   },

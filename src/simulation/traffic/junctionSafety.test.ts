@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { mainStreet } from '../../scenes/mainStreet';
+import { marketRoundabout } from '../../scenes/marketRoundabout';
 import { testNetwork } from '../../scenes/testNetwork';
 import { buildLaneGraph } from '../network/buildLaneGraph';
 import { pointAlongLane } from '../network/laneGeometry';
@@ -71,6 +72,13 @@ describe('junction safety', () => {
   it('never lets vehicles overlap on Main Street, across the two-tile junctions of the divided road', () => {
     for (const [seed, tripsPerMinute] of [[31, 10], [32, 16]]) {
       const { touching } = assertNoCollisions(mainStreet.pieces, mainStreet.controls, mainStreet.demand.gateways, 180, seed, tripsPerMinute, mainStreet.demand.destinations);
+      expect(touching).toEqual([]);
+    }
+  });
+
+  it('never lets vehicles overlap at Market Roundabout, even when the crossing’s queue backs into the circle', () => {
+    for (const [seed, tripsPerMinute] of [[41, 10], [42, 24]]) {
+      const { touching } = assertNoCollisions(marketRoundabout.pieces, marketRoundabout.controls, marketRoundabout.demand.gateways, 180, seed, tripsPerMinute);
       expect(touching).toEqual([]);
     }
   });

@@ -242,6 +242,36 @@ await runPage.waitForSelector('.status', { state: 'hidden', timeout: 30000 });
 runChecks.tipRememberedAfterReload = (await runPage.locator('.first-visit-tip').count()) === 0;
 await runPage.close();
 
+// Presets (T8+): open each other preset on the dev server (?scene=), check it loads, has traffic and queues, and screenshot it.
+const presetChecks = {};
+if (isDevServer) {
+  for (const [id, name] of [['market-roundabout', 'Market Roundabout']]) {
+    const presetPage = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+    const presetUrl = new URL(url);
+    presetUrl.searchParams.set('scene', id);
+    presetUrl.searchParams.set('timeScale', '15');
+    const failed = [];
+    presetPage.on('response', (r) => r.status() >= 400 && failed.push(r.url()));
+    presetPage.on('pageerror', (e) => failed.push(String(e)));
+    await presetPage.goto(presetUrl.toString());
+    await presetPage.waitForSelector('.status', { state: 'hidden', timeout: 30000 });
+    await presetPage.getByRole('button', { name: 'Play' }).click();
+    const queued = await presetPage
+      .waitForFunction(() => window.__trafficDebug.queues().some((q) => q.live > 0), null, { timeout: 6000, polling: 100 })
+      .then(() => true, () => false);
+    await presetPage.getByRole('button', { name: 'Pause' }).click();
+    await presetPage.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+    presetChecks[id] = {
+      pill: (await presetPage.locator('.scene-name').textContent())?.trim() === name,
+      noFailedRequests: failed.length === 0,
+      traffic: (await presetPage.evaluate(() => window.__trafficDebug.vehicles().length)) > 0,
+      queueAtApproach: queued,
+    };
+    await presetPage.screenshot({ path: `${outDir}/20-${id}.png` });
+    await presetPage.close();
+  }
+}
+
 const webglRenderer = await page.evaluate(() => {
   const gl = document.querySelector('canvas').getContext('webgl2');
   const info = gl?.getExtension('WEBGL_debug_renderer_info');
@@ -289,6 +319,7 @@ const result = {
   retryRecovered,
   runChecks,
   hoverTag: hoverTag,
+  presetChecks,
   blockedAtEntries,
 };
 writeFileSync(`${outDir}/result.json`, JSON.stringify(result, null, 2));

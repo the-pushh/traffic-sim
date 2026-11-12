@@ -147,3 +147,13 @@ Owner agreed the spec and the T1–T13 ticket breakdown and authorised implement
   - Screen readers hear "Run ended" without focus moving.
   - It hides on the next start. Closing it leaves a "Show results" button that reopens it. Live queue counts float as amber badges over each approach and are hidden at zero.
 - **Before/after:** checked at the session seam on Main Street: retiming the middle junction and pressing Restart gives exactly the same arrivals (the simulation keeps an arrivals log) and different peak queues. Changing timings in the UI arrives with the editor (T12).
+
+## Market Roundabout notes (T8) — 2026-11-12
+
+- **Layout:**
+  - A 3 × 3 roundabout at (7.5, 7.5) with four arms to the edges.
+  - A signalled pedestrian crossing at column 11, two tiles past the east exit.
+  - A T-junction at column 13 whose north arm is the open connection.
+- **Demand:** west 0.6, north 0.45, east 0.25, south 0.2, about 15 trips a minute at Medium. A single-lane roundabout carries roughly 20; the first weights (summing to 2.5) jammed it at Medium.
+- **Crossing:** a 48 s cycle with a 15 s red. At Medium its queue fits in the two tiles before the circle; at Congested it spills back into the circle.
+- **Opening other presets before the carousel:** the dev server opens another preset with `?scene=<id>` (`src/scenes/presets.ts` lists them). Production always opens Main Street until T11.
