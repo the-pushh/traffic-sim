@@ -21,7 +21,12 @@ function headingAt(points: Point3[], fromEnd: boolean): [number, number] {
 
 /** Which way a movement turns, seen from above with x east and z south (right-hand traffic). */
 export function turnOf(lane: Lane): Turn {
-  const [h0, h1] = [headingAt(lane.points, false), headingAt(lane.points, true)];
+  return turnBetween(lane, lane);
+}
+
+/** Which way a movement turns from the start of `first` to the end of `last` (e.g. across a two-tile junction). */
+export function turnBetween(first: Lane, last: Lane): Turn {
+  const [h0, h1] = [headingAt(first.points, false), headingAt(last.points, true)];
   const dot = h0[0] * h1[0] + h0[1] * h1[1];
   const cross = h0[0] * h1[1] - h0[1] * h1[0];
   if (dot > 0.7) return 'straight';

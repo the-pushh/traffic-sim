@@ -49,6 +49,8 @@ export interface ControlPlacement {
 export interface DemandPattern {
   /** Relative share of trips entering at each gateway, keyed by gateway label. */
   gateways: Record<string, number>;
+  /** Relative share of trips leaving by each gateway; defaults to every reachable exit equally. */
+  destinations?: Record<string, number>;
 }
 
 export interface SceneDefinition {

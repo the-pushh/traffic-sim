@@ -44,7 +44,7 @@ export class TrafficSession {
     this.simulation = new TrafficSimulation(this.graph, {
       seed: seedFor(this.scene.id),
       controls: resolveControls(this.scene.pieces, this.graph, this.scene.controls),
-      demand: { tripsPerMinute: TRIPS_PER_MINUTE[this.run.intensity], entries: this.scene.demand.gateways },
+      demand: { tripsPerMinute: TRIPS_PER_MINUTE[this.run.intensity], entries: this.scene.demand.gateways, destinations: this.scene.demand.destinations },
     });
     for (let i = 0; i < WARM_UP_SECONDS * STEPS_PER_SECOND; i++) this.simulation.step(STEP);
     // Measures cover the run itself, not the warm-up.
