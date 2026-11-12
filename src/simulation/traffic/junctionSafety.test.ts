@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { flyoverBottleneck } from '../../scenes/flyoverBottleneck';
 import { mainStreet } from '../../scenes/mainStreet';
 import { marketRoundabout } from '../../scenes/marketRoundabout';
 import { schoolRun } from '../../scenes/schoolRun';
@@ -90,6 +91,22 @@ describe('junction safety', () => {
     const g = buildLaneGraph(schoolRun.pieces);
     for (const [seed, tripsPerMinute] of [[51, 10], [52, 16]]) {
       const s = new TrafficSimulation(g, { seed, controls: resolveControls(schoolRun.pieces, g, schoolRun.controls), speedLimits: laneSpeedLimits(schoolRun.pieces, g), demand: sceneDemand(schoolRun.demand, tripsPerMinute, 0) });
+      const touching: string[] = [];
+      for (let i = 0; i < 120 * 30; i++) {
+        s.step(STEP);
+        if (i % 3) continue;
+        const all = s.allVehicles();
+        const bodies = all.map((v) => body(s, g, v));
+        for (let a = 0; a < all.length; a++) for (let b = a + 1; b < all.length; b++) if (closest(bodies[a], bodies[b]) < 1.5 && touching.length < 5) touching.push(`t=${s.time.toFixed(1)} ${all[a].id}/${all[b].id}`);
+      }
+      expect(touching).toEqual([]);
+    }
+  }, 60_000);
+
+  it('never lets vehicles overlap on Flyover Bottleneck, on the bridge, below it, at the narrowing and the merge', () => {
+    const g = buildLaneGraph(flyoverBottleneck.pieces);
+    for (const [seed, tripsPerMinute] of [[61, 10], [62, 16]]) {
+      const s = new TrafficSimulation(g, { seed, controls: resolveControls(flyoverBottleneck.pieces, g, flyoverBottleneck.controls), speedLimits: laneSpeedLimits(flyoverBottleneck.pieces, g), demand: sceneDemand(flyoverBottleneck.demand, tripsPerMinute, 0) });
       const touching: string[] = [];
       for (let i = 0; i < 120 * 30; i++) {
         s.step(STEP);

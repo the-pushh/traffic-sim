@@ -82,7 +82,7 @@ F  ........|.......
 - School frontage from column A: a pedestrian crossing `z` (A), the school driveway `d` (B, peak of local trips) and a lay-by **drop-off bay** (C–D, kit pieces `road-side-exit` and `road-side-entry`). As built in T9: the lay-by needs two tiles, so the frontage spans columns A–D.
 - Open connection `o` south of the T at column 4; free space for another junction control or a traffic-calming element.
 
-## 4. Flyover Bottleneck (redrawn 2026-11-12)
+## 4. Flyover Bottleneck (redrawn 2026-11-12; as built in T10)
 
 ```text
    0123456789ABCDEF
@@ -90,8 +90,8 @@ F  ........|.......
 1  ........|.......
 2  ........|.......
 3  ........|.......
-4  ===<-//BBB\\-m--
-5  =e=<....|....|..
+4  =====<//B\\>=m==
+5  =e===<..|..>=|..
 6  .|......|....|..
 7  .|......|....|..
 8  .|......|....|..
@@ -106,7 +106,7 @@ F  ........|.......
 
 Extra legend: `e` T-junction where eastbound drivers can turn off · `m` T-junction where the alternative merges back under a **yield** sign · `B` bridge deck. (Updated after T4: the kit's side-entry/exit pieces are a lay-by bay, so turn-offs and merges use T-junctions.)
 
-- **Raised route** (rows 4–5 → row 4): enters from the west as a divided two-lane road, narrows to one lane at the road split `<` (column 3), climbs the ramps `//` (columns 5–6), crosses the bridge `BBB` (columns 7–9) over the surface road, and descends `\\` (columns A–B) back to ground.
+- **Raised route** (rows 4–5): enters from the west as a divided two-lane road, narrows to one lane each way at the road split `<` (column 5), climbs the ramps `//` (columns 6–7), crosses the bridge `B` (column 8) over the surface road, descends `\\` (columns 9–A) and widens again at `>` (column B). As built in T10: the narrowing moved from column 3 to 5 so the queue can build past the turn-off, where drivers can see it and divert (owner to confirm).
 - **Surface road** (column 8) runs north–south at ground level and passes **under** the bridge with no connection there.
 - **Getting off before the bottleneck:** eastbound drivers can leave at the T-junction `e` (column 1, before the narrowing) and take the link (column 1) down to the **slower surface alternative** (row B).
 - **Slower surface alternative** (row B): crosses the surface road at a signal-controlled crossroads `#` (column 8), then turns north at column D.
