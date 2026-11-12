@@ -459,6 +459,15 @@ const openPage = async (target) => {
   await page.waitForSelector('.status', { state: 'hidden', timeout: 60000 });
   return { page, errors };
 };
+// Background (P4): faint vertical colour columns, no radial glows.
+const backgroundChecks = {};
+{
+  const { page } = await openPage(url);
+  const image = await page.evaluate(() => getComputedStyle(document.body).backgroundImage);
+  backgroundChecks.columnsNotGlows = !image.includes('radial-gradient') && image.includes('linear-gradient(90deg');
+  await page.close();
+}
+
 // Real presses (P1): a person's click holds the button ~100 ms, so the button must not be rebuilt under it.
 const pressChecks = {};
 {
@@ -720,6 +729,7 @@ const result = {
   presetChecks,
   carouselChecks,
   editorChecks,
+  backgroundChecks,
   pressChecks,
   presetRunChecks,
   scenarioChecks,
@@ -750,6 +760,7 @@ const ok =
   resetDisabledDuringFailure &&
   retryRecovered &&
   Object.values(runChecks).every(Boolean) &&
+  passed(backgroundChecks) &&
   passed(pressChecks) &&
   passed(presetRunChecks) &&
   passed(scenarioChecks);
