@@ -36,6 +36,8 @@
   --space-4: 16px;
   --space-5: 24px;
   --radius: 10px;
+  /* The parts tray: three part tiles to a row. */
+  --tray-width: 320px;
   --control-height: 40px;
   --font-body: 14px;
   --font-meta: 12px;
@@ -929,15 +931,13 @@ button.primary:hover:not(:disabled),
 }
 
 .parts-drawer {
-  /* Bottom-right over the map, below the camera panel. Where the window is too narrow for
-     it to sit beside the dock, it rises above the dock's line instead. */
-  --tray-top: 340px; /* clears the camera panel (top-right) */
-  --tray-bottom: calc(var(--space-4) + var(--dock-clearance));
+  /* Bottom-right over the map. The editor measures --tray-top (under the camera panel)
+     and --tray-bottom (beside the dock when there's room, else above it) on opening. */
   position: absolute;
   right: var(--space-4);
-  bottom: var(--tray-bottom);
-  width: 320px;
-  max-height: calc(100% - var(--tray-top) - var(--tray-bottom));
+  bottom: var(--tray-bottom, var(--space-4));
+  width: var(--tray-width);
+  max-height: calc(100% - var(--tray-top, var(--space-4)) - var(--tray-bottom, var(--space-4)));
   overflow-y: auto;
   padding: var(--space-3);
   border: 1px solid var(--glass-border);
@@ -946,14 +946,6 @@ button.primary:hover:not(:disabled),
   box-shadow: var(--glass-highlight), var(--shadow-floating);
   -webkit-backdrop-filter: var(--glass-blur);
   backdrop-filter: var(--glass-blur);
-  --dock-clearance: 88px; /* the dock's height and gap */
-}
-
-/* Wide enough for the tray to sit beside the dock (about 840px wide, centred). */
-@media (min-width: 1560px) {
-  .parts-drawer {
-    --dock-clearance: 0px;
-  }
 }
 
 .parts-drawer header {
@@ -999,7 +991,7 @@ button.primary:hover:not(:disabled),
 .parts-group .part {
   display: grid;
   justify-items: center;
-  gap: 2px;
+  gap: var(--space-1);
   height: auto;
   padding: var(--space-1);
   font-size: var(--font-meta);
@@ -1019,8 +1011,9 @@ button.primary:hover:not(:disabled),
 }
 
 .part-picture {
-  width: 52px;
-  height: 52px;
+  /* The size the pictures are drawn at (partThumbnails.ts). */
+  width: 56px;
+  height: 56px;
   background: center / contain no-repeat;
 }
 

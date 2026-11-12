@@ -492,8 +492,11 @@ for (const [width, height] of [[1440, 900], [1280, 800]]) {
   await page.goto(url);
   await page.waitForSelector('.status', { state: 'hidden', timeout: 60000 });
   await page.getByRole('button', { name: 'Parts' }).click();
-  const pictured = await page.waitForSelector('.parts-drawer.pictured', { timeout: 20000 }).then(() => true, () => false);
-  const layout = await page.evaluate(() => {
+  const pictured = await page
+    .waitForFunction(() => [...document.querySelectorAll('.part-picture')].every((t) => t.style.backgroundImage.startsWith('url("data:image/png')), null, { timeout: 20000 })
+    .then(() => true, () => false);
+  await page.waitForTimeout(300); // the view re-centres beside the tray
+  const layout = await page.evaluate((dev) => {
     const tray = document.querySelector('.parts-drawer').getBoundingClientRect();
     const dock = document.querySelector('.dock').getBoundingClientRect();
     const tiles = [...document.querySelectorAll('.part-picture')];
@@ -501,10 +504,14 @@ for (const [width, height] of [[1440, 900], [1280, 800]]) {
     return {
       everyPartPictured: tiles.length > 0 && tiles.every((t) => getComputedStyle(t).backgroundImage.startsWith('url("data:image/png')),
       bottomRight: innerWidth - tray.right < 40 && tray.left > innerWidth / 2,
-      centreClear: !(tray.left < innerWidth / 2 && tray.top < innerHeight / 2),
       clearOfDock: !overlaps(tray, dock),
+      // The whole board stays in view beside the tray (its corners, on the dev server where they can be located).
+      boardClear: !dev || [[0, 0], [16, 0], [0, 16], [16, 16]].every(([x, z]) => {
+        const p = window.__trafficDebug.screenOf(x, z);
+        return p.x < tray.left && p.x > 0 && p.y > 0;
+      }),
     };
-  });
+  }, isDevServer);
   trayChecks[`at${width}`] = pictured && Object.values(layout).every(Boolean);
   if (!trayChecks[`at${width}`]) trayChecks[`detail${width}`] = layout; // shown only on failure
   await page.screenshot({ path: `${outDir}/33-tray-${width}.png` });

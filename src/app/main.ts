@@ -129,13 +129,17 @@ const camera = new PerspectiveCamera(45, 1, 0.1, 500);
 
 /** Fraction of the screen height covered by the scene pill and dock (the tip is temporary and not counted). */
 let coveredBottom = 0;
+/** The parts tray, once the editor exists: while open, the view centres in the space left of it. */
+let rightPanel: HTMLElement | null = null;
 function resize() {
   const { clientWidth: width, clientHeight: height } = viewport;
   renderer.setSize(width, height, false);
   // Measure from the panels' real layout: everything from the top of the scene pill down.
-  const panelsTop = pill.element.getBoundingClientRect().top - viewport.getBoundingClientRect().top;
+  const area = viewport.getBoundingClientRect();
+  const panelsTop = pill.element.getBoundingClientRect().top - area.top;
   const covered = Math.max(0, height - panelsTop);
-  coveredBottom = fitCameraToViewport(camera, { width, height, covered });
+  const coveredRight = rightPanel && !rightPanel.hidden ? Math.max(0, area.right - rightPanel.getBoundingClientRect().left) : 0;
+  coveredBottom = fitCameraToViewport(camera, { width, height, covered, coveredRight });
 }
 new ResizeObserver(resize).observe(viewport);
 resize();
@@ -328,16 +332,31 @@ async function applyEdit(scene: SceneDefinition, fromHistory = false) {
   await start('edit');
 }
 
+// Models the editor previews and pictures, loaded once each.
+const editorModels = new Map<string, Promise<Group>>();
+const editorLoader = createAssetLoader(import.meta.env.BASE_URL);
 const editor = createEditor({
   viewport,
+  cameraPanel: cameraControls,
+  dock: dock.element,
+  trayToggled: resize,
   canvas: renderer.domElement,
   camera,
   scene: () => store.current(),
   view: () => currentView?.scene ?? null,
-  model: (name) => createAssetLoader(import.meta.env.BASE_URL).model(`models/roads/${name}.glb`),
+  model: (name) => {
+    let loading = editorModels.get(name);
+    if (!loading) {
+      loading = editorLoader.model(`models/roads/${name}.glb`);
+      loading.catch(() => editorModels.delete(name)); // a failed load is tried again next time
+      editorModels.set(name, loading);
+    }
+    return loading;
+  },
   apply: (scene, fromHistory) => applyEdit(scene, fromHistory).then(() => undefined),
   canEdit: () => run.state !== 'running',
 });
 dock.addSection(editor.toggle);
+rightPanel = editor.tray;
 
 start();

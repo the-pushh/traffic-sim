@@ -300,7 +300,14 @@ Owner agreed the spec and the T1–T13 ticket breakdown and authorised implement
 
 ## Parts tray (P5, #35) — 2026-11-13
 
-- **Pictures:** `renderThumbnails` (`src/three/thumbnails/partThumbnails.ts`) draws each part's model along the map's starting view diagonal, in a short-lived 128 px WebGL context. It reads each picture back as a PNG data URL, then frees the context. This happens the first time the tray opens, not at start-up, and takes about 150–750 ms. Until then, the tiles show their names only.
-- **Placement:** the tray is absolute in the viewport, bottom-right, 320 px wide, below the camera panel (`--tray-top` 340 px). From 1560 px wide it sits beside the dock; narrower, it rises above the dock's line (`--dock-clearance`). It scrolls when the window is short.
-- **Tiles:** three per row, with the picture above the name (up to two lines). The lane note stays in the tooltip.
+- **Pictures:** `renderThumbnails` (`src/three/thumbnails/partThumbnails.ts`) draws each part's model along the map's starting view diagonal, under the scene's own lights. It uses a short-lived 112 px WebGL context that it frees afterwards.
+  - This runs the first time the tray opens, not at start-up, and each picture appears as soon as it's drawn.
+  - A model that won't load is skipped; its tile keeps just its name.
+  - The editor's models are loaded once and cached (`main.ts`), and are shared by the pictures and the drag preview. The preview tints its own copies and no longer disposes the shared materials.
+- **Placement:** the tray sits bottom-right, `--tray-width` (320 px) wide.
+  - On opening (and on resize), the editor measures the camera panel and the dock to set `--tray-top` (below the camera panel) and `--tray-bottom` (beside the dock if there's room, otherwise above its top edge).
+  - The tray scrolls when the window is short.
+- **The map stays in view:** while the tray is open, `fitCameraToViewport(…, coveredRight)` centres the view in the space left of it. It renders part of a wider virtual view, so the camera's position, orbit and the run are untouched.
+  - The browser check confirms the board's four corners stay clear of the tray at 1440×900 and 1280×800.
+- **Tiles:** three to a row, with the picture above a name of up to two lines. The lane note stays in the tooltip.
 - **Removed:** the old full-width strip drawer rules.
