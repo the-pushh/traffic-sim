@@ -255,13 +255,16 @@ if (isDevServer) {
   const ready = () => page2.waitForSelector('.status', { state: 'hidden', timeout: 30000 });
   const sceneName = async () => (await page2.locator('.scene-name').textContent())?.trim();
   await ready();
+  // Warm-up traffic appears on the first frames after loading: allow a moment before calling a scene empty.
+  const hasTraffic = () =>
+    page2.waitForFunction(() => window.__trafficDebug.vehicles().length > 0, null, { timeout: 2000 }).then(() => true, () => false);
   const names = [await sceneName()];
-  const warmedUp = [(await page2.evaluate(() => window.__trafficDebug.vehicles().length)) > 0];
+  const warmedUp = [await hasTraffic()];
   for (let i = 0; i < 5; i++) {
     await page2.getByRole('button', { name: 'Next scene' }).click();
     await ready();
     names.push(await sceneName());
-    warmedUp.push((await page2.evaluate(() => window.__trafficDebug.vehicles().length)) > 0);
+    warmedUp.push(await hasTraffic());
   }
   // Every preset opens with warm-up traffic; the blank board (5th) has none until joined up.
   carouselChecks.presetsOpenWithWarmUpTraffic = JSON.stringify(warmedUp) === JSON.stringify([true, true, true, true, false, true]);
@@ -431,6 +434,52 @@ const openPage = async (target) => {
   await page.waitForSelector('.status', { state: 'hidden', timeout: 60000 });
   return { page, errors };
 };
+// Real presses (P1): a person's click holds the button ~100 ms, so the button must not be rebuilt under it.
+const pressChecks = {};
+{
+  const { page, errors } = await openPage(url);
+  /** Press like a person; false when the button isn't there to press. */
+  const press = async (locator) => {
+    const box = await locator.boundingBox({ timeout: 3000 }).catch(() => null);
+    if (!box) return false;
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.down();
+    await page.waitForTimeout(100);
+    await page.mouse.up();
+    return true;
+  };
+  const state = () => page.evaluate(() => document.querySelector('.dock')?.dataset.state);
+  const reaches = (wanted, timeout = 3000) =>
+    page.waitForFunction((wanted) => document.querySelector('.dock')?.dataset.state === wanted, wanted, { timeout }).then(() => true, () => false);
+  const sceneName = () => page.evaluate(() => document.querySelector('.scene-name')?.textContent);
+  const playPause = page.locator('.dock [data-action="play-pause"]');
+  pressChecks.playStartsRun = (await press(playPause)) && (await reaches('running'));
+  await page.waitForTimeout(1000); // let the clock tick under the next press
+  pressChecks.pauseStopsRun = (await press(playPause)) && (await reaches('paused'));
+  // Reset on the pill while traffic runs: stops the run and restores the designer's network.
+  // Dev server only: the edit that makes Reset appear goes through the debug hook.
+  if (isDevServer) {
+    const before = await sceneName();
+    await page.evaluate(() => window.__trafficDebug.select({ kind: 'piece', index: 0 }));
+    const removed = await page
+      .getByRole('button', { name: 'Remove' })
+      .click({ timeout: 3000 })
+      .then(() => true, () => false);
+    const runningAgain = (await press(playPause)) && (await reaches('running'));
+    await page.waitForTimeout(500);
+    const pressedReset = await press(page.getByRole('button', { name: 'Reset', exact: true }));
+    pressChecks.resetWorksWhileRunning =
+      removed &&
+      runningAgain &&
+      pressedReset &&
+      (await reaches('ready', 10000)) &&
+      (await sceneName()) === before &&
+      (await page.getByRole('button', { name: 'Reset', exact: true }).isHidden());
+  }
+  pressChecks.noPageErrors = errors.length === 0;
+  await page.close();
+}
+
 // Every preset runs: cycle the pill and play each one for a moment (also against the deployed app).
 const presetRunChecks = {};
 {
@@ -646,6 +695,7 @@ const result = {
   presetChecks,
   carouselChecks,
   editorChecks,
+  pressChecks,
   presetRunChecks,
   scenarioChecks,
   blockedAtEntries,
@@ -675,6 +725,7 @@ const ok =
   resetDisabledDuringFailure &&
   retryRecovered &&
   Object.values(runChecks).every(Boolean) &&
+  passed(pressChecks) &&
   passed(presetRunChecks) &&
   passed(scenarioChecks);
 process.exit(ok ? 0 : 1);
