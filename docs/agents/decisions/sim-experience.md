@@ -257,3 +257,28 @@ Owner agreed the spec and the T1–T13 ticket breakdown and authorised implement
   - The selection gets a pink outline on the map.
   - Keyboard placement: Enter on a part, arrow keys move it a tile, R rotates, Enter drops, Escape cancels.
   - A release over a panel drops nothing; the preview hides and says "Drop it on the map". Pointer capture is released, so touch and pen drags reach the map.
+
+## Verification and delivery report (T13) — 2026-11-12
+
+- **Deployed app:** https://traffic-sim-one.vercel.app (production, from `main`).
+- **The four presets:** Main Street, Market Roundabout, School Run and Flyover Bottleneck, plus the Blank board. `npm run verify:browser -- https://traffic-sim-one.vercel.app/` cycles the scene pill through all five, presses Play on each preset and checks that the clock moves. All four ran, with no page errors.
+- **Behaviour checks.** These are automated in the test suite (`npm test`) and named in the T5–T10 notes above:
+  - signal timing shifts queues;
+  - a stop sign changes who goes first;
+  - closing a connection diverts eligible trips, and blocked trips are counted;
+  - the flyover and the road below interact only through ramps (a stopped car below doesn't slow the bridge).
+- **Before/after in the browser:** run Main Street for 30 s, select Junction 1's light, set the arterial green to 8 s, apply it and run again. The results card puts the two runs side by side ("This run" and "Previous run") with the same arrivals, and the peak queues differ (Junction 1 westbound 2 → 3, eastbound 4 → 2). Screenshot: `artifacts/3d/previews/25-before-after.png`.
+- **A scenario built on the Blank board through the UI:**
+  - From the Parts drawer, the check drags 27 straights and a crossroads into a plus shape across the board, rotating with R for the north–south arm. It then drags a traffic light onto each of the four approaches.
+  - All 31 drops previewed as valid before release. The scene then held exactly those pieces and controls.
+  - A 90 s run at Medium reached the results card: 70 trips due, 43 entered, 11 finished. Its peak queues were measured per approach, and the scene saved in the browser.
+  - The 30 s default is too short for any trip to cross the 16-tile board through one default-timed light, so this check uses 90 s.
+  - Screenshots: `26-blank-board-built.png`, `27-blank-board-results.png`.
+- **Element types counted toward the 60% target:** 15 of 22 (68%). See the final count in `assets/3d/ASSETS.md`.
+- **Open for the owner:**
+  - which side of the road traffic drives on (right assumed);
+  - whether to retire the road-texture strip;
+  - the Flyover narrowing column;
+  - picture thumbnails for the parts drawer (parts are text labels).
+- **Not modelled:** lane changes and merging early.
+- **Known flaky check:** the visible-window joystick drag in the browser check fails intermittently. It predates this work.

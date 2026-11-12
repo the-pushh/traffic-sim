@@ -422,6 +422,129 @@ if (isDevServer) {
   await page3.close();
 }
 
+// Final verification (T13).
+// Every preset runs: cycle the pill and play each one for a moment (works against the deployed app too).
+const deployedChecks = {};
+{
+  const page4 = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+  const pageErrors = [];
+  page4.on('pageerror', (e) => pageErrors.push(String(e)));
+  await page4.goto(url);
+  await page4.waitForSelector('.status', { state: 'hidden', timeout: 60000 });
+  const ran = {};
+  for (let i = 0; i < 5; i++) {
+    const name = (await page4.locator('.scene-name').textContent())?.trim();
+    if (name !== 'Blank board') {
+      await page4.getByRole('button', { name: 'Play' }).click();
+      const moved = await page4
+        .waitForFunction(() => !document.querySelector('.clock')?.textContent?.startsWith('0:00'), null, { timeout: 8000 })
+        .then(() => true, () => false);
+      await page4.getByRole('button', { name: 'Pause' }).click();
+      await page4.getByRole('button', { name: 'Restart run' }).click();
+      ran[name] = moved;
+    }
+    await page4.getByRole('button', { name: 'Next scene' }).click();
+    await page4.waitForSelector('.status', { state: 'hidden', timeout: 60000 });
+  }
+  deployedChecks.presetsRan = ran;
+  deployedChecks.allFourPresetsRun = Object.keys(ran).length === 4 && Object.values(ran).every(Boolean);
+  deployedChecks.noPageErrors = pageErrors.length === 0;
+  await page4.close();
+}
+
+const scenarioChecks = {};
+if (isDevServer) {
+  const page5 = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+  const errors5 = [];
+  page5.on('pageerror', (e) => errors5.push(String(e)));
+  const fast = new URL(url);
+  fast.searchParams.set('timeScale', '15');
+  await page5.goto(fast.toString());
+  await page5.evaluate(() => localStorage.clear());
+  await page5.reload();
+  await page5.waitForSelector('.status', { state: 'hidden', timeout: 30000 });
+  const finishRun = () => page5.waitForFunction(() => document.querySelector('.dock')?.dataset.state === 'ended', null, { timeout: 30000 });
+  const peaks = (column) =>
+    page5.evaluate((column) => {
+      const rows = [...document.querySelectorAll('.results-card tbody tr')].filter((r) => r.querySelector('th')?.textContent?.includes('·') && !r.querySelector('th')?.textContent?.includes('due'));
+      return rows.map((r) => Number(r.querySelectorAll('td')[column]?.textContent ?? 'NaN'));
+    }, column);
+  // Before/after: run Main Street, shorten the first junction's arterial green, run again with the same traffic.
+  await page5.getByRole('button', { name: 'Play' }).click();
+  await finishRun();
+  await page5.evaluate(() => window.__trafficDebug.select({ kind: 'control', index: 0 }));
+  await page5.locator('[data-timing="green"]').fill('8');
+  await page5.getByRole('button', { name: 'Apply timing' }).click();
+  await page5.waitForTimeout(800);
+  await page5.getByRole('button', { name: 'Play' }).click();
+  await finishRun();
+  await page5.waitForTimeout(200);
+  const [after, before] = [await peaks(0), await peaks(1)];
+  scenarioChecks.beforeAfterEditChangesQueues = before.length > 0 && JSON.stringify(after) !== JSON.stringify(before);
+  scenarioChecks.beforeAfterResultsLabelled = ((await page5.locator('.results-card').textContent()) ?? '').includes('Previous run');
+  await page5.locator('.bottom-stack').screenshot({ path: `${outDir}/25-before-after.png` });
+
+  // A player's own scenario on the Blank board, built with the editor from the drawer, run to results.
+  await page5.getByRole('button', { name: 'Previous scene' }).click();
+  await page5.getByRole('button', { name: 'Discard and switch' }).click();
+  await page5.waitForSelector('.status', { state: 'hidden', timeout: 30000 });
+  scenarioChecks.onBlankBoard = (await page5.locator('.scene-name').textContent())?.trim() === 'Blank board';
+  await page5.getByRole('button', { name: 'Parts' }).click();
+  const drop = async (part, x, z) => {
+    const box = await page5.locator(`[data-part="${part}"]`).boundingBox();
+    await page5.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page5.mouse.down();
+    const target = await page5.evaluate(([x, z]) => window.__trafficDebug.screenOf(x, z), [x, z]);
+    for (let i = 1; i <= 6; i++) await page5.mouse.move(box.x + ((target.x - box.x) * i) / 6, box.y + ((target.y - box.y) * i) / 6);
+    await page5.waitForTimeout(250);
+    await page5.mouse.move(target.x + 1, target.y);
+    const preview = await page5.evaluate(() => window.__trafficDebug.preview()?.valid === true);
+    await page5.mouse.up();
+    await page5.waitForTimeout(350);
+    return preview;
+  };
+  const drops = [];
+  // West to east along row 8, with a crossroads in the middle.
+  for (let x = 1; x <= 14; x++) drops.push(await drop(x === 8 ? 'crossroad' : 'straight', x + 0.5, 8.5));
+  // North and south to the crossroads (straights turned a quarter).
+  await page5.keyboard.press('r');
+  for (let z = 1; z <= 7; z++) drops.push(await drop('straight', 8.5, z + 0.5));
+  for (let z = 9; z <= 14; z++) drops.push(await drop('straight', 8.5, z + 0.5));
+  await page5.keyboard.press('r');
+  await page5.keyboard.press('r');
+  await page5.keyboard.press('r');
+  // A traffic light on each approach to the crossroads.
+  for (const [x, z] of [[8.5, 8.05], [8.95, 8.5], [8.5, 8.95], [8.05, 8.5]]) drops.push(await drop('signal', x, z));
+  scenarioChecks.everyDropValid = drops.every(Boolean);
+  scenarioChecks.dropsMade = drops.length;
+  const built = await page5.evaluate(() => ({ pieces: window.__trafficDebug.scene().pieces.length, controls: window.__trafficDebug.scene().controls.length }));
+  scenarioChecks.networkBuilt = built.pieces === 4 + 27 && built.controls === 4;
+  await page5.screenshot({ path: `${outDir}/26-blank-board-built.png` });
+  await page5.getByRole('button', { name: '90 s' }).click();
+  await page5.getByRole('button', { name: 'Play' }).click();
+  await page5.waitForFunction(() => document.querySelector('.dock')?.dataset.state === 'ended', null, { timeout: 60000 });
+  await page5.waitForTimeout(200);
+  const resultsText = (await page5.locator('.results-card').textContent()) ?? '';
+  const tripsCell = await page5.evaluate(() => {
+    const row = [...document.querySelectorAll('.results-card tr')].find((r) => r.querySelector('th')?.textContent?.includes('Trips due'));
+    return row?.querySelector('td')?.textContent ?? '';
+  });
+  const finished = Number(tripsCell.split('·')[2] ?? 0);
+  scenarioChecks.tripsDueEnteredFinished = tripsCell.trim();
+  scenarioChecks.scenarioRunsToResults = resultsText.includes('Blank board') && finished > 0;
+  scenarioChecks.finishedTrips = finished;
+  await page5.screenshot({ path: `${outDir}/27-blank-board-results.png` });
+  await page5.getByRole('button', { name: 'Save', exact: true }).click();
+  scenarioChecks.scenarioSaved = await page5
+    .getByRole('button', { name: 'Save', exact: true })
+    .waitFor({ state: 'hidden', timeout: 5000 })
+    .then(() => page5.evaluate(() => Object.keys(localStorage).some((k) => localStorage.getItem(k)?.includes('Blank board'))), () => false);
+  scenarioChecks.noPageErrors = errors5.length === 0;
+  scenarioChecks.errors = errors5.slice(0, 3);
+  await page5.evaluate(() => localStorage.clear());
+  await page5.close();
+}
+
 // Presets (T8+): open each other preset on the dev server (?scene=), check it loads, has traffic and queues, and screenshot it.
 const presetChecks = {};
 if (isDevServer) {
@@ -511,6 +634,8 @@ const result = {
   presetChecks,
   carouselChecks,
   editorChecks,
+  deployedChecks,
+  scenarioChecks,
   blockedAtEntries,
 };
 writeFileSync(`${outDir}/result.json`, JSON.stringify(result, null, 2));
