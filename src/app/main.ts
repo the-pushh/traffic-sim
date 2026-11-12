@@ -11,7 +11,7 @@ import { fitCameraToViewport } from '../three/controls/cameraViewport';
 import { ObserverCamera } from '../three/controls/observerCamera';
 import { attachViewportInput } from '../three/controls/viewportInput';
 import { AssetLoadError } from '../three/loaders/assetLoader';
-import { signalTest } from '../scenes/signalTest';
+import { testNetwork } from '../scenes/testNetwork';
 import { createAssetLoader } from '../three/loaders/assetLoader';
 import { createSceneView, SceneDefinitionError } from '../three/scene/createSceneView';
 import { createTrafficLayer, VEHICLE_MODEL_NAMES } from '../three/scene/trafficLayer';
@@ -19,8 +19,8 @@ import { createVehiclePicker } from '../three/scene/vehiclePicker';
 import { exposeTrafficDebug } from './devHooks';
 import { TrafficSession } from '../simulation/traffic/trafficSession';
 
-/** The scene the app opens on until the scene carousel arrives (T11). */
-const currentScene = signalTest;
+/** The scene the app opens on until the presets (T7) and the scene carousel (T11) arrive. */
+const currentScene = testNetwork;
 
 const ZOOM_STEP = 0.8;
 

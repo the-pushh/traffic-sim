@@ -2,7 +2,7 @@ import type { LaneGraph } from '../network/buildLaneGraph';
 import type { SceneDefinition } from '../network/scene';
 import type { RunController } from '../runController';
 import { TRIPS_PER_MINUTE } from './intensity';
-import { resolveSignals } from './signals';
+import { resolveControls } from './signals';
 import { TrafficSimulation } from './trafficSimulation';
 import { STEPS_PER_SECOND } from '../runController';
 
@@ -43,7 +43,7 @@ export class TrafficSession {
     this.builtFor = this.run.freshStarts;
     this.simulation = new TrafficSimulation(this.graph, {
       seed: seedFor(this.scene.id),
-      signals: resolveSignals(this.scene.pieces, this.graph, this.scene.controls),
+      controls: resolveControls(this.scene.pieces, this.graph, this.scene.controls),
       demand: { tripsPerMinute: TRIPS_PER_MINUTE[this.run.intensity], entries: this.scene.demand.gateways },
     });
     for (let i = 0; i < WARM_UP_SECONDS * STEPS_PER_SECOND; i++) this.simulation.step(STEP);
