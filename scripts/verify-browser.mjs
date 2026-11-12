@@ -176,7 +176,21 @@ runChecks.resultsCardOnEnd = await runPage.evaluate(() => {
   const text = card.textContent ?? '';
   return text.includes('Main Street · Medium · 30 s') && /Trips due · entered · finished\s*\d+ · \d+ · \d+/.test(text) && text.includes('Peak queue') && text.includes('Junction 1 · eastbound');
 });
+// Headlines first (P3): four big numbers show; the full table waits behind Show details.
+runChecks.resultsHeadlinesFirst = await runPage.evaluate(() => {
+  const labels = [...document.querySelectorAll('.results-headlines dt')].map((d) => d.textContent);
+  return JSON.stringify(labels) === JSON.stringify(['Trips finished', 'Average travel time', 'Longest queue', 'Blocked trips']) && document.querySelector('#results-details').hidden;
+});
 await runPage.locator('.bottom-stack').screenshot({ path: `${outDir}/16-results-first-run.png` });
+const detailsToggle = runPage.locator('.results-details-toggle');
+await detailsToggle.click();
+runChecks.resultsDetailsToggle =
+  (await detailsToggle.getAttribute('aria-expanded')) === 'true' &&
+  (await runPage.locator('#results-details').isVisible()) &&
+  (await detailsToggle.textContent()) === 'Hide details';
+await runPage.locator('.bottom-stack').screenshot({ path: `${outDir}/16b-results-details.png` });
+await detailsToggle.click();
+runChecks.resultsDetailsToggle &&= (await runPage.locator('#results-details').isHidden()) && (await detailsToggle.getAttribute('aria-expanded')) === 'false';
 await runPage.getByRole('button', { name: 'Close results' }).click();
 runChecks.resultsCloseAndReopen =
   (await runPage.locator('.results-card').isHidden()) &&
@@ -200,6 +214,8 @@ runChecks.resultsShowPreviousRun = await runPage.evaluate(() => {
   const card = document.querySelector('.results-card');
   return !card.hidden && (card.textContent ?? '').includes('Previous run');
 });
+// Same scene twice: every headline says how it moved since the previous run.
+runChecks.resultsHeadlinesCompare = (await runPage.locator('.results-headlines .change').count()) === 4;
 await runPage.locator('.bottom-stack').screenshot({ path: `${outDir}/17-results-with-previous.png` });
 await runPage.getByRole('button', { name: '60 s' }).click();
 runChecks.resultsHiddenAfterFreshStart = await runPage

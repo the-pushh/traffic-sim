@@ -565,6 +565,80 @@ button.primary {
   font-weight: bold;
 }
 
+/* Four big numbers first; the full table is behind Show details. */
+.results-headlines {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-2);
+  margin: 0 0 var(--space-2);
+}
+
+.results-headlines .headline {
+  min-width: 0;
+}
+
+.results-headlines dt {
+  font-size: var(--font-meta);
+  color: var(--color-text-muted);
+}
+
+.results-headlines dd {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 var(--space-1);
+  font-variant-numeric: tabular-nums;
+}
+
+.results-headlines .headline-value {
+  font-size: var(--font-title);
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.results-headlines .headline-detail {
+  flex-basis: 100%;
+  font-size: var(--font-meta);
+  color: var(--color-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.results-headlines .change {
+  font-size: var(--font-meta);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.results-headlines .change.better {
+  color: var(--color-accent);
+}
+
+.results-headlines .change.worse {
+  color: var(--color-error);
+}
+
+.results-headlines .change.same {
+  font-weight: normal;
+  color: var(--color-text-muted);
+}
+
+@media (max-width: 560px) {
+  .results-headlines {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.results-details-toggle {
+  font-size: var(--font-meta);
+}
+
+.results-scroll:not([hidden]) {
+  margin-top: var(--space-2);
+}
+
 .results-reopen {
   border-radius: var(--radius-pill);
   box-shadow: var(--shadow-floating);
