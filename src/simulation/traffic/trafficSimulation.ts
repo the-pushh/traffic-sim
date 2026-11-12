@@ -215,6 +215,8 @@ export class TrafficSimulation {
   private nextId = 0;
   private readonly laneLength: number[];
   private readonly controlOnLane = new Map<number, ApproachControl>();
+  /** Every controlled approach, in the order given (`controls`, then `signals`). */
+  private readonly controls: ApproachControl[];
   private readonly conflicts: Map<number, Conflict[]>;
   private readonly turns: Turn[];
   /**
@@ -265,6 +267,7 @@ export class TrafficSimulation {
     this.laneLength = graph.lanes.map((l) => l.length * METRES_PER_TILE);
     const controls: ApproachControl[] = [...(options.controls ?? []), ...(options.signals ?? []).map((s) => ({ type: 'signal' as const, lanes: s.lanes, timing: s.timing }))];
     for (const control of controls) for (const lane of control.lanes) this.controlOnLane.set(lane, control);
+    this.controls = controls;
     this.conflicts = findConflicts(graph);
     this.turns = graph.lanes.map(turnOf);
     this.junctionOf = junctionClusters(graph, this.conflicts);
@@ -530,6 +533,21 @@ export class TrafficSimulation {
   private queueCost(sensitivity: number) {
     const delay = this.queueDelays();
     return (lane: number) => sensitivity * delay[lane];
+  }
+
+  /**
+   * Vehicles queued at each controlled approach right now, in the order the controls were
+   * given: everyone held up (below walking pace) whose next control is that approach.
+   */
+  queueLengths(): number[] {
+    const queues = this.controls.map(() => 0);
+    const index = new Map(this.controls.map((c, i) => [c, i]));
+    for (const v of this.vehicles.values()) {
+      if (v.speed >= HELD_UP) continue;
+      const next = this.nextStopLine(v);
+      if (next) queues[index.get(next.control)!]++;
+    }
+    return queues;
   }
 
   /** Trips turned away at each entry since counting started because there was no way through, by gateway label. */

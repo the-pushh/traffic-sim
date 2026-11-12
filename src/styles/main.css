@@ -427,3 +427,80 @@ button.primary {
   pointer-events: none;
   box-shadow: var(--shadow-floating);
 }
+
+.results-card {
+  width: min(600px, 100%);
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--color-surface) 96%, transparent);
+  box-shadow: var(--shadow-floating);
+}
+
+.results-card header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-2);
+}
+
+.results-card h2 {
+  margin: 0;
+  font-size: var(--font-body);
+}
+
+.results-close {
+  height: 24px;
+  min-width: 24px;
+  padding: 0;
+}
+
+.results-scroll {
+  max-height: 38vh;
+  overflow-y: auto;
+}
+
+.results-card table {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+.results-card th,
+.results-card td {
+  padding: var(--space-1) var(--space-2);
+  text-align: right;
+  vertical-align: top;
+}
+
+.results-card tbody th {
+  text-align: left;
+  font-weight: normal;
+  color: var(--color-text-muted);
+}
+
+.results-card thead th {
+  font-weight: normal;
+}
+
+.results-card .run-name {
+  display: block;
+  font-weight: bold;
+}
+
+.results-card .run-label,
+.results-card .sample {
+  font-size: var(--font-meta);
+  color: var(--color-text-muted);
+}
+
+.results-card .run-label,
+.results-card td {
+  white-space: nowrap;
+}
+
+.results-card tr.group th {
+  padding-top: var(--space-2);
+  color: var(--color-text);
+  font-weight: bold;
+}

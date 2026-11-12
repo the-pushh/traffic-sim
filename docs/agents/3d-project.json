@@ -278,6 +278,20 @@
         ],
         "result": "pass: all earlier checks plus blockedTripsCountedAtEntry (dev hook closes the west entry road; trips there are counted as blocked and a red count badge shows above gateway H). No console errors. Screenshot 15-blocked-entry.png inspected.",
         "previews": "artifacts/3d/previews/ (git-ignored)"
+      },
+      {
+        "date": "2026-11-12",
+        "check": "T7 Main Street, measures and results card (#9)",
+        "command": "npm test (194/194), npm run build, npm run dev then npm run verify:browser (headless) and npm run verify:browser:headed (3 runs)",
+        "browser": "Google Chrome 157 on macOS, headless and headed, 1440x900",
+        "assets": [
+          "public/models/roads/road-straight.glb",
+          "public/models/roads/road-crossroad.glb",
+          "signal models",
+          "public/models/vehicles/*.glb"
+        ],
+        "result": "pass: pill shows Main Street; live queue badges over the approaches; results card on Ended labelled 'Main Street · Medium · 30 s', with counts, average travel time with trip count, blocked trips and peak queue by approach; previous run shown beside the next; card hidden on a fresh start; no console errors. One headed run reported two false checks once and didn't reproduce in three reruns. Screenshots 14, 16, 17 inspected.",
+        "previews": "artifacts/3d/previews/ (git-ignored)"
       }
     ]
   },

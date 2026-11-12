@@ -1,6 +1,7 @@
 import { PCFSoftShadowMap, PerspectiveCamera, Timer, WebGLRenderer } from 'three';
 import { createDock } from '../components/dock';
 import { createFirstVisitTip } from '../components/firstVisitTip';
+import { createResultsCard } from '../components/resultsCard';
 import { attachJoystickControl, setJoystickEnabled } from '../components/joystickControl';
 import { createScenePill } from '../components/scenePill';
 import { createVehicleTooltip } from '../components/vehicleTooltip';
@@ -11,16 +12,17 @@ import { fitCameraToViewport } from '../three/controls/cameraViewport';
 import { ObserverCamera } from '../three/controls/observerCamera';
 import { attachViewportInput } from '../three/controls/viewportInput';
 import { AssetLoadError } from '../three/loaders/assetLoader';
-import { testNetwork } from '../scenes/testNetwork';
+import { mainStreet } from '../scenes/mainStreet';
 import { createAssetLoader } from '../three/loaders/assetLoader';
 import { createSceneView, SceneDefinitionError } from '../three/scene/createSceneView';
+import { createQueueLabels } from '../three/scene/queueLabels';
 import { createTrafficLayer, VEHICLE_MODEL_NAMES } from '../three/scene/trafficLayer';
 import { createVehiclePicker } from '../three/scene/vehiclePicker';
 import { exposeTrafficDebug } from './devHooks';
 import { TrafficSession } from '../simulation/traffic/trafficSession';
 
-/** The scene the app opens on until the presets (T7) and the scene carousel (T11) arrive. */
-const currentScene = testNetwork;
+/** The scene the app opens on; the scene carousel (T11) will cycle through the presets. */
+const currentScene = mainStreet;
 
 const ZOOM_STEP = 0.8;
 
@@ -60,12 +62,15 @@ const run = new RunController();
 const tip = createFirstVisitTip(bottomStack, () => run.duration);
 const pill = createScenePill(bottomStack, currentScene.name);
 const dock = createDock(bottomStack, run, { onPlay: () => tip.dismiss() });
+let session: TrafficSession | null = null;
+const results = createResultsCard(bottomStack, () => session!.results(), () => run.state);
 bottomStack.inert = true;
 
 
 function syncRunUi() {
   dock.sync();
   tip.sync();
+  if (session) results.sync();
 }
 
 // Transparent canvas: the page's --color-background token shows behind the scene.
@@ -129,10 +134,12 @@ async function start() {
     const { scene, bounds, graph, updateSignals, updateBlocked } = view;
     const traffic = createTrafficLayer(graph, new Map(VEHICLE_MODEL_NAMES.map((name, i) => [name, vehicleModels[i]])));
     scene.add(traffic.group);
-    const session = new TrafficSession(currentScene, graph, run);
+    session = new TrafficSession(currentScene, graph, run);
+    const queueLabels = createQueueLabels(session.approaches);
+    scene.add(queueLabels.group);
     tooltip ??= createVehicleTooltip(viewport, renderer.domElement);
     const pickVehicle = createVehiclePicker(traffic.group);
-    exposeTrafficDebug(renderer.domElement, camera, traffic.group, graph, () => session.simulation);
+    exposeTrafficDebug(renderer.domElement, camera, traffic.group, graph, () => session!.simulation, () => session!.liveQueues());
     observer = ObserverCamera.framing(camera, bounds, { coveredBottom });
     const joystick = new CameraJoystick(observer);
     const detachViewport = attachViewportInput(renderer.domElement, observer);
@@ -146,11 +153,13 @@ async function start() {
       timer.update(time);
       const delta = Math.min(timer.getDelta(), 0.1);
       joystick.update(delta);
-      session.advance(run.tick(delta * TIME_SCALE));
-      traffic.sync(session.simulation);
-      updateSignals(session.simulation.time);
-      updateBlocked(session.simulation.blockedAtEntries());
-      tooltip!.update((ndc) => pickVehicle(camera, ndc), session.simulation, time);
+      const current = session!;
+      current.advance(run.tick(delta * TIME_SCALE));
+      traffic.sync(current.simulation);
+      updateSignals(current.simulation.time);
+      updateBlocked(current.simulation.blockedAtEntries());
+      queueLabels.update(current.liveQueues().map((q) => q.live));
+      tooltip!.update((ndc) => pickVehicle(camera, ndc), current.simulation, time);
       syncRunUi();
       renderer.render(scene, camera);
     });

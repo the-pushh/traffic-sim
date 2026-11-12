@@ -147,6 +147,7 @@ runChecks.dockFloatsAtBottomCentre = await runPage.evaluate(() => {
   return Math.abs(dock.left + dock.width / 2 - innerWidth / 2) < 2 && innerHeight - dock.bottom < 40 && getComputedStyle(document.querySelector('.dock')).borderTopLeftRadius !== '0px';
 });
 runChecks.sceneArrowsInertUntilCarousel = await runPage.evaluate(() => [...document.querySelectorAll('.pill-arrow')].every((a) => a.disabled));
+runChecks.pillShowsMainStreet = (await runPage.locator('.scene-name').textContent())?.trim() === 'Main Street';
 runChecks.tipShownOnFirstVisit = await runPage.locator('.first-visit-tip').isVisible();
 runChecks.readyClock = (await clockText()) === '0:00 / 0:30' && (await dockState()) === 'ready' && (await settingsEnabled());
 await runPage.locator('.intensity input').fill('4');
@@ -165,6 +166,14 @@ await runPage.locator('.bottom-stack').screenshot({ path: `${outDir}/12-dock-pau
 await runPage.getByRole('button', { name: 'Play' }).click();
 await runPage.waitForFunction(() => document.querySelector('.dock')?.dataset.state === 'ended', null, { timeout: runEndTimeout });
 runChecks.endsExactlyAtDuration = (await clockText()) === '0:30 / 0:30' && (await settingsEnabled());
+// Results card (T7): appears on Ended, labelled with scene, intensity and duration, with absolute numbers.
+runChecks.resultsCardOnEnd = await runPage.evaluate(() => {
+  const card = document.querySelector('.results-card');
+  if (!card || card.hidden) return false;
+  const text = card.textContent ?? '';
+  return text.includes('Main Street · Medium · 30 s') && /Trips due · entered · finished\s*\d+ · \d+ · \d+/.test(text) && text.includes('Peak queue') && text.includes('Junction 1 · eastbound');
+});
+await runPage.locator('.bottom-stack').screenshot({ path: `${outDir}/16-results-first-run.png` });
 await runPage.locator('.dock').screenshot({ path: `${outDir}/13-dock-ended.png` });
 // Click Play and read the clock in the same task, so the check doesn't depend on timing.
 runChecks.playAfterEndContinuesFromZero = await runPage.evaluate(() => {
@@ -179,7 +188,15 @@ runChecks.durationChangeShown = (await clockText()) === '0:00 / 1:00';
 await runPage.getByRole('button', { name: '30 s' }).click();
 await runPage.getByRole('button', { name: 'Play' }).click();
 await runPage.waitForFunction(() => document.querySelector('.dock')?.dataset.state === 'ended', null, { timeout: runEndTimeout });
+runChecks.resultsShowPreviousRun = await runPage.evaluate(() => {
+  const card = document.querySelector('.results-card');
+  return !card.hidden && (card.textContent ?? '').includes('Previous run');
+});
+await runPage.locator('.bottom-stack').screenshot({ path: `${outDir}/17-results-with-previous.png` });
 await runPage.getByRole('button', { name: '60 s' }).click();
+runChecks.resultsHiddenAfterFreshStart = await runPage
+  .waitForFunction(() => document.querySelector('.results-card')?.hidden === true, null, { timeout: 2000 })
+  .then(() => true, () => false);
 runChecks.settingChangeAfterEndReturnsToReady = (await dockState()) === 'ready' && (await clockText()) === '0:00 / 1:00';
 // Traffic (T3): play for a while, pause, check vehicles queue at the red light and the hover tag explains them.
 if (isDevServer) {
@@ -194,6 +211,7 @@ if (isDevServer) {
   const vehicles = await runPage.evaluate(() => window.__trafficDebug.vehicles());
   runChecks.trafficOnTheRoad = vehicles.length >= 1;
   runChecks.someQueuedOrStoppedAtRed = sawQueue;
+  runChecks.liveQueueShownOnApproach = await runPage.evaluate(() => window.__trafficDebug.queues().some((q) => q.live > 0));
   const target = vehicles.find((v) => v.x > 100 && v.x < 1300 && v.y > 80 && v.y < 650);
   if (target) {
     await runPage.mouse.move(target.x, target.y);

@@ -16,6 +16,9 @@ export interface SignalControl {
 export interface ApproachControl {
   type: 'signal' | 'stop' | 'yield';
   lanes: Set<number>;
+  /** The piece and the port traffic arrives through (absent for hand-built controls). */
+  piece?: number;
+  port?: string;
   /** Signals only. */
   timing?: SignalTiming;
 }
@@ -49,6 +52,8 @@ function approachLanes(pieces: PiecePlacement[], graph: LaneGraph, piece: number
 export function resolveControls(pieces: PiecePlacement[], graph: LaneGraph, controls: ControlPlacement[]): ApproachControl[] {
   const resolved: ApproachControl[] = controls.map((control) => ({
     type: control.type,
+    piece: control.piece,
+    port: control.port,
     lanes: new Set(approachLanes(pieces, graph, control.piece, control.port).map((l) => l.id)),
     timing: control.type === 'signal' ? (control.timing ?? DEFAULT_SIGNAL_TIMING) : undefined,
   }));
@@ -56,7 +61,7 @@ export function resolveControls(pieces: PiecePlacement[], graph: LaneGraph, cont
     if (!PIECES[placement.piece]?.ring) return;
     for (const port of PIECES[placement.piece].ports) {
       const lanes = approachLanes(pieces, graph, piece, port.id);
-      if (lanes.length && !resolved.some((c) => lanes.some((l) => c.lanes.has(l.id)))) resolved.push({ type: 'yield', lanes: new Set(lanes.map((l) => l.id)) });
+      if (lanes.length && !resolved.some((c) => lanes.some((l) => c.lanes.has(l.id)))) resolved.push({ type: 'yield', piece, port: port.id, lanes: new Set(lanes.map((l) => l.id)) });
     }
   });
   return resolved;
