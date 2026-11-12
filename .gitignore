@@ -58,3 +58,4 @@ node_modules/
 # Generated verification previews
 /artifacts/3d/previews/*
 !/artifacts/3d/previews/.gitkeep
+/artifacts/perf/

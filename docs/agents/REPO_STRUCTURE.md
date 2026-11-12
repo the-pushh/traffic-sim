@@ -37,15 +37,18 @@ traffic-sim/
 │   ├── simulation/                   # Lane network, routing, vehicles, controls, timing
 │   ├── three/
 │   │   ├── scene/                    # Rendering, lighting, scene lifecycle
-│   │   ├── loaders/                  # Browser asset loading
-│   │   └── controls/                 # Observer camera and viewport input
+│   │   ├── loaders/                  # Browser asset loading, shared kit textures
+│   │   ├── controls/                 # Observer camera and viewport input
+│   │   ├── render/                   # Drawing on demand, adaptive resolution
+│   │   └── thumbnails/               # Part pictures for the parts tray
 │   └── styles/                       # Visual tokens and interface styles
 ├── public/                           # Planned, subject to toolchain conventions
 │   ├── models/                       # Browser-ready models used by the app
 │   └── textures/                     # Not used: City Kit pieces carry their own colormap.png beside the models
 └── artifacts/                        # Planned verification output
-    └── 3d/
-        └── previews/                 # Browser verification screenshots
+    ├── 3d/
+    │   └── previews/                 # Browser verification screenshots
+    └── perf/                         # Benchmark results (npm run perf; git-ignored)
 ```
 
 Adapt app entry points, test locations, and static asset paths to the selected toolchain. Create planned folders when they have content.

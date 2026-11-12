@@ -25,6 +25,8 @@ import { createQueueLabels } from '../three/scene/queueLabels';
 import { createTrafficLayer, VEHICLE_MODEL_NAMES } from '../three/scene/trafficLayer';
 import { createVehiclePicker } from '../three/scene/vehiclePicker';
 import { exposeTrafficDebug } from './devHooks';
+import { DrawOnDemand } from '../three/render/drawOnDemand';
+import { ResolutionGovernor } from '../three/render/resolutionGovernor';
 import { TrafficSession } from '../simulation/traffic/trafficSession';
 
 /**
@@ -120,12 +122,32 @@ function syncPill() {
 
 // Transparent canvas: the page's --color-background token shows behind the scene.
 const renderer = new WebGLRenderer({ antialias: true, alpha: true });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+// Full sharpness unless frames can't keep up (then fewer pixels, until the next scene opens).
+const resolution = new ResolutionGovernor(window.devicePixelRatio);
+renderer.setPixelRatio(resolution.pixelRatio);
+function useResolution() {
+  if (renderer.getPixelRatio() === resolution.pixelRatio) return;
+  renderer.setPixelRatio(resolution.pixelRatio);
+  resize();
+}
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = PCFSoftShadowMap;
 viewport.prepend(renderer.domElement);
 
 const camera = new PerspectiveCamera(45, 1, 0.1, 500);
+
+/** A gap longer than this (a background tab, a debugger pause) counts as this long. */
+const MAX_FRAME_GAP_MS = 100;
+let drewLast = false;
+let lastFrameTime = 0;
+
+// ---- Drawing on demand: an idle map isn't drawn at all ----
+const draws = new DrawOnDemand();
+const requestRender = () => draws.request();
+function frameChanged(current: TrafficSession): boolean {
+  camera.updateMatrixWorld();
+  return draws.changed({ view: camera.matrixWorld, projection: camera.projectionMatrix, traffic: current.simulation, time: current.simulation.time, state: run.state });
+}
 
 /** Fraction of the screen height covered by the scene pill and dock (the tip is temporary and not counted). */
 let coveredBottom = 0;
@@ -140,8 +162,11 @@ function resize() {
   const covered = Math.max(0, height - panelsTop);
   const coveredRight = rightPanel && !rightPanel.hidden ? Math.max(0, area.right - rightPanel.getBoundingClientRect().left) : 0;
   coveredBottom = fitCameraToViewport(camera, { width, height, covered, coveredRight });
+  requestRender();
 }
 new ResizeObserver(resize).observe(viewport);
+// A lost and restored GPU context leaves the canvas blank until it's drawn again.
+renderer.domElement.addEventListener('webglcontextrestored', requestRender);
 resize();
 
 
@@ -279,7 +304,10 @@ async function show(mode: 'open' | 'edit'): Promise<boolean> {
       };
       editor.reset();
       timer.reset();
+      resolution.reset();
+      useResolution();
     }
+    requestRender();
     renderer.setAnimationLoop((time) => {
       timer.update(time);
       const delta = Math.min(timer.getDelta(), 0.1);
@@ -292,8 +320,19 @@ async function show(mode: 'open' | 'edit'): Promise<boolean> {
       queueLabels.update(current.liveQueues());
       tooltip!.update((ndc) => pickVehicle(camera, ndc), current.simulation, time);
       syncRunUi();
-      editor.sync();
-      renderer.render(scene, camera);
+      const editorChanged = editor.sync();
+      // Draw only when something on the map changed: an idle map costs nothing.
+      // Slow frames show up as long gaps while the map is being drawn; idle gaps show the screen's pace.
+      if (lastFrameTime) {
+        const gap = Math.min(time - lastFrameTime, MAX_FRAME_GAP_MS);
+        if (drewLast) resolution.frame(gap);
+        else resolution.idle(gap);
+        useResolution(); // before drawing: changing the resolution clears the canvas
+      }
+      const drew = frameChanged(current) || editorChanged;
+      if (drew) renderer.render(scene, camera);
+      drewLast = drew;
+      lastFrameTime = time;
     });
     status.hidden = true;
     setCameraControlsEnabled(true);

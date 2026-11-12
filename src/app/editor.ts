@@ -485,21 +485,25 @@ export function createEditor(host: EditorHost) {
   }
 
   /** Outline the selected piece or sign on the map, against light and dark ground alike. */
-  function showOutline() {
+  /** Keep the selection outline on the selected thing; true when it changed (the view needs drawing). */
+  function showOutline(): boolean {
     const view = host.view();
     const key = selected ? `${selected.kind}:${selected.index}` : '';
+    let changed = false;
     if (outlined && (outlined.view !== view || outlined.key !== key)) {
       outlined.view.remove(outline);
       outlined = null;
+      changed = true;
     }
-    if (!selected || !view || outlined) return;
+    if (!selected || !view || outlined) return changed;
     const target = selected;
     const group = view.getObjectByName(target.kind === 'piece' ? 'road-pieces' : 'traffic-controls');
     const object = group?.children.find((o) => o.userData[target.kind === 'piece' ? 'pieceIndex' : 'controlIndex'] === target.index);
-    if (!object) return;
+    if (!object) return changed;
     outline.box.setFromObject(object).expandByScalar(0.15);
     view.add(outline);
     outlined = { view, key };
+    return true;
   }
 
   function renderInspector() {
@@ -612,6 +616,7 @@ export function createEditor(host: EditorHost) {
     drawer.querySelector<HTMLButtonElement>('[data-action="redo"]')!.disabled = !history.canRedo() || !host.canEdit();
   }
 
+  let wasPlacing = false;
   let lockedShown: boolean | null = null;
   return {
     toggle,
@@ -629,11 +634,14 @@ export function createEditor(host: EditorHost) {
       syncButtons();
     },
     /** Call every frame: locks the parts while traffic runs, and keeps the outline and preview on the current view. */
-    sync() {
-      showOutline();
+    /** Call every frame; true when the editor changed what the map shows (a part being placed, the outline). */
+    sync(): boolean {
+      const placing = drag !== null;
+      const changed = showOutline() || placing || wasPlacing;
+      wasPlacing = placing; // one more frame after placing ends, to clear the preview
       if (drag?.ghost && !ghostRoot.parent) host.view()?.add(ghostRoot);
       const locked = !host.canEdit();
-      if (locked === lockedShown) return;
+      if (locked === lockedShown) return changed;
       lockedShown = locked;
       for (const button of drawer.querySelectorAll<HTMLButtonElement>('.part')) button.disabled = locked;
       drawer.classList.toggle('locked', locked);
@@ -643,6 +651,7 @@ export function createEditor(host: EditorHost) {
         select(null);
       }
       syncButtons();
+      return true;
     },
   };
 }

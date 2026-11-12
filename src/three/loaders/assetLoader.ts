@@ -1,5 +1,6 @@
 import type { Group } from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { shareKitTextures } from './textureSharing';
 
 /** Thrown when a supplied asset cannot be loaded, naming the asset URL. */
 export class AssetLoadError extends Error {
@@ -24,6 +25,7 @@ export function createAssetLoader(baseUrl: string) {
   }
 
   return {
-    model: (url: string): Promise<Group> => load(url, async (u) => (await gltfLoader.loadAsync(u)).scene),
+    /** A model; its kit's textures are shared with the kit's other models (one GPU copy each). */
+    model: (url: string): Promise<Group> => load(url, async (u) => shareKitTextures((await gltfLoader.loadAsync(u)).scene, url.slice(0, url.lastIndexOf('/')))),
   };
 }
