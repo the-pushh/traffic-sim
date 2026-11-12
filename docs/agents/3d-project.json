@@ -266,6 +266,18 @@
         ],
         "result": "pass: all run, traffic and hover checks true; no console errors; vehicles on every arm, queue at red, hover tag shows type · profile · reason. Paused traffic screenshot inspected (roundabout, crossroads, signals).",
         "previews": "artifacts/3d/previews/ (git-ignored)"
+      },
+      {
+        "date": "2026-11-12",
+        "check": "T6 routing (#8)",
+        "command": "npm test (181/181), npm run build, npm run dev then npm run verify:browser and npm run verify:browser:headed",
+        "browser": "Google Chrome 157 on macOS, headless and headed, 1440x900",
+        "assets": [
+          "public/models/roads/*.glb (test network)",
+          "public/models/vehicles/*.glb"
+        ],
+        "result": "pass: all earlier checks plus blockedTripsCountedAtEntry (dev hook closes the west entry road; trips there are counted as blocked and a red count badge shows above gateway H). No console errors. Screenshot 15-blocked-entry.png inspected.",
+        "previews": "artifacts/3d/previews/ (git-ignored)"
       }
     ]
   },

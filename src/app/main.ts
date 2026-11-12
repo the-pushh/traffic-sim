@@ -126,13 +126,13 @@ async function start() {
       createSceneView(currentScene, import.meta.env.BASE_URL),
       Promise.all(VEHICLE_MODEL_NAMES.map((name) => load.model(`models/vehicles/${name}.glb`))),
     ]);
-    const { scene, bounds, graph, updateSignals } = view;
+    const { scene, bounds, graph, updateSignals, updateBlocked } = view;
     const traffic = createTrafficLayer(graph, new Map(VEHICLE_MODEL_NAMES.map((name, i) => [name, vehicleModels[i]])));
     scene.add(traffic.group);
     const session = new TrafficSession(currentScene, graph, run);
     tooltip ??= createVehicleTooltip(viewport, renderer.domElement);
     const pickVehicle = createVehiclePicker(traffic.group);
-    exposeTrafficDebug(renderer.domElement, camera, traffic.group, () => session.simulation);
+    exposeTrafficDebug(renderer.domElement, camera, traffic.group, graph, () => session.simulation);
     observer = ObserverCamera.framing(camera, bounds, { coveredBottom });
     const joystick = new CameraJoystick(observer);
     const detachViewport = attachViewportInput(renderer.domElement, observer);
@@ -149,6 +149,7 @@ async function start() {
       session.advance(run.tick(delta * TIME_SCALE));
       traffic.sync(session.simulation);
       updateSignals(session.simulation.time);
+      updateBlocked(session.simulation.blockedAtEntries());
       tooltip!.update((ndc) => pickVehicle(camera, ndc), session.simulation, time);
       syncRunUi();
       renderer.render(scene, camera);

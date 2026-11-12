@@ -13,7 +13,7 @@ describe('traffic session', () => {
     const session = new TrafficSession(signalTest, graph, new RunController());
 
     expect(session.simulation.allVehicles().length).toBeGreaterThan(0);
-    expect(session.simulation.counts).toEqual({ due: 0, entered: 0, finished: 0, waiting: 0 });
+    expect(session.simulation.counts).toEqual({ due: 0, entered: 0, finished: 0, waiting: 0, blocked: 0 });
     expect(session.simulation.travelTimes).toEqual([]);
   });
 
