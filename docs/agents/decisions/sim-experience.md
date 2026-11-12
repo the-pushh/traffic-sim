@@ -94,7 +94,15 @@ Owner agreed the spec and the T1–T13 ticket breakdown and authorised implement
 - **Framing above the panels:** the camera's view is centred in the area above the scene pill and dock, and the board is fitted into that area. The first-visit tip is not counted.
 - **Driving side (assumed):** right-hand traffic; roundabouts circulate anticlockwise from above. Asked the owner to confirm (2026-11-12). The side is set in two places in the lane builder (`rightOf` lane placement and the roundabout ring direction).
 - **Road texture strip** retired: scenes are built from City Kit pieces only (T4).
-- **App scene during T3–T6:** the app opens on a hidden **Signal test** scene (one road, a signal-controlled crossing) while junction behaviour and routing are built; the test network stays in code. Main Street replaces it in T7.
+- **App scene during T5–T6:** the app opens on the **Test network** (signalised crossroads, roundabout, T-junction, overpass; every gateway at weight 0.25) so junction behaviour is visible; T3 used a one-road **Signal test** scene. Main Street replaces it in T7.
 - **Deferred from T3:** impatience building during delays (needs junction waiting and route choice, T5/T6) and use of the drivers' accepted-gap preference (gap acceptance, T5). Rule violations (speeding, rolling stops) are T5.
 - **Run measures** start at zero when a run starts; warm-up trips carry on but aren't counted.
 - **Signal lamps** show the aspect by colour and position (red top, amber middle, green bottom).
+
+## Junction behaviour notes (T5) — 2026-11-12
+
+- **Uncontrolled crossroads:** give way to traffic from the right (right-hand traffic assumption). Roundabout entries yield to the ring automatically.
+- **Curve speed:** drivers slow for bends to √(2.5 m/s² · radius).
+- **Conflict points:** paths that cross, merge or pass within 0.15 tile (≈1.3 m) of each other count as a conflict. Measured: real near-touches are ≤0.06 tile; roundabout entry/exit pairs sit at 0.27 tile and don't conflict.
+- **Committing to a junction:** a driver at the front of the queue reserves every conflict point on its path at once (all or nothing), then doesn't recheck. Two drivers who must both give way go in arrival order (same junction only).
+- **Courtesy:** a cooperative driver within 70 m of a waiting side-road driver eases toward 3 m/s and holds back. The waiting driver sees this and goes.

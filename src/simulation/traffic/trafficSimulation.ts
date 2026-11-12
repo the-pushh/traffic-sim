@@ -29,8 +29,14 @@ const HELD_UP = 1;
 const CALMING_RATE = 2;
 /** A driver rolling through a stop sign slows to this, m/s. */
 const ROLLING_SPEED = 2.5;
-/** Courteous drivers notice someone waiting to pull out this far ahead, metres. */
-const COURTESY_RANGE = 45;
+/** Sideways acceleration drivers accept through a curve, m/s². */
+const CURVE_ACCELERATION = 2.5;
+/**
+ * Courteous drivers notice someone waiting to pull out this far ahead of the meeting
+ * point, metres: far enough to decide before they commit to the junction (about 35 m
+ * out at 50 km/h) plus the width of the junction.
+ */
+const COURTESY_RANGE = 70;
 /** Speed a courteous driver slows to while letting someone out, m/s. */
 const COURTESY_SPEED = 3;
 
@@ -66,9 +72,12 @@ export interface VehicleState {
   committedThrough: number | null;
   /** Junction entry lane the driver has committed to entering. */
   committedJunction: number | null;
-  /** Stop-sign lane where the driver has already come to a full stop, and when. */
+  /** Stop-sign lane where the driver has already come to a full stop. */
   stoppedAt: number | null;
-  stoppedSince: number;
+  /** When the driver came to a stop at the line of the junction ahead (Infinity if not waiting there). */
+  waitingSince: number;
+  /** Braking a courteous driver applies this step to let someone out, m/s². */
+  courtesyBraking: number;
   /** Seconds spent held up recently; drives impatience. */
   heldUp: number;
   /** Highest speed allowed this step by a decision (rolling a stop, letting someone out), m/s. */
@@ -77,6 +86,8 @@ export interface VehicleState {
   decisions: Map<string, boolean>;
   /** This vehicle's own seeded generator for those decisions. */
   random: Random;
+  /** What last stopped the driver entering a junction (diagnostics). */
+  blockedBy: string;
   /** Count of junctions passed: identifies the stretch of road the vehicle is on. */
   stretch: number;
 }
@@ -173,6 +184,10 @@ export class TrafficSimulation {
   private readonly controlOnLane = new Map<number, ApproachControl>();
   private readonly conflicts: Map<number, Conflict[]>;
   private readonly turns: Turn[];
+  /** Highest comfortable speed through each lane, from its tightest curve, m/s. */
+  private readonly curveSpeed: number[];
+  /** For each lane, the other lanes that end at the same merge point. */
+  private readonly mergesWith: Map<number, number[]>;
   /** Simulated seconds since the simulation started. */
   time = 0;
   private readonly entries: Entry[];
@@ -187,6 +202,12 @@ export class TrafficSimulation {
   private readonly enteredAt = new Map<number, number>();
   /** Rear bumpers by lane, rebuilt each step. */
   private rearsByLane = new Map<number, Rear[]>();
+  /**
+   * Crossing points currently held, keyed by the pair of lanes that cross. A vehicle
+   * reserves every crossing on its path through a junction before committing, and
+   * releases each one once its rear has passed it: two vehicles never cross at once.
+   */
+  private readonly crossings = new Map<string, { vehicle: VehicleState; lane: number; at: number }>();
 
   constructor(
     private readonly graph: LaneGraph,
@@ -198,6 +219,8 @@ export class TrafficSimulation {
     for (const control of controls) for (const lane of control.lanes) this.controlOnLane.set(lane, control);
     this.conflicts = findConflicts(graph);
     this.turns = graph.lanes.map(turnOf);
+    this.curveSpeed = graph.lanes.map((lane) => Math.sqrt(CURVE_ACCELERATION * tightestRadius(lane.points) * METRES_PER_TILE));
+    this.mergesWith = new Map(graph.lanes.map((l) => [l.id, this.conflicts.get(l.id)!.filter((c) => c.kind === 'merge').map((c) => c.lane)]));
     this.demand = options.demand;
     this.entries = Object.entries(options.demand?.entries ?? {})
       .filter(([, weight]) => weight > 0)
@@ -278,6 +301,7 @@ export class TrafficSimulation {
   }
 
   step(dt: number) {
+    this.releaseCrossings();
     this.indexRears();
     this.arriveAndEnter();
     const all = [...this.vehicles.values()];
@@ -287,16 +311,20 @@ export class TrafficSimulation {
     for (const v of all) {
       v.heldUp = v.speed < HELD_UP ? v.heldUp + dt : Math.max(0, v.heldUp - CALMING_RATE * dt);
       v.speedCap = Infinity;
+      v.courtesyBraking = 0;
+      this.updateWaiting(v);
     }
-    for (const v of all) controls.set(v, this.signalAhead(v) ?? this.junctionAhead(v));
+    for (const v of all) v.speedCap = Math.min(v.speedCap, this.curveLimit(v));
+    // Courtesy first: a driver letting someone out must not claim the junction this step.
     this.letWaitingDriversOut(all);
+    for (const v of all) controls.set(v, this.signalAhead(v) ?? this.junctionAhead(v));
     for (const v of all) {
       const car = this.leaderAhead(v.route, v.routeIndex, v.position, v);
       leaders.set(v, car);
       const signal = controls.get(v) ?? null;
       const carAccel = this.idmAcceleration(v, car);
       const signalAccel = signal ? this.idmAcceleration(v, signal) : Infinity;
-      v.acceleration = Math.min(carAccel, signalAccel);
+      v.acceleration = Math.min(carAccel, signalAccel, v.courtesyBraking > 0 ? -v.courtesyBraking : Infinity);
       v.reason = describe(v, signalAccel < carAccel ? signal : car);
     }
     this.time += dt;
@@ -338,11 +366,13 @@ export class TrafficSimulation {
       committedThrough: null,
       committedJunction: null,
       stoppedAt: null,
-      stoppedSince: Infinity,
+      waitingSince: Infinity,
+      courtesyBraking: 0,
       heldUp: 0,
       speedCap: Infinity,
       decisions: new Map(),
       random: this.random.fork('decisions', id),
+      blockedBy: '',
       stretch: 0,
     };
     this.setPreferredSpeed(v);
@@ -428,11 +458,17 @@ export class TrafficSimulation {
       const leaving = v.route[v.routeIndex];
       v.position -= this.laneLength[leaving];
       v.routeIndex++;
-      // Out of a junction onto a new stretch of road: a fresh decision about speed.
       const entering = v.route[v.routeIndex];
-      if (this.conflicts?.get(leaving)?.length && !this.conflicts.get(entering)!.length) {
-        v.stretch++;
-        this.setPreferredSpeed(v);
+      if (this.graph.lanes[entering].piece !== this.graph.lanes[leaving].piece) {
+        // Into a new piece: any stop at the previous line is done with.
+        v.stoppedAt = null;
+        v.waitingSince = Infinity;
+        // Out of a junction onto a new stretch of road: commitment done, a fresh decision about speed.
+        if (this.isJunctionLane(leaving)) {
+          v.committedJunction = null;
+          v.stretch++;
+          this.setPreferredSpeed(v);
+        }
       }
     }
   }
@@ -463,8 +499,8 @@ export class TrafficSimulation {
    */
   private leaderAhead(route: number[], index: number, position: number, self: VehicleState | null): Obstacle | null {
     let travelled = -position;
+    let best: Obstacle | null = null;
     for (let i = index; i < route.length && travelled <= LOOKAHEAD; i++) {
-      let best: Obstacle | null = null;
       for (const rear of this.rearsByLane.get(route[i]) ?? []) {
         if (rear.vehicle === self) continue;
         // On the starting lane, vehicles whose front is behind ours don't count; one level with us does.
@@ -473,9 +509,41 @@ export class TrafficSimulation {
         if (!best || gap < best.gap) best = { gap, speed: rear.vehicle.speed, kind: 'car', vehicle: rear.vehicle };
       }
       if (best) return best;
+      // Approaching a merge: whoever is closer to the merge point on the other lane goes first; follow them.
+      if (self) {
+        const toMerge = travelled + this.laneLength[route[i]];
+        for (const otherLane of this.mergesWith.get(route[i]) ?? []) {
+          for (const other of this.vehicles.values()) {
+            if (other === self) continue;
+            // Only drivers already in the junction (or committed to it) take their turn at the merge.
+            const inJunction = this.graph.lanes[other.route[other.routeIndex]].piece === this.graph.lanes[otherLane].piece;
+            if (!inJunction && other.committedJunction === null) continue;
+            const theirs = this.distanceToPoint(other, otherLane, this.laneLength[otherLane]);
+            // Still counts until its rear has cleared the merge point (long vehicles curve in for a while).
+            if (theirs === null || theirs + other.type.length < 0) continue;
+            const ahead = theirs < toMerge || (theirs === toMerge && other.id < self.id);
+            if (!ahead) continue;
+            const gap = toMerge - theirs - other.type.length;
+            if (!best || gap < best.gap) best = { gap, speed: other.speed, kind: 'car', vehicle: other };
+          }
+        }
+        if (best) return best;
+      }
       travelled += this.laneLength[route[i]];
     }
     return null;
+  }
+
+  /** Highest speed now that still lets the driver slow comfortably to each curve's speed ahead. */
+  private curveLimit(v: VehicleState) {
+    let limit = this.curveSpeed[v.route[v.routeIndex]];
+    let distance = this.laneLength[v.route[v.routeIndex]] - v.position;
+    for (let i = v.routeIndex + 1; i < v.route.length && distance <= 120; i++) {
+      const lane = v.route[i];
+      limit = Math.min(limit, Math.sqrt(this.curveSpeed[lane] ** 2 + 2 * v.driver.comfortBraking * distance));
+      distance += this.laneLength[lane];
+    }
+    return limit;
   }
 
   /** The next controlled approach on the route ahead, and how far away its stop line is. */
@@ -501,6 +569,10 @@ export class TrafficSimulation {
     return null;
   }
 
+  private isJunctionLane(lane: number) {
+    return (this.conflicts.get(lane)?.length ?? 0) > 0 || this.graph.lanes.some((l) => l.piece === this.graph.lanes[lane].piece && this.conflicts.get(l.id)!.length > 0);
+  }
+
   /** Route indices of the lanes inside the junction piece entered at `index`. */
   private junctionSpan(route: number[], index: number) {
     const piece = this.graph.lanes[route[index]].piece;
@@ -509,10 +581,19 @@ export class TrafficSimulation {
     return span;
   }
 
+  /** Note when a driver comes to a stop at the line of the junction ahead (any control), for first come, first served. */
+  private updateWaiting(v: VehicleState) {
+    const junction = this.nextJunction(v);
+    const atLine = junction !== null && junction.distance < STOP_LINE_MARGIN + 3 && v.speed < STOPPED;
+    if (atLine && v.waitingSince === Infinity) v.waitingSince = this.time;
+    if (!atLine && v.speed > HELD_UP) v.waitingSince = Infinity;
+  }
+
   /**
-   * At a junction: come to a full stop at a stop sign, wait for a safe gap in traffic
-   * that has priority, and don't enter when the exit has no room. Once a driver is
-   * too close to stop comfortably and has decided to go, they're committed.
+   * At a junction: never enter while anything is in a conflict area on the path; come
+   * to a full stop at a stop sign; wait for a safe gap in traffic that has priority;
+   * don't enter when the exit has no room. Once a driver is too close to stop
+   * comfortably and has decided to go, the priority decision is final.
    */
   private junctionAhead(v: VehicleState): Obstacle | null {
     const junction = this.nextJunction(v);
@@ -520,24 +601,187 @@ export class TrafficSimulation {
       v.committedJunction = null;
       return null;
     }
-    if (v.committedJunction === junction.lane) return null;
-    const control = this.controlOnLane.get(junction.lane);
     const atLine = (kind: Obstacle['kind']): Obstacle => ({ gap: junction.distance - STOP_LINE_MARGIN + v.driver.minGap, speed: 0, kind });
+    if (v.courtesyBraking > 0 && v.committedJunction === null) {
+      // Letting someone out: hang back at the line without claiming the junction.
+      return atLine('gap');
+    }
+    if (v.committedJunction === junction.lane) {
+      // Held up short of the line after committing (stuck behind someone): hand the
+      // crossings back so others can use them, and decide again later.
+      if (v.speed < STOPPED && junction.distance > STOP_LINE_MARGIN + 3) this.uncommit(v);
+      // Otherwise only the vehicle ahead can hold a committed driver back; re-checking
+      // here could leave two committed drivers each waiting for the other.
+      else return null;
+    }
+    if (this.conflictAreaOccupied(v, junction)) return atLine('gap');
+    if (this.exitFull(v, junction.index)) return atLine('exit');
 
-    if (control?.type === 'stop' && v.stoppedAt !== junction.lane && this.decide(v, `stop:${junction.lane}`) && this.safeToEnter(v, junction)) {
-      // Rolling through: the junction looks clear, so slow right down but don't stop.
-      v.speedCap = Math.sqrt(ROLLING_SPEED ** 2 + 2 * v.driver.comfortBraking * Math.max(0, junction.distance - STOP_LINE_MARGIN));
-    } else if (control?.type === 'stop' && v.stoppedAt !== junction.lane) {
-      if (junction.distance < STOP_LINE_MARGIN + 2.5 && v.speed < STOPPED) {
+    const control = this.controlOnLane.get(junction.lane);
+    if (control?.type === 'stop' && v.stoppedAt !== junction.lane) {
+      const rolling = this.decide(v, `stop:${junction.lane}`) && this.safeToEnter(v, junction);
+      if (rolling) {
+        // Rolling through: the junction looks clear, so slow right down but don't stop.
+        v.speedCap = Math.sqrt(ROLLING_SPEED ** 2 + 2 * v.driver.comfortBraking * Math.max(0, junction.distance - STOP_LINE_MARGIN));
+      } else if (junction.distance < STOP_LINE_MARGIN + 2.5 && v.speed < STOPPED) {
         v.stoppedAt = junction.lane;
-        v.stoppedSince = this.time;
       } else return atLine('stop');
     }
     if (!this.safeToEnter(v, junction)) return atLine('gap');
-    if (this.exitFull(v, junction.index)) return atLine('exit');
     const stoppingDistance = (v.speed * v.speed) / (2 * v.driver.comfortBraking);
-    if (junction.distance <= stoppingDistance + 1) v.committedJunction = junction.lane;
+    if (junction.distance <= stoppingDistance + 1) {
+      // Commit only when nobody is still ahead of us before the line: otherwise we'd hold
+      // the junction's crossings while stuck in the queue.
+      const ahead = this.leaderAhead(v.route, v.routeIndex, v.position, v);
+      if (ahead && ahead.gap < junction.distance + 1) return null;
+      // The point of commitment: only go if every crossing on the path can be reserved.
+      if (!this.reserveCrossings(v, junction.index)) return atLine('gap');
+      v.committedJunction = junction.lane;
+    }
     return null;
+  }
+
+  private uncommit(v: VehicleState) {
+    v.committedJunction = null;
+    for (const [key, held] of this.crossings) if (held.vehicle === v) this.crossings.delete(key);
+  }
+
+  private crossingKey(a: number, b: number) {
+    return a < b ? `${a}x${b}` : `${b}x${a}`;
+  }
+
+  /** Reserve every crossing on the path through the junction entered at `index`, all or nothing. */
+  private reserveCrossings(v: VehicleState, index: number): boolean {
+    const wanted: { key: string; lane: number; at: number }[] = [];
+    for (const i of this.junctionSpan(v.route, index)) {
+      const lane = v.route[i];
+      for (const c of this.conflicts.get(lane)!) {
+        if (c.kind !== 'cross') continue;
+        const key = this.crossingKey(lane, c.lane);
+        const holder = this.crossings.get(key);
+        if (holder && holder.vehicle !== v) return false;
+        wanted.push({ key, lane, at: c.at * METRES_PER_TILE });
+      }
+    }
+    for (const { key, lane, at } of wanted) this.crossings.set(key, { vehicle: v, lane, at });
+    return true;
+  }
+
+  /** Release crossings whose holder has left, or whose rear has passed the crossing point. */
+  private releaseCrossings() {
+    for (const [key, { vehicle, lane, at }] of this.crossings) {
+      if (!this.vehicles.has(vehicle.id)) {
+        this.crossings.delete(key);
+        continue;
+      }
+      const toPoint = this.distanceToPoint(vehicle, lane, at);
+      if (toPoint === null || toPoint + vehicle.type.length < 0) this.crossings.delete(key);
+    }
+  }
+
+  /**
+   * Whether any vehicle's body is over a point where this vehicle's path through the
+   * junction meets another lane. Safety comes before priority: green or not, committed
+   * or not, nobody drives into a vehicle still crossing.
+   */
+  private conflictAreaOccupied(v: VehicleState, junction: { index: number }): boolean {
+    for (const i of this.junctionSpan(v.route, junction.index)) {
+      for (const conflict of this.conflicts.get(v.route[i])!) {
+        const at = conflict.otherAt * METRES_PER_TILE;
+        for (const other of this.vehicles.values()) {
+          if (other === v) continue;
+          const toConflict = this.distanceToPoint(other, conflict.lane, at);
+          if (toConflict !== null && toConflict < 1 && toConflict + other.type.length > -1) return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Whether every vehicle this driver must give way to is far enough from the conflict
+   * points: its time to arrive must exceed this driver's time to clear plus the gap they
+   * accept. Priority only applies at the entry: once inside (e.g. on a roundabout ring),
+   * a driver doesn't give way to drivers still waiting to get in. Drivers who would each
+   * give way to the other, both waiting at their lines, go in order of arrival.
+   */
+  private safeToEnter(v: VehicleState, junction: { index: number; lane: number; distance: number }): boolean {
+    const span = this.junctionSpan(v.route, junction.index);
+    const effort = v.type.maxAcceleration * v.driver.acceleration;
+    const mine = v.route[span[0]];
+    // Giving way at a merge (e.g. onto a roundabout): don't pull in without room beyond
+    // the merge point, or the merging traffic locks up.
+    const afterMerge = span[0] + 1;
+    for (const conflict of this.conflicts.get(mine)!) {
+      if (conflict.kind !== 'merge' || this.priority(mine, junction.lane, conflict.lane) !== 'yield' || afterMerge >= v.route.length) continue;
+      const beyond = this.leaderAhead(v.route, afterMerge, 0, v);
+      if (beyond && beyond.gap < v.type.length + v.driver.minGap) return this.block(v, `no room beyond merge (vehicle ${beyond.vehicle?.id})`);
+    }
+    for (const conflict of this.conflicts.get(mine)!) {
+      const relation = this.priority(mine, junction.lane, conflict.lane);
+      const toMine = junction.distance + conflict.at * METRES_PER_TILE;
+      const myArrival = timeToCover(toMine, v.speed, effort);
+      const myClear = timeToCover(toMine + v.type.length, v.speed, effort);
+      for (const other of this.vehicles.values()) {
+        if (other === v) continue;
+        const toConflict = this.distanceToPoint(other, conflict.lane, conflict.otherAt * METRES_PER_TILE);
+        if (toConflict === null || toConflict + other.type.length < 0 || toConflict > LOOKAHEAD) continue;
+        if (relation === 'go' && other.committedJunction === null && this.graph.lanes[other.route[other.routeIndex]].piece !== this.graph.lanes[conflict.lane].piece) continue;
+        // They're hanging back to let us out.
+        if (other.decisions.get(`courtesy:${v.id}`) === true && other.committedJunction === null) continue;
+        // Queued right by the merge with priority: no space to pull in ahead of it.
+        if (other.speed < STOPPED && relation === 'yield' && conflict.kind === 'merge' && toConflict < 8 && toConflict > -other.type.length) return this.block(v, `queued at merge: ${other.id}`);
+        if (other.speed < STOPPED) {
+          // Not coming yet. Waiting at its own line with neither of us having priority:
+          // whoever arrived first goes (ties by order).
+          if (relation !== 'mutual' || other.waitingSince === Infinity) continue;
+          // Only drivers taking turns count: not someone held by a red light or a full exit.
+          if (other.reason !== 'Waiting for a gap' && other.reason !== 'Stop sign') continue;
+          // Only drivers waiting at this same junction take turns with us.
+          const theirJunction = this.nextJunction(other);
+          if (!theirJunction || this.graph.lanes[theirJunction.lane].piece !== this.graph.lanes[junction.lane].piece) continue;
+          if (other.waitingSince < v.waitingSince || (other.waitingSince === v.waitingSince && other.id < v.id)) return this.block(v, `arrived first: ${other.id} (lane ${conflict.lane}, ${relation})`);
+          continue;
+        }
+        const theirArrival = toConflict / other.speed;
+        // Someone already in the junction (or committed to it) is crossing: whatever the
+        // priority, don't cut across them if they'll still be in the way.
+        const alreadyIn = other.committedJunction !== null || this.graph.lanes[other.route[other.routeIndex]].piece === this.graph.lanes[conflict.lane].piece;
+        if (alreadyIn && theirArrival < myClear + 0.5) return this.block(v, `already in: ${other.id}`);
+        if (relation === 'yield' && theirArrival < myClear + this.acceptedGapOf(v)) return this.block(v, `giving way to ${other.id} (lane ${conflict.lane})`);
+        // Neither has priority: whoever gets there first goes; the other waits for a safe gap.
+        if (relation === 'mutual' && (theirArrival < myArrival || (theirArrival === myArrival && other.id < v.id)) && theirArrival < myClear + this.acceptedGapOf(v)) return this.block(v, `they get there first: ${other.id} (lane ${conflict.lane})`);
+      }
+    }
+    return true;
+  }
+
+  private block(v: VehicleState, why: string): false {
+    v.blockedBy = why;
+    return false;
+  }
+
+  /**
+   * Distance from a vehicle's front to a point `at` metres along `lane`, following its
+   * route (negative once the front has passed it); null if the lane isn't on its route
+   * from its rear bumper onwards.
+   */
+  private distanceToPoint(v: VehicleState, lane: number, at: number): number | null {
+    const index = v.route.indexOf(lane);
+    if (index < 0) return null;
+    const pointProgress = this.lengthOf(v.route, 0, index) + at;
+    const frontProgress = this.lengthOf(v.route, 0, v.routeIndex) + v.position;
+    if (pointProgress < frontProgress - v.type.length - 1) return null; // already behind it
+    return pointProgress - frontProgress;
+  }
+
+  /** Whether the lane after the junction has no room for this vehicle behind slow traffic. */
+  private exitFull(v: VehicleState, index: number): boolean {
+    const span = this.junctionSpan(v.route, index);
+    const exitIndex = span[span.length - 1] + 1;
+    if (exitIndex >= v.route.length) return false;
+    const ahead = this.leaderAhead(v.route, exitIndex, 0, v);
+    return ahead !== null && ahead.speed < 3 && ahead.gap < v.type.length + v.driver.minGap;
   }
 
   /** How frustrated a driver is right now, from 0 (calm) towards 1, given how long they've been held up. */
@@ -576,128 +820,83 @@ export class TrafficSimulation {
   }
 
   /**
-   * Courtesy: a driver approaching a junction where someone is waiting to pull out across
-   * or into their path may decide (once per waiting driver) to slow right down and let them out.
+   * Courtesy: a driver approaching (not yet in) a junction where someone is waiting to
+   * pull out across or into their path may decide, once per waiting driver, to ease off
+   * at a comfortable rate and let them out.
    */
   private letWaitingDriversOut(all: VehicleState[]) {
-    const waiting = all.filter((w) => w.reason === 'Waiting for a gap' && w.speed < HELD_UP);
+    const waiting = all
+      .filter((w) => w.reason === 'Waiting for a gap' && w.speed < HELD_UP)
+      .map((w) => ({ w, junction: this.nextJunction(w) }))
+      .filter((x): x is { w: VehicleState; junction: NonNullable<ReturnType<TrafficSimulation['nextJunction']>> } => x.junction !== null);
     if (!waiting.length) return;
     for (const v of all) {
-      if (v.driver.courtesy <= 0) continue;
-      for (const w of waiting) {
+      // Too late once committed (too close to stop comfortably) or already in a junction.
+      if (v.driver.courtesy <= 0 || v.committedJunction !== null || this.conflicts.get(v.route[v.routeIndex])!.length) continue;
+      for (const { w, junction } of waiting) {
         if (w === v) continue;
-        const junction = this.nextJunction(w);
-        if (!junction) continue;
-        const crossesMyPath = this.junctionSpan(w.route, junction.index).some((i) =>
-          this.conflicts.get(w.route[i])!.some((c) => {
+        let distance = Infinity;
+        for (const i of this.junctionSpan(w.route, junction.index))
+          for (const c of this.conflicts.get(w.route[i])!) {
             const d = this.distanceToPoint(v, c.lane, c.otherAt * METRES_PER_TILE);
-            return d !== null && d > 0 && d < COURTESY_RANGE;
-          }),
-        );
-        if (!crossesMyPath) continue;
+            if (d !== null && d > 0 && d < COURTESY_RANGE) distance = Math.min(distance, d);
+          }
+        if (distance === Infinity) continue;
         const key = `courtesy:${w.id}`;
         if (!v.decisions.has(key)) v.decisions.set(key, v.random.next() < v.driver.courtesy);
-        if (v.decisions.get(key)) v.speedCap = Math.min(v.speedCap, COURTESY_SPEED);
+        if (!v.decisions.get(key)) continue;
+        // Slow to walking pace by the conflict point, never harder than comfortable braking.
+        const needed = (v.speed * v.speed - COURTESY_SPEED * COURTESY_SPEED) / (2 * Math.max(distance - 5, 1));
+        v.courtesyBraking = Math.max(v.courtesyBraking, Math.min(Math.max(needed, 0), v.driver.comfortBraking));
       }
     }
   }
 
-  /** Whether this driver must give way to traffic on `other` when entering through `mine`. */
-  private mustYield(mine: number, entryLane: number, other: number): boolean {
+  /**
+   * Priority between this driver's movement through `mine` (entering through
+   * `entryLane`) and traffic on `other`: `yield` (I give way), `go` (they give way), or
+   * `mutual` (neither has priority: whoever reaches the conflict first goes).
+   */
+  private priority(mine: number, entryLane: number, other: number): 'yield' | 'go' | 'mutual' {
     const myControl = this.controlOnLane.get(entryLane);
     const otherEntry = this.entryLaneOf(other);
     const otherControl = otherEntry === null ? undefined : this.controlOnLane.get(otherEntry);
     const minor = (c?: ApproachControl) => c?.type === 'stop' || c?.type === 'yield';
-    // Minor approaches give way to everyone; between two minor approaches, first come first served (see safeToEnter).
-    if (minor(myControl)) return true;
-    if (minor(otherControl)) return false;
-    if (myControl?.type === 'signal' && otherControl?.type === 'signal') {
-      // Permissive turns on green: turning across oncoming traffic gives way to it.
-      return (this.turns[mine] === 'left' || this.turns[mine] === 'u-turn') && (this.turns[other] === 'straight' || this.turns[other] === 'right');
-    }
-    if (myControl?.type === 'signal' || otherControl?.type === 'signal') return false;
-    // Uncontrolled: give way to traffic from the right; a left turn gives way to oncoming traffic.
+    if (minor(myControl) && minor(otherControl)) return 'mutual';
+    if (minor(myControl)) return 'yield';
+    if (minor(otherControl)) return 'go';
+    const turnsAcross = (lane: number) => this.turns[lane] === 'left' || this.turns[lane] === 'u-turn';
+    const goesWith = (lane: number) => this.turns[lane] === 'straight' || this.turns[lane] === 'right';
+    // Turning across oncoming traffic gives way to it (permissive turns on green, and at uncontrolled junctions).
+    const oncomingRule = (): 'yield' | 'go' | 'mutual' => {
+      if (turnsAcross(mine) && goesWith(other)) return 'yield';
+      if (goesWith(mine) && turnsAcross(other)) return 'go';
+      return 'mutual';
+    };
+    if (myControl?.type === 'signal' || otherControl?.type === 'signal') return oncomingRule();
+    // Uncontrolled: give way to traffic from the right.
     const [h1, h2] = [this.entryHeading(mine), this.entryHeading(other)];
     const cross = h1[0] * h2[1] - h1[1] * h2[0];
-    if (cross < -0.5) return true;
-    if (cross > 0.5) return false;
-    return this.turns[mine] === 'left' || this.turns[mine] === 'u-turn';
+    if (cross < -0.5) return 'yield';
+    if (cross > 0.5) return 'go';
+    return oncomingRule();
   }
 
-  /** The lane through which traffic on `lane` entered its piece (itself if it starts at an approach). */
+  /**
+   * The approach lane for traffic on `lane`: the lane itself if it starts at the edge of
+   * its piece (entering from another piece, or from the board edge); null for lanes that
+   * continue inside a piece, such as a roundabout ring, which carry circulating traffic.
+   */
   private entryLaneOf(lane: number): number | null {
-    let current = lane;
-    for (let guard = 0; guard < 8; guard++) {
-      const previous = this.graph.lanes[current].previous.find((p) => this.graph.lanes[p].piece === this.graph.lanes[lane].piece);
-      if (previous === undefined) return current;
-      current = previous;
-    }
-    return null;
+    const piece = this.graph.lanes[lane].piece;
+    const previous = this.graph.lanes[lane].previous;
+    return previous.length === 0 || previous.some((p) => this.graph.lanes[p].piece !== piece) ? lane : null;
   }
 
   private entryHeading(lane: number): [number, number] {
     const [a, b] = this.graph.lanes[lane].points;
     const length = Math.hypot(b[0] - a[0], b[2] - a[2]) || 1;
     return [(b[0] - a[0]) / length, (b[2] - a[2]) / length];
-  }
-
-  /**
-   * Whether every conflicting vehicle this driver must give way to is far enough away:
-   * its time to the conflict point must exceed the time this driver needs to clear it
-   * plus the gap this driver accepts.
-   */
-  private safeToEnter(v: VehicleState, junction: { index: number; lane: number; distance: number }): boolean {
-    const span = this.junctionSpan(v.route, junction.index);
-    let offset = junction.distance;
-    const effort = v.type.maxAcceleration * v.driver.acceleration;
-    for (const i of span) {
-      const mine = v.route[i];
-      for (const conflict of this.conflicts.get(mine)!) {
-        if (!this.mustYield(mine, junction.lane, conflict.lane)) continue;
-        const clearDistance = offset + conflict.at * METRES_PER_TILE + v.type.length;
-        const myTime = timeToCover(clearDistance, v.speed, effort);
-        for (const other of this.vehicles.values()) {
-          if (other === v) continue;
-          const toConflict = this.distanceToPoint(other, conflict.lane, conflict.otherAt * METRES_PER_TILE);
-          if (toConflict === null) continue;
-          if (toConflict < 0) {
-            if (toConflict + other.type.length > 0) return false; // in the conflict area now
-            continue;
-          }
-          if (toConflict > LOOKAHEAD) continue;
-          // A vehicle stopped at its own line further back isn't coming yet, unless it got
-          // there first at a stop sign (first come, first served).
-          if (other.speed < STOPPED && toConflict > 3) {
-            const arrivedFirst = other.stoppedAt !== null && other.stoppedSince < v.stoppedSince && other.committedJunction === null;
-            if (!arrivedFirst || other.stoppedAt !== this.entryLaneOf(conflict.lane)) continue;
-            return false;
-          }
-          if (toConflict / Math.max(other.speed, 0.5) < myTime + this.acceptedGapOf(v)) return false;
-        }
-      }
-      offset += this.laneLength[mine];
-    }
-    return true;
-  }
-
-  /** Distance from a vehicle's front to a point `at` metres along `lane`, if `lane` is ahead on its route. */
-  private distanceToPoint(v: VehicleState, lane: number, at: number): number | null {
-    let distance = -v.position;
-    for (let i = v.routeIndex; i < v.route.length; i++) {
-      if (v.route[i] === lane) return distance + at;
-      distance += this.laneLength[v.route[i]];
-      if (distance > LOOKAHEAD) return null;
-    }
-    return null;
-  }
-
-  /** Whether the lane after the junction has no room for this vehicle behind slow traffic. */
-  private exitFull(v: VehicleState, index: number): boolean {
-    const span = this.junctionSpan(v.route, index);
-    const exitIndex = span[span.length - 1] + 1;
-    if (exitIndex >= v.route.length) return false;
-    const ahead = this.leaderAhead(v.route, exitIndex, 0, v);
-    return ahead !== null && ahead.speed < 3 && ahead.gap < v.type.length + v.driver.minGap;
   }
 
   /**
@@ -776,6 +975,18 @@ const OBSTACLE_REASONS: Record<Exclude<Obstacle['kind'], 'car'>, Reason> = {
   gap: 'Waiting for a gap',
   exit: 'Exit lane full',
 };
+
+/** Tightest turning radius along a polyline (from each three consecutive points), tiles; Infinity if straight. */
+function tightestRadius(points: [number, number, number][]): number {
+  let tightest = Infinity;
+  for (let i = 2; i < points.length; i++) {
+    const [a, b, c] = [points[i - 2], points[i - 1], points[i]];
+    const [ab, bc, ca] = [Math.hypot(b[0] - a[0], b[2] - a[2]), Math.hypot(c[0] - b[0], c[2] - b[2]), Math.hypot(a[0] - c[0], a[2] - c[2])];
+    const area2 = Math.abs((b[0] - a[0]) * (c[2] - a[2]) - (b[2] - a[2]) * (c[0] - a[0]));
+    if (area2 > 1e-9) tightest = Math.min(tightest, (ab * bc * ca) / (2 * area2));
+  }
+  return tightest;
+}
 
 /** Time to cover `distance` metres starting at `speed` and accelerating at `acceleration`. */
 function timeToCover(distance: number, speed: number, acceleration: number) {

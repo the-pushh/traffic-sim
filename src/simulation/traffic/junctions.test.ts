@@ -137,12 +137,13 @@ describe('junctions: roundabout', () => {
     const entering = s.addVehicle({ type: 'sedan', profile: 'steady', from: N, to: E, position: 60.5, speed: 0 });
     let waited = false;
     let circulatingSlowest = Infinity;
-    run(s, 14, () => {
+    // 30 s: the entering car goes three-quarters of the way round at the ring's curve speed.
+    run(s, 30, () => {
       if (s.has(entering) && s.vehicle(entering).reason === 'Waiting for a gap') waited = true;
       if (s.has(circulating) && s.vehicle(circulating).routeIndex > 7) circulatingSlowest = Math.min(circulatingSlowest, s.vehicle(circulating).speed);
     });
     expect(waited).toBe(true);
-    expect(circulatingSlowest).toBeGreaterThan(4); // slows for the curve, never stops for the entering car
+    expect(circulatingSlowest).toBeGreaterThan(2); // slows to the ring's curve speed (~4 m/s), never stops for the entering car
     expect(s.has(entering)).toBe(false); // it got in afterwards and left
   });
 });

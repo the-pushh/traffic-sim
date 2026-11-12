@@ -35,11 +35,11 @@
     "roadModels": "public/models/roads"
   },
   "coordinates": {
-    "unit": "World unit = 1/4 road tile (one City Kit Roads tile scaled \u00d74 = 4 units). Real-world metres not yet assigned.",
+    "unit": "World unit = 1/4 road tile (one City Kit Roads tile scaled ×4 = 4 units). Real-world metres not yet assigned.",
     "upAxis": "+Y (source GLBs and app)",
-    "forwardAxis": "+Z for vehicles (Car Kit front wheels at +Z). City Kit road-straight runs along X in source; rotated 90\u00b0 about Y to run along Z.",
+    "forwardAxis": "+Z for vehicles (Car Kit front wheels at +Z). City Kit road-straight runs along X in source; rotated 90° about Y to run along Z.",
     "handedness": "right-handed (glTF / Three.js)",
-    "originPolicy": "Car Kit: origin at ground centre of vehicle. City Kit Roads: origin at tile centre, surface at y=0.02 (source units). App keeps source origins and places by transform. Scene ground: a 64 \u00d7 64 unit square board (16 \u00d7 16 road tiles), rounded corners (r = 4), 0.4 thick + 0.2 bevel above and below (0.8 visible edge), centred on the origin with its top face at y = 0; roads and vehicles sit on that top face.",
+    "originPolicy": "Car Kit: origin at ground centre of vehicle. City Kit Roads: origin at tile centre, surface at y=0.02 (source units). App keeps source origins and places by transform. Scene ground: a 64 × 64 unit square board (16 × 16 road tiles), rounded corners (r = 4), 0.4 thick + 0.2 bevel above and below (0.8 visible edge), centred on the origin with its top face at y = 0; roads and vehicles sit on that top face.",
     "conversionPolicy": "Inspect source units and axes, confirm the application's conventions, and record conversions before applying them.",
     "simulationUnits": "Traffic simulation in metres and seconds; 1 tile = 8.75 m (lane 0.4 tile = 3.5 m)"
   },
@@ -92,7 +92,7 @@
         "served": "public/models/vehicles/*.glb sharing Textures/colormap.png",
         "totalBytes": "about 3.5 MB",
         "conversion": "none (copied)",
-        "scale": "type length in metres / 8.75 m per tile \u00d7 4 units per tile; width capped at 75% of a lane"
+        "scale": "type length in metres / 8.75 m per tile × 4 units per tile; width capped at 75% of a lane"
       }
     },
     "license": "CC0 1.0 (all three Kenney packs)"
@@ -209,10 +209,10 @@
       },
       {
         "date": "2026-11-11",
-        "check": "45\u00b0 starting camera and square ground board",
+        "check": "45° starting camera and square ground board",
         "command": "npm test; npm run verify:browser and npm run verify:browser:headed (dev); node scripts/verify-browser.mjs http://localhost:4173/ (production)",
         "browser": "Google Chrome 157.0.8103.50 on macOS, headless and headed (visible window), 1440x900; WebGL via ANGLE Metal on Apple M1 Pro",
-        "result": "pass: all camera checks; no console errors; 5/5 assets 200. Initial view at 45\u00b0 shows the whole rounded square board filling the view; board top at y=0 (geometry bounds y -1.6..0); roads and sedan sit on top with no clipping in zoomed angled view.",
+        "result": "pass: all camera checks; no console errors; 5/5 assets 200. Initial view at 45° shows the whole rounded square board filling the view; board top at y=0 (geometry bounds y -1.6..0); roads and sedan sit on top with no clipping in zoomed angled view.",
         "previews": "artifacts/3d/previews/ (git-ignored)"
       },
       {
@@ -252,7 +252,19 @@
         "check": "T3 driving core (#5)",
         "command": "npm test; npm run verify:browser and npm run verify:browser:headed (dev)",
         "browser": "Google Chrome 157.0.8103.50 on macOS, headless and headed (visible window), 1440x900; WebGL via ANGLE Metal on Apple M1 Pro",
-        "result": "pass: traffic enters both ends, queues at the red light, hover tag reads 'Type \u00b7 Profile \u00b7 Reason' (e.g. 'SUV \u00b7 Steady \u00b7 Red light'); close-ups at Congested inspected (queues at the stop lines, lamps at aspect positions, vehicles within lanes); all earlier checks pass; no console errors.",
+        "result": "pass: traffic enters both ends, queues at the red light, hover tag reads 'Type · Profile · Reason' (e.g. 'SUV · Steady · Red light'); close-ups at Congested inspected (queues at the stop lines, lamps at aspect positions, vehicles within lanes); all earlier checks pass; no console errors.",
+        "previews": "artifacts/3d/previews/ (git-ignored)"
+      },
+      {
+        "date": "2026-11-12",
+        "check": "T5 junction behaviour (#7)",
+        "command": "npm test (172/172), npm run build, npm run dev then npm run verify:browser and npm run verify:browser:headed",
+        "browser": "Google Chrome 157 on macOS, headless and headed, 1440x900",
+        "assets": [
+          "public/models/roads/*.glb (test network: signalised crossroads, roundabout, T-junction, overpass ramps)",
+          "public/models/vehicles/*.glb"
+        ],
+        "result": "pass: all run, traffic and hover checks true; no console errors; vehicles on every arm, queue at red, hover tag shows type · profile · reason. Paused traffic screenshot inspected (roundabout, crossroads, signals).",
         "previews": "artifacts/3d/previews/ (git-ignored)"
       }
     ]

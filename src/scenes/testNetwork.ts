@@ -48,6 +48,6 @@ export const testNetwork: SceneDefinition = {
     { type: 'signal', piece: 3, port: 's', timing: NORTH_SOUTH },
     { type: 'signal', piece: 3, port: 'w', timing: EAST_WEST },
   ],
-  // Eight entries share one central corridor: half weight each keeps it busy without saturating it.
-  demand: { gateways: { A: 0.5, B: 0.5, C: 0.5, D: 0.5, E: 0.5, F: 0.5, G: 0.5, H: 0.5 } },
+  // Eight entries share one single-lane central corridor: a quarter weight each keeps it busy without overloading it.
+  demand: { gateways: { A: 0.25, B: 0.25, C: 0.25, D: 0.25, E: 0.25, F: 0.25, G: 0.25, H: 0.25 } },
 };
