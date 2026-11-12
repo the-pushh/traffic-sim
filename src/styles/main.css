@@ -15,6 +15,8 @@
   --color-text: var(--ink);
   --color-text-muted: color-mix(in srgb, var(--ink) 62%, var(--cream));
   --color-accent: var(--blue);
+  /* A deeper accent for filled badges with small white text (4.5:1). */
+  --color-accent-strong: color-mix(in srgb, var(--blue) 80%, black);
   --color-accent-2: var(--pink);
   --color-on-accent: #ffffff;
   --color-error: #c4285e;
@@ -51,6 +53,7 @@
     --color-text: var(--cream);
     --color-text-muted: color-mix(in srgb, var(--cream) 62%, var(--ink));
     --color-accent: #6b95ff;
+    --color-accent-strong: var(--color-accent);
     --color-on-accent: var(--ink);
     --color-error: #ff9dc4;
     --color-border: rgb(247 243 227 / 0.14);
@@ -70,6 +73,7 @@
   --color-text: var(--cream);
   --color-text-muted: color-mix(in srgb, var(--cream) 62%, var(--ink));
   --color-accent: #6b95ff;
+  --color-accent-strong: var(--color-accent);
   --color-on-accent: var(--ink);
   --color-error: #ff9dc4;
   --color-border: rgb(247 243 227 / 0.14);
@@ -563,6 +567,93 @@ button.primary {
   padding-top: var(--space-2);
   color: var(--color-text);
   font-weight: bold;
+}
+
+/* Four big numbers first; the full table is behind Show details. */
+.results-headlines {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-2);
+  margin: 0 0 var(--space-2);
+}
+
+.results-headlines .headline {
+  min-width: 0;
+}
+
+.results-headlines dt {
+  font-size: var(--font-meta);
+  color: var(--color-text-muted);
+}
+
+.results-headlines dd {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 var(--space-1);
+  font-variant-numeric: tabular-nums;
+}
+
+.results-headlines .headline-value {
+  font-size: var(--font-title);
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.results-headlines .headline-detail {
+  flex-basis: 100%;
+  font-size: var(--font-meta);
+  color: var(--color-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.results-caption {
+  margin: calc(-1 * var(--space-1)) 0 var(--space-2);
+  font-size: var(--font-meta);
+  color: var(--color-text-muted);
+}
+
+/* Better: a filled badge. Worse: an outlined one. Same: plain. Colour backs up the shape. */
+.results-headlines .change {
+  padding: 0 6px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-pill);
+  font-size: var(--font-meta);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.results-headlines .change.better {
+  color: var(--color-on-accent);
+  background: var(--color-accent-strong);
+}
+
+.results-headlines .change.worse {
+  color: var(--color-error);
+  border-color: currentColor;
+}
+
+.results-headlines .change.same {
+  padding: 0;
+  font-weight: normal;
+  color: var(--color-text-muted);
+}
+
+@media (max-width: 560px) {
+  .results-headlines {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.results-details-toggle {
+  font-size: var(--font-meta);
+}
+
+.results-scroll:not([hidden]) {
+  margin-top: var(--space-2);
 }
 
 .results-reopen {

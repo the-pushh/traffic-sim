@@ -1,6 +1,7 @@
 import type { RunState } from '../simulation/runController';
 import type { LabelledResults } from '../simulation/traffic/trafficSession';
 import { INTENSITY_LABELS } from './dock';
+import { comparable, resultsHeadlines, type Headline } from './resultsHeadlines';
 
 const escapeHtml = (text: string) => text.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 
@@ -12,8 +13,25 @@ function travelTime(r: LabelledResults) {
   return r.averageTravelTime === null ? '—' : `${Math.round(r.averageTravelTime)} s <span class="sample">· ${r.travelTimeSamples} ${r.travelTimeSamples === 1 ? 'trip' : 'trips'}</span>`;
 }
 
+const CHANGE_WORDS = { better: 'Better', worse: 'Worse', same: 'Same' } as const;
+
+/** ▲/▼ and the amount; better is a filled badge and worse an outlined one, so colour isn't the only cue. */
+function changeTag(change: Headline['change']) {
+  if (!change) return '';
+  const was = `${CHANGE_WORDS[change.verdict]} than the previous run (${change.was})`.replace('Same than', 'Same as');
+  const shown = change.verdict === 'same' ? '±0' : `${change.amount > 0 ? '▲' : '▼'} ${Math.abs(change.amount)}${change.unit}`;
+  return `<span class="change ${change.verdict}" title="${escapeHtml(was)}"><span aria-hidden="true">${shown}</span><span class="visually-hidden">${escapeHtml(was)}</span></span>`;
+}
+
+/** Which run this is, and what it's compared with (only a run of the same scene, load and duration). */
+function runCaption(latest: LabelledResults, previous: LabelledResults | null) {
+  const versus = !previous ? '' : comparable(latest, previous) ? ' · compared with the previous run' : ` · not compared: the previous run was ${label(previous)}`;
+  return `<p class="results-caption">${escapeHtml(label(latest) + versus)}</p>`;
+}
+
 /**
- * Results of the run that just ended, beside the previous run, above the dock. Shown
+ * Results of the run that just ended: four headline numbers (against the previous run),
+ * with the full table beside the previous run behind Show details. Above the dock; shown
  * when a run ends; hidden when the next one starts or when closed.
  */
 export function createResultsCard(container: HTMLElement, results: () => LabelledResults, state: () => RunState) {
@@ -45,6 +63,8 @@ export function createResultsCard(container: HTMLElement, results: () => Labelle
   let latest: LabelledResults | null = null;
   let previous: LabelledResults | null = null;
   let lastState: RunState = state();
+  // The full table stays open or closed across runs, as the player left it.
+  let detailsOpen = false;
 
   const render = () => {
     if (!latest) return;
@@ -56,7 +76,14 @@ export function createResultsCard(container: HTMLElement, results: () => Labelle
         <h2>Results</h2>
         <button type="button" class="results-close" aria-label="Close results">×</button>
       </header>
-      <div class="results-scroll">
+      ${runCaption(latest, previous)}
+      <dl class="results-headlines">
+        ${resultsHeadlines(latest, previous)
+          .map((h) => `<div class="headline"><dt>${escapeHtml(h.label)}</dt><dd><span class="headline-value">${escapeHtml(h.value)}</span>${changeTag(h.change)}<span class="headline-detail" title="${escapeHtml(h.detail)}">${escapeHtml(h.detail)}</span></dd></div>`)
+          .join('')}
+      </dl>
+      <button type="button" class="results-details-toggle" aria-expanded="${detailsOpen}" aria-controls="results-details">${detailsOpen ? 'Hide details' : 'Show details'}</button>
+      <div class="results-scroll" id="results-details"${detailsOpen ? '' : ' hidden'}>
         <table>
           <thead><tr><td></td>${runs.map((r, i) => `<th scope="col"><span class="run-name">${i === 0 ? 'This run' : 'Previous run'}</span><span class="run-label">${escapeHtml(label(r))}</span></th>`).join('')}</tr></thead>
           <tbody>
@@ -68,6 +95,13 @@ export function createResultsCard(container: HTMLElement, results: () => Labelle
           </tbody>
         </table>
       </div>`;
+    const toggle = card.querySelector<HTMLButtonElement>('.results-details-toggle')!;
+    toggle.addEventListener('click', () => {
+      detailsOpen = !detailsOpen;
+      toggle.setAttribute('aria-expanded', String(detailsOpen));
+      toggle.textContent = detailsOpen ? 'Hide details' : 'Show details';
+      card.querySelector<HTMLElement>('#results-details')!.hidden = !detailsOpen;
+    });
     card.querySelector('.results-close')!.addEventListener('click', () => {
       show(false);
       reopen.focus();

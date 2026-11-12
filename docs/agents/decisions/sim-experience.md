@@ -142,7 +142,7 @@ Owner agreed the spec and the T1–T13 ticket breakdown and authorised implement
   - Average travel time covers finished trips, shown with their count.
   - Approaches are named "Junction n · eastbound", grouped as the simulation drives them (lane-connected junction pieces) and numbered west to east.
   - Play after a run ends measures the continued run afresh.
-- **Results card:** opens above the scene pill when a run ends and shows this run beside the previous one, each labelled scene · intensity · duration.
+- **Results card:** opens above the scene pill when a run ends. Since P3 (#33), it leads with the run's label (scene · intensity · duration) and four headline numbers; this run beside the previous one is the full table behind **Show details**. See the P3 notes below.
   - Every measure shows its sample: travel time with its trip count, blocked trips "of N due", and peak queue "· N approaches".
   - Screen readers hear "Run ended" without focus moving.
   - It hides on the next start. Closing it leaves a "Show results" button that reopens it. Live queue counts float as amber badges over each approach and are hidden at zero.
@@ -283,3 +283,11 @@ Owner agreed the spec and the T1–T13 ticket breakdown and authorised implement
   - picture thumbnails for the parts drawer (parts are text labels).
 - **Not modelled:** lane changes and merging early.
 - **Known flaky check:** the visible-window joystick drag in the browser check fails intermittently. It predates this work.
+
+## Results headlines (P3, #33) — 2026-11-13
+
+- **Layout** (owner's choice of four numbers): trips finished ("of N due"), average travel time ("over N trips"), longest queue (with where), and blocked trips ("of N due"). Above them, the run's label. **Show details** opens the full table and stays open or closed across runs.
+- **Comparing:** each number shows its change only against a previous run of the **same scene, load and duration**, so the change comes from the player's edit. Otherwise the caption says "not compared: the previous run was …", and no arrows show.
+  - Travel time is subtracted before rounding (21.2 → 21.6 s is ±0, not ▲ 1).
+  - The longest queue is compared by size even if it moved. The tooltip says where it was ("5 at Junction 1 · westbound").
+- **Look:** better is a filled accent badge ▲/▼ n, worse an outlined pink badge, and unchanged a plain ±0. Shape and colour both carry the verdict, and screen readers hear "Better than the previous run (…)" instead of the arrows. Contrast: the better badge is white on `--color-accent-strong` (6.0:1 in light mode) and ink on the accent in dark mode (6.6:1); the worse badge text is 5.3:1 (light) and 9.2:1 (dark).
