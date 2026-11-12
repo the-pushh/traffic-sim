@@ -776,3 +776,198 @@ button.primary:hover:not(:disabled),
   min-width: 28px;
   padding: 0;
 }
+
+/* ---- Editor: Parts drawer, inspector, placement label ---- */
+.parts-toggle {
+  align-self: center;
+}
+
+.parts-drawer {
+  width: min(760px, 100%);
+  max-height: 32vh;
+  overflow-y: auto;
+  padding: var(--space-3);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  background: var(--glass-bg-strong);
+  box-shadow: var(--glass-highlight), var(--shadow-floating);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+}
+
+.parts-drawer header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.parts-drawer h2 {
+  margin: 0;
+  font-size: var(--font-body);
+}
+
+.parts-hint {
+  flex: 1;
+  font-size: var(--font-meta);
+  color: var(--color-text-muted);
+}
+
+.parts-groups {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: var(--space-3);
+}
+
+.parts-group h3 {
+  margin: 0 0 var(--space-1);
+  font-size: var(--font-meta);
+  color: var(--color-text-muted);
+  font-weight: 600;
+}
+
+.parts-group .part {
+  display: block;
+  width: 100%;
+  margin-bottom: var(--space-1);
+  text-align: left;
+  cursor: grab;
+  touch-action: none;
+}
+
+.parts-drawer.locked .part {
+  cursor: not-allowed;
+}
+
+body.placing,
+body.placing canvas {
+  cursor: grabbing;
+}
+
+.inspector {
+  position: absolute;
+  top: var(--space-4);
+  left: var(--space-4);
+  width: 240px;
+  padding: var(--space-3);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  background: var(--glass-bg-strong);
+  box-shadow: var(--glass-highlight), var(--shadow-floating);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+}
+
+.inspector header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.inspector h2 {
+  margin: 0;
+  font-size: var(--font-body);
+}
+
+.inspector header button {
+  height: 28px;
+  min-width: 28px;
+  padding: 0;
+}
+
+.inspector-hint,
+.inspector-error {
+  margin: var(--space-1) 0 var(--space-2);
+  font-size: var(--font-meta);
+  color: var(--color-text-muted);
+}
+
+.inspector-error {
+  color: var(--color-error);
+}
+
+.inspector-actions {
+  display: flex;
+  gap: var(--space-2);
+  margin: var(--space-2) 0;
+}
+
+.inspector label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin: var(--space-1) 0;
+  font-size: var(--font-meta);
+}
+
+.inspector input[type='number'] {
+  width: 64px;
+}
+
+.placement-reason {
+  position: absolute;
+  pointer-events: none;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius);
+  border: 2px solid currentColor;
+  background: var(--glass-bg-strong);
+  font-size: var(--font-meta);
+  font-weight: 600;
+}
+
+.placement-reason.valid {
+  color: var(--color-accent);
+}
+
+.placement-reason.invalid {
+  color: var(--color-error);
+  border-style: dashed;
+}
+
+/* Compact drawer: every group visible at once in a strip above the dock. */
+.parts-drawer {
+  width: min(1040px, 100%);
+  max-height: 26vh;
+  padding: var(--space-2) var(--space-3);
+}
+
+.parts-groups {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+.parts-group .part {
+  height: 28px;
+  padding: 0 var(--space-2);
+  font-size: var(--font-meta);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@media (max-width: 900px) {
+  .parts-groups {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.duration .segment {
+  white-space: nowrap;
+}
+
+.inspector .timing label {
+  display: grid;
+  grid-template-columns: 1fr 64px auto;
+  align-items: center;
+}
+
+.inspector .timing input {
+  width: 100%;
+}
+
+.inspector > button.primary {
+  width: 100%;
+  margin-top: var(--space-1);
+}

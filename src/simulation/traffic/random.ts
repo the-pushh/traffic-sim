@@ -16,6 +16,13 @@ export class Random {
     this.state = seed >>> 0;
   }
 
+  /** A generator that carries on from exactly where this one is, independently of it. */
+  copy(): Random {
+    const copy = new Random(0);
+    copy.state = this.state;
+    return copy;
+  }
+
   /** Uniform in [0, 1). */
   next(): number {
     this.state = (this.state + 0x6d2b79f5) >>> 0;
