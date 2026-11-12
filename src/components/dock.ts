@@ -27,7 +27,7 @@ export function formatClock(seconds: number) {
 
 /**
  * The floating simulation dock: Play/Pause, Restart, clock and progress with the run
- * length beside them, then intensity; the editor adds its Parts button at the end. Call `sync()` each frame; it only touches the DOM on changes.
+ * length beside them, then intensity. Other modules add sections with `addSection`. Call `sync()` each frame; it only touches the DOM on changes.
  */
 export function createDock(container: HTMLElement, run: RunController, callbacks: DockCallbacks = {}) {
   const dock = document.createElement('div');
@@ -43,20 +43,19 @@ export function createDock(container: HTMLElement, run: RunController, callbacks
         <div class="progress" role="progressbar" aria-label="Run progress" aria-valuemin="0"><div class="progress-fill"></div></div>
       </div>
       <div class="duration" role="group" aria-label="Run length">
-        <span class="dock-icon" title="Run length">${icon('clock')}</span>
+        <span class="dock-icon">${icon('clock')}</span>
         ${RUN_DURATIONS.map((d) => `<button type="button" class="segment" data-duration="${d}">${d} s</button>`).join('')}
       </div>
     </div>
     <div class="dock-divider" aria-hidden="true"></div>
     <div class="dock-section dock-traffic">
-      <span class="dock-icon" title="Traffic intensity">${icon('gauge')}</span>
+      <span class="dock-icon">${icon('gauge')}</span>
       <label class="intensity">
         <span class="dock-label">Intensity <strong class="intensity-name"></strong><span class="lock-hint" id="dock-lock-hint" hidden> · locked during the run</span></span>
         <input type="range" min="0" max="${INTENSITIES.length - 1}" step="1" list="intensity-ticks" />
         <datalist id="intensity-ticks">${INTENSITIES.map((_, i) => `<option value="${i}"></option>`).join('')}</datalist>
       </label>
     </div>
-    <div class="dock-divider" aria-hidden="true"></div>
   `;
   container.append(dock);
 
@@ -139,5 +138,15 @@ export function createDock(container: HTMLElement, run: RunController, callbacks
   }
 
   sync();
-  return { sync, element: dock };
+  return {
+    sync,
+    element: dock,
+    /** Add a section at the end, after a divider (the editor's Parts button). */
+    addSection(section: HTMLElement) {
+      const divider = document.createElement('div');
+      divider.className = 'dock-divider';
+      divider.setAttribute('aria-hidden', 'true');
+      dock.append(divider, section);
+    },
+  };
 }

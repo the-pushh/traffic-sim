@@ -322,7 +322,7 @@ button.primary {
   padding: 0;
 }
 
-.icon-button svg {
+.icon-button .icon {
   width: 20px;
   height: 20px;
 }
@@ -839,10 +839,6 @@ button.primary:hover:not(:disabled),
   border-color: color-mix(in srgb, var(--color-accent-2) 55%, var(--glass-border));
 }
 
-.theme-toggle {
-  font-size: 16px;
-}
-
 /* No blur support: fall back to solid panels so text stays readable. */
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   .camera-controls,
@@ -931,7 +927,6 @@ button.primary:hover:not(:disabled),
 .parts-toggle {
   align-self: center;
 }
-
 
 .parts-drawer {
   width: min(760px, 100%);

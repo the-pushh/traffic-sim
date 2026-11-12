@@ -51,3 +51,5 @@ On the dev server, `?timeScale=15` speeds up simulation time (used by the browse
 ## Assets
 
 3D models and textures are from Kenney's Car Kit, City Kit Roads, and Road Textures (CC0, www.kenney.nl). See `assets/3d/ASSETS.md` for the inventory and how the original archives are extracted.
+
+Interface icons are from [Phosphor Icons](https://phosphoricons.com) (`@phosphor-icons/core`, MIT licence).

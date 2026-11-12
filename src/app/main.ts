@@ -339,6 +339,6 @@ const editor = createEditor({
   apply: (scene, fromHistory) => applyEdit(scene, fromHistory).then(() => undefined),
   canEdit: () => run.state !== 'running',
 });
-dock.element.append(editor.toggle);
+dock.addSection(editor.toggle);
 
 start();
