@@ -1107,6 +1107,14 @@ body.placing canvas {
   color: var(--color-accent);
 }
 
+/* The first placement's tip, under the ✓/✕ line. */
+.placement-tip {
+  display: block;
+  margin-top: 2px;
+  font-weight: normal;
+  color: var(--color-text-muted);
+}
+
 .placement-reason.invalid {
   color: var(--color-error);
   border-style: dashed;

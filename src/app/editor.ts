@@ -6,6 +6,7 @@ import { DEFAULT_SIGNAL_TIMING } from '../simulation/traffic/signals';
 import { EditHistory, moveControl, movePiece, removeControl, removePiece, replaceControl, replacePiece, rotatePiece, setSignalTiming } from '../editor/edits';
 import { PARTS, partById, type PartGroup, type PartId } from '../editor/parts';
 import { placePart, type PlacementResult } from '../editor/placement';
+import { placementKeyAction, type PlacingMode } from '../editor/placementKeys';
 import { CONTROL_MODELS } from '../three/scene/controlModels';
 import { signPose } from '../three/scene/createSceneView';
 import { icon } from '../components/icons';
@@ -47,6 +48,43 @@ const GROUPS: PartGroup[] = ['Roads', 'Curves', 'Junctions', 'Ends', 'Flyovers',
 const DRAG_THRESHOLD = 6;
 const CONTROL_TYPES: ControlPlacement['type'][] = ['signal', 'stop', 'yield'];
 
+/** Remembers in this browser that the Space-to-turn tip has been shown. */
+const SPACE_TIP_KEY = 'traffic-sim:space-turns-tip-seen';
+
+/**
+ * A tip shown during the first placement only: `start` when a placement begins (it shows if
+ * never seen), `finish` when it ends (then it's remembered as seen).
+ */
+function createOnceTip(key: string) {
+  const seen = () => {
+    try {
+      return localStorage.getItem(key) === '1';
+    } catch {
+      return false;
+    }
+  };
+  const tip = {
+    /** This placement may show the tip; `shown` once it actually has. */
+    showing: false,
+    shown: false,
+    start() {
+      tip.showing = !seen();
+      tip.shown = false;
+    },
+    finish() {
+      const wasShown = tip.shown;
+      tip.showing = tip.shown = false;
+      if (!wasShown) return;
+      try {
+        localStorage.setItem(key, '1');
+      } catch {
+        // Blocked storage: the tip shows again next visit, which is harmless.
+      }
+    },
+  };
+  return tip;
+}
+
 /** The model file a part is shown with. */
 const partModel = (part: PartId) => (partById(part).kind === 'control' ? CONTROL_MODELS[part as ControlPlacement['type']] : PIECES[part].model);
 
@@ -78,8 +116,8 @@ export function createEditor(host: EditorHost) {
   drawer.innerHTML = `
     <header>
       <h2>Parts</h2>
-      <span class="parts-hint" id="parts-hint">Drag a part onto the map, or press Enter on one and use the arrow keys · <kbd>R</kbd> rotates · <kbd>Esc</kbd> cancels</span>
-      <button type="button" data-action="rotate" title="Rotate the part (R)">Rotate ⟲</button>
+      <span class="parts-hint" id="parts-hint">Drag a part onto the map, or press Enter on one and use the arrow keys · <kbd>Space</kbd> or <kbd>R</kbd> turns it · <kbd>Esc</kbd> cancels</span>
+      <button type="button" data-action="rotate" title="Turn the part (Space while placing, or R)">Rotate ⟲</button>
       <button type="button" data-action="undo" title="Undo (Ctrl/⌘ Z)">Undo</button>
       <button type="button" data-action="redo" title="Redo (Ctrl/⌘ ⇧ Z)">Redo</button>
     </header>
@@ -157,6 +195,7 @@ export function createEditor(host: EditorHost) {
   reasonLabel.setAttribute('role', 'status');
   reasonLabel.hidden = true;
   host.viewport.append(reasonLabel);
+  const spaceTip = createOnceTip(SPACE_TIP_KEY);
 
   // ---- 3D helpers: the ghost, the snap highlight and the selection outline ----
   const raycaster = new Raycaster();
@@ -260,6 +299,13 @@ export function createEditor(host: EditorHost) {
     reasonLabel.hidden = false;
     reasonLabel.className = `placement-reason ${valid ? 'valid' : 'invalid'}`;
     reasonLabel.textContent = text;
+    if (spaceTip.showing && drag && partById(drag.part).kind === 'piece') {
+      spaceTip.shown = true;
+      const tip = document.createElement('span');
+      tip.className = 'placement-tip';
+      tip.innerHTML = 'Press <kbd>Space</kbd> to turn it';
+      reasonLabel.append(tip);
+    }
     const rect = host.viewport.getBoundingClientRect();
     const at = drag?.screen ?? (drag?.pointer ? screenOf(drag.pointer) : null);
     if (at) {
@@ -279,6 +325,7 @@ export function createEditor(host: EditorHost) {
     cancelDrag();
     const mine: NonNullable<typeof drag> = { part, moving, pointer: start.pointer, overMap: start.overMap, screen: start.screen, latest: null, ghost: null };
     drag = mine;
+    spaceTip.start();
     const ghost = await makeGhost(part);
     if (drag !== mine) {
       // A newer drag (or a cancel) came along while this one loaded.
@@ -301,6 +348,7 @@ export function createEditor(host: EditorHost) {
     reasonLabel.hidden = true;
     ghostRoot.parent?.remove(ghostRoot);
     document.body.classList.remove('placing');
+    if (drag) spaceTip.finish();
     drag = null;
   }
 
@@ -324,12 +372,11 @@ export function createEditor(host: EditorHost) {
     (event.target as Element).releasePointerCapture?.(event.pointerId);
     void beginDrag(part, null, { pointer: null, screen: { x: event.clientX, y: event.clientY }, overMap: false });
   });
-  // Keyboard: Enter or Space on a part aims it at the middle of the map; arrows move it a tile; Enter drops.
+  // Keyboard: Enter or Space on a part aims it at the middle of the map; arrows move it a tile, Space or R turns it, Enter drops.
   drawer.addEventListener('keydown', (event) => {
     const part = (event.target as HTMLElement).closest<HTMLElement>('[data-part]')?.dataset.part as PartId | undefined;
-    if (!part || (event.key !== 'Enter' && event.key !== ' ')) return;
+    if (!part || drag || (event.key !== 'Enter' && event.key !== ' ')) return;
     event.preventDefault();
-    if (drag) return void drop();
     void beginDrag(part, null, { pointer: [BOARD_TILES / 2, BOARD_TILES / 2], screen: null, overMap: true });
   });
   drawer.addEventListener('click', (event) => {
@@ -354,10 +401,28 @@ export function createEditor(host: EditorHost) {
   window.addEventListener('pointerup', () => {
     if (drag?.screen) void drop();
   });
+  // Placement keys go first (capture phase): while a part is being placed, Space turns it
+  // instead of panning the map, and Enter drops it rather than pressing a focused button.
+  window.addEventListener(
+    'keydown',
+    (event) => {
+      if ((event.target as HTMLElement)?.closest?.('input, textarea, select, [contenteditable]')) return;
+      const mode: PlacingMode = !drag ? 'idle' : drag.screen ? 'dragging' : 'keyboard';
+      const action = placementKeyAction(event, mode);
+      // With nothing being placed, R just sets the turn for the next part; the key carries on as usual.
+      if (mode === 'idle') return void (action === 'rotate' && rotate());
+      // A held Space while placing does nothing, but mustn't start a pan either.
+      if (!action && event.key !== ' ') return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      if (action === 'rotate') rotate();
+      if (action === 'drop') void drop();
+      if (action === 'cancel') cancelDrag();
+    },
+    { capture: true },
+  );
   window.addEventListener('keydown', (event) => {
     if ((event.target as HTMLElement)?.closest?.('input, textarea, select')) return;
-    if (event.key === 'Escape' && drag) return cancelDrag();
-    if ((event.key === 'r' || event.key === 'R') && !event.metaKey && !event.ctrlKey) return rotate();
     if (drag?.pointer && !drag.screen) {
       const steps: Record<string, [number, number]> = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
       const step = steps[event.key];
