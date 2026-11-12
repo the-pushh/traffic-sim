@@ -17,6 +17,10 @@ const WEST_SHORTCUT = 'F';
 const EAST_SHORTCUT = 'D';
 const PEAK_WINDOW: [number, number] = [10, 70];
 const withoutPeak = { ...schoolRun, demand: { ...schoolRun.demand, peaks: [] } };
+const SCHOOL = 'P1';
+const schoolExits = new Set(graph.accessPoints.find((a) => a.label === SCHOOL)!.entryLanes);
+/** The link at the west end, up from the shortcut to the main road: taking it means going by the main road. */
+const onWestLink = (lane: number) => at(lane)[0] === 1.5 && at(lane)[1] > 5 && at(lane)[1] < SHORTCUT_ROW;
 
 describe('School Run preset', () => {
   it('is a valid scene that fits the board, with two routes, a school driveway and an open connection', () => {
@@ -58,8 +62,9 @@ describe('School Run preset', () => {
         const s = simulateScene(scene, 'medium', seed);
         runScene(s, PEAK_WINDOW[1], () => {
           if (s.time < PEAK_WINDOW[0]) return;
+          // Through traffic only: parents turning in and out of the school are slow by design.
           for (const v of s.allVehicles())
-            if (onSchoolFrontage(v.route[v.routeIndex])) {
+            if (onSchoolFrontage(v.route[v.routeIndex]) && v.destination !== SCHOOL && !schoolExits.has(v.route[0])) {
               total += v.speed;
               samples++;
             }
@@ -71,10 +76,12 @@ describe('School Run preset', () => {
   }, SLOW_TEST);
 
   it('sends more through drivers by the main road during the peak', () => {
+    // Trips from the shortcut's west end to its east end: straight along the shortcut, or up the
+    // west link, along the main road and back down.
     const viaMain = (scene: typeof schoolRun) => {
       let through = 0;
       let main = 0;
-      for (const seed of [1, 2, 3, 4, 5, 6]) {
+      for (const seed of [1, 2, 3, 4, 5, 6, 7, 8]) {
         const s = simulateScene(scene, 'medium', seed);
         const seen = new Set<number>();
         runScene(s, PEAK_WINDOW[1], () => {
@@ -82,11 +89,10 @@ describe('School Run preset', () => {
           for (const v of s.allVehicles()) {
             if (seen.has(v.id)) continue;
             seen.add(v.id);
-            // From the shortcut's west end to the east of the board, by either route.
             const fromWestShortcut = graph.gateways.find((g) => g.label === WEST_SHORTCUT)!.entryLanes.includes(v.route[0]);
-            if (!fromWestShortcut || (v.destination !== EAST_SHORTCUT && v.destination !== 'C')) continue;
+            if (!fromWestShortcut || v.destination !== EAST_SHORTCUT) continue;
             through++;
-            if (v.route.some(onMainRoad)) main++;
+            if (v.route.some(onWestLink)) main++;
           }
         });
       }
@@ -95,7 +101,7 @@ describe('School Run preset', () => {
     const peak = viaMain(schoolRun);
     const quiet = viaMain(withoutPeak);
     expect(peak.through).toBeGreaterThan(5);
-    expect(peak.main / peak.through).toBeGreaterThan(quiet.main / Math.max(quiet.through, 1));
     expect(peak.main).toBeGreaterThan(0);
+    expect(peak.main / peak.through).toBeGreaterThan(quiet.main / Math.max(quiet.through, 1));
   }, SLOW_TEST);
 });

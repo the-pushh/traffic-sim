@@ -21,9 +21,10 @@ const DRIVEWAY_COLUMN = 11.5;
 const LAYBY_COLUMNS = [12.5, 13.5];
 
 /** Speed limits, km/h: a faster main road, a slow shortcut, slower still past the school. */
-const MAIN_ROAD_LIMIT = 60;
-const SHORTCUT_LIMIT = 30;
+const MAIN_ROAD_LIMIT = 70;
+const SHORTCUT_LIMIT = 22;
 const SCHOOL_LIMIT = 20;
+const LINK_LIMIT = 60;
 
 /** The main road's light: 30 s for the main road, 15 s for the side street, 3 s ambers. */
 const MAIN_GREEN: SignalTiming = { green: 30, amber: 3, red: 18, offset: 0 };
@@ -43,7 +44,7 @@ for (const x of range(0, 16).map((i) => i + 0.5)) {
 // Side street north of the main road's junction.
 for (const z of range(0, 3)) pieces.push({ piece: 'straight', at: [JUNCTION_COLUMN, z + 0.5], rotation: 90 });
 // Links between the main road and the shortcut.
-for (const x of LINK_COLUMNS) for (const z of range(5, 11)) pieces.push({ piece: 'straight', at: [x, z + 0.5], rotation: 90 });
+for (const x of LINK_COLUMNS) for (const z of range(5, 11)) pieces.push({ piece: 'straight', at: [x, z + 0.5], rotation: 90, speedLimit: LINK_LIMIT });
 // The shortcut, west to east.
 const shortcutPiece = (x: number): Pick<PiecePlacement, 'piece' | 'rotation'> => {
   if (LINK_COLUMNS.includes(x)) return { piece: 't-junction', rotation: 180 }; // north arm to the link
@@ -93,11 +94,11 @@ export const schoolRun: SceneDefinition = {
   // Gateways (clockwise from the north-west): A side street north, B/C main road east (in/out),
   // D shortcut east, E street south, F shortcut west, G/H main road west (in/out); P1 the school.
   demand: {
-    gateways: { G: 0.6, B: 0.6, F: 0.5, D: 0.4, A: 0.2, E: 0.2 },
-    destinations: { C: 1, H: 1, D: 0.7, F: 0.7, A: 0.2, E: 0.2 },
+    gateways: { G: 0.6, B: 0.6, F: 0.6, D: 0.4, A: 0.2, E: 0.2 },
+    destinations: { C: 1, H: 1, D: 1.2, F: 0.7, A: 0.2, E: 0.2 },
     // The school drop-off: from 10 s to 60 s into a run, parents drive to the school and leave again.
     peaks: [
-      { from: 10, to: 60, rate: 0.5, entries: { G: 1, B: 1, F: 1, D: 1, E: 0.5 }, destinations: { P1: 1 } },
+      { from: 10, to: 60, rate: 0.8, entries: { G: 1, B: 1, F: 1, D: 1, E: 0.5 }, destinations: { P1: 1 } },
       { from: 20, to: 70, rate: 1, entries: { P1: 1 }, destinations: { C: 1, H: 1, D: 1, F: 1 } },
     ],
   },

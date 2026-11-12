@@ -161,19 +161,28 @@ Owner agreed the spec and the T1–T13 ticket breakdown and authorised implement
 ## School Run notes (T9) — 2026-11-12
 
 - **Layout:**
-  - A divided 60 km/h main road on rows 3–4. Its signalised two-tile junction at column 8 has a side street north.
-  - A 30 km/h shortcut on row 11 with an all-way stop at column 8, which has a street south.
-  - School frontage on the shortcut at 20 km/h: a zebra crossing (col 10), the school driveway (P1, col 11) and a drop-off lay-by (cols 12–13).
-  - Links at columns 1 and 14 join the shortcut to the eastbound main road, giving way at both ends.
-  - The shortcut's T at column 4 has an open south arm.
+  - A divided 70 km/h main road on rows 3–4. Its signalised two-tile junction at column 8 has a side street north.
+  - A 22 km/h shortcut on row 11 with an all-way stop at column 8, which has a street south.
+  - School frontage on the shortcut at 20 km/h: a zebra crossing (col 10), the school driveway (P1, col 11) and a drop-off lay-by (cols 12–13). The sketch puts `z` and `d` both in column A; the lay-by needs two tiles, so the frontage spans columns A–D.
+  - 60 km/h links at columns 1 and 14 give way where they join the main road and the shortcut (yield signs, so the links never take priority).
+  - The shortcut's T at column 4 has an open south arm. Free grass between the roads leaves room for another junction control or traffic calming.
+- **Tuning:** the limits make the shortcut about 1.4 s quicker than the main-road detour in quiet traffic, so the queues of the school peak tip some drivers onto the main road.
 - **Speed limits per piece** (`speedLimit`, km/h, 10–120; default 50):
   - Drivers keep the limit of the lane they're on, adjusted by their speed factor.
   - They slow before a lower limit at their comfortable braking rate, firmly once over it.
   - Routing uses the limits.
-- **Driveways** are labelled P1, P2, … (west to east) and can start and end trips. A trip leaving a driveway pulls out (at most 3 m/s) only when the junction checks allow it, like a driver at a line.
-- **Timed peaks:** a scene's demand can add peaks, in run seconds, scaled by intensity. School Run sends parents to P1 from 10–60 s and back out from 20–70 s.
-- **Safety fixes found on School Run:**
+- **Driveways** are labelled P1, P2, … (west to east) and can start and end trips.
+  - A trip leaving a driveway waits at the mouth like a driver at a line.
+  - Its patience builds and it keeps its place in turn.
+  - It pulls out (at most 3 m/s) only when the junction checks allow it.
+- **Timed peaks:**
+  - A scene's demand can add peaks, in run seconds, scaled by intensity. School Run sends parents to P1 from 10–60 s and back out from 20–70 s.
+  - Peak trips draw from their own random sequence, so adding a peak leaves every other trip unchanged (tested).
+  - The peak applies to the run that starts from Ready, which is what Restart replays. A run continued after the end doesn't repeat it.
+- **Fixes found on School Run:**
+  - No route makes a U-turn across a multi-tile junction (from one carriageway of a divided road into the other).
   - A driveway's way in and way out conflict at the mouth.
-  - Where lanes split (including lanes fanning out at a junction's entrance and a lay-by peeling away), a vehicle blocks the split until its rear is past the point where the branches are 2.2 m apart. Splits off a roundabout ring keep the fixed 3 m.
+  - Where lanes split (junction entrances, a lay-by peeling away), a vehicle blocks the split until its rear is past the point where the branches are 2.2 m apart. Splits off a roundabout ring keep the fixed 3 m.
   - A vehicle straddling a merge point always counts as the car ahead.
   - At a merge, a crawling queue counts as queued.
+  - A crossing stays reserved until the holder's rear is 2 m past it.

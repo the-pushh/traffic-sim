@@ -11,6 +11,8 @@ export class Router {
     private readonly graph: LaneGraph,
     /** Seconds to drive each lane at the speed it allows, with no traffic. */
     readonly freeFlowTime: readonly number[],
+    /** Moves from one lane to the next that no route may make (e.g. a U-turn across a divided road's junction). */
+    private readonly forbidden: (from: number, to: number) => boolean = () => false,
   ) {}
 
   /** Lanes no new path may use (e.g. a connection removed by an edit). */
@@ -51,7 +53,7 @@ export class Router {
         return { lanes: lanes.reverse(), cost: reached };
       }
       for (const next of this.graph.lanes[lane].next) {
-        if (closed.has(next)) continue;
+        if (closed.has(next) || this.forbidden(lane, next)) continue;
         const c = reached + cost(next);
         if (c < (best.get(next) ?? Infinity)) {
           best.set(next, c);

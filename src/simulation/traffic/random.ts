@@ -1,5 +1,5 @@
-export type Stream = 'vehicles' | 'entries' | 'trips' | 'decisions';
-const STREAM_SALT: Record<Stream, number> = { vehicles: 0x1b873593, entries: 0x85ebca6b, trips: 0xc2b2ae35, decisions: 0x27d4eb2f };
+export type Stream = 'vehicles' | 'entries' | 'trips' | 'peak-trips' | 'decisions';
+const STREAM_SALT: Record<Stream, number> = { vehicles: 0x1b873593, entries: 0x85ebca6b, trips: 0xc2b2ae35, decisions: 0x27d4eb2f, 'peak-trips': 0x165667b1 };
 
 /** 32-bit integer hash (murmur3 finaliser): spreads nearby inputs far apart. */
 function mix(x: number) {

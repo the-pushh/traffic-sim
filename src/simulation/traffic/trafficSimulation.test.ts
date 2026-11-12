@@ -326,6 +326,15 @@ describe('driving core: local trips and timed peaks', () => {
     expect(g.accessPoints.map((a) => a.label)).toEqual(['P1']);
   });
 
+  it('leaves the other trips exactly as they were when a peak is added', () => {
+    const demand = { tripsPerMinute: 8, entries: { A: 1, B: 1 }, destinations: { A: 1, B: 1 } };
+    const base = new TrafficSimulation(g, { seed: 6, demand });
+    const peaked = new TrafficSimulation(g, { seed: 6, demand: { ...demand, peaks: [{ from: 5, to: 40, tripsPerMinute: 30, entries: { A: 1, B: 1 }, destinations: { P1: 1 } }] } });
+    run(base, 60);
+    run(peaked, 60);
+    expect(peaked.arrivals.filter((a) => a.to !== 'P1')).toEqual(base.arrivals);
+  });
+
   it('adds a peak of trips to and from the driveway only during its time window', () => {
     const sim = new TrafficSimulation(g, {
       seed: 4,
