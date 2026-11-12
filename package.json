@@ -10,7 +10,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "verify:browser": "node scripts/verify-browser.mjs",
-    "verify:browser:headed": "node scripts/verify-browser.mjs --headed"
+    "verify:browser:headed": "node scripts/verify-browser.mjs --headed",
+    "perf": "node scripts/perf.mjs"
   },
   "dependencies": {
     "@phosphor-icons/core": "^2.1.1",
