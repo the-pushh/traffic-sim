@@ -27,8 +27,8 @@
   --glass-highlight: inset 0 1px 0 rgb(255 255 255 / 0.85);
   --glass-blur: blur(22px) saturate(180%);
   /* Faint vertical columns of the palette behind the scene (pink and blue, washed out). */
-  --backdrop-column-1: rgb(244 135 182 / 0.11);
-  --backdrop-column-2: rgb(55 114 255 / 0.065);
+  --backdrop-column-pink: rgb(244 135 182 / 0.11);
+  --backdrop-column-blue: rgb(55 114 255 / 0.065);
 
   --space-1: 4px;
   --space-2: 8px;
@@ -62,8 +62,8 @@
     --glass-bg-strong: rgb(30 25 32 / 0.7);
     --glass-border: rgb(247 243 227 / 0.16);
     --glass-highlight: inset 0 1px 0 rgb(247 243 227 / 0.12);
-    --backdrop-column-1: rgb(244 135 182 / 0.055);
-    --backdrop-column-2: rgb(55 114 255 / 0.075);
+    --backdrop-column-pink: rgb(244 135 182 / 0.055);
+    --backdrop-column-blue: rgb(55 114 255 / 0.075);
     --shadow-floating: 0 12px 34px rgb(0 0 0 / 0.45), 0 2px 6px rgb(0 0 0 / 0.3);
     color-scheme: dark;
   }
@@ -82,8 +82,8 @@
   --glass-bg-strong: rgb(30 25 32 / 0.7);
   --glass-border: rgb(247 243 227 / 0.16);
   --glass-highlight: inset 0 1px 0 rgb(247 243 227 / 0.12);
-  --backdrop-column-1: rgb(244 135 182 / 0.055);
-  --backdrop-column-2: rgb(55 114 255 / 0.075);
+  --backdrop-column-pink: rgb(244 135 182 / 0.055);
+  --backdrop-column-blue: rgb(55 114 255 / 0.075);
   --shadow-floating: 0 12px 34px rgb(0 0 0 / 0.45), 0 2px 6px rgb(0 0 0 / 0.3);
   color-scheme: dark;
 }
@@ -668,25 +668,24 @@ html,
 body {
   /*
    * Faint vertical columns of uneven width in the palette's colours, like washes of
-   * colour on paper: they fade into the background towards the bottom, and give the
-   * glass something to blur. A few pink columns are at half or 60% strength.
+   * colour on paper, top to bottom; they give the glass something to blur. A few pink
+   * columns are lighter still (half and 60% strength).
    */
   background:
-    linear-gradient(180deg, transparent 35%, var(--color-background) 100%),
     linear-gradient(
       90deg,
       transparent 0 5%,
-      var(--backdrop-column-1) 5% 13%,
+      var(--backdrop-column-pink) 5% 13%,
       transparent 13% 19%,
-      var(--backdrop-column-2) 19% 23%,
-      color-mix(in srgb, var(--backdrop-column-1) 50%, transparent) 23% 36%,
+      var(--backdrop-column-blue) 19% 23%,
+      color-mix(in srgb, var(--backdrop-column-pink) 50%, transparent) 23% 36%,
       transparent 36% 52%,
-      var(--backdrop-column-2) 52% 61%,
+      var(--backdrop-column-blue) 52% 61%,
       transparent 61% 68%,
-      color-mix(in srgb, var(--backdrop-column-1) 60%, transparent) 68% 72%,
-      var(--backdrop-column-2) 72% 84%,
+      color-mix(in srgb, var(--backdrop-column-pink) 60%, transparent) 68% 72%,
+      var(--backdrop-column-blue) 72% 84%,
       transparent 84% 91%,
-      var(--backdrop-column-1) 91% 95%,
+      var(--backdrop-column-pink) 91% 95%,
       transparent 95% 100%
     ),
     var(--color-background);
