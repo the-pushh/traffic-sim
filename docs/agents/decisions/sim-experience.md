@@ -229,3 +229,24 @@ Owner agreed the spec and the T1–T13 ticket breakdown and authorised implement
   - Focus returns to the arrow used.
 - **Blank board:** a one-tile stub in the middle of each edge, each an entry/exit point with an open end. No trips run until the player joins edges up.
 - Edits arrive with the editor (T12). Until then, the dev-only `__trafficDebug.editScene()` stands in, to check Save, Reset and the dialog in the browser.
+
+## Editor notes (T12) — 2026-11-12
+
+- **Parts:** a Parts button in the dock opens a drawer above it with six groups: Roads, Curves, Junctions, Ends, Flyovers, Controls. Parts are labelled with text; there are no rendered thumbnails yet.
+- **Placement rules** (`src/editor/placement.ts`) are shared by the preview and the drop.
+  - A piece snaps to the nearest open road end its port can meet (within 1.1 tiles), taking that end's height. A straight piece also takes its one-way direction.
+  - Otherwise it goes on the grid under the pointer.
+  - Invalid placements say why: "Off the board", "Something's already there", "Ramp needed to connect these heights", or the lane builder's mismatch reason ("Lane directions don't match" and so on).
+  - Controls go on the nearest approach (within 0.8 tile) to a junction or crossing, replacing any control already there.
+- **Dragging:** a translucent copy of the part follows the pointer at the exact position, rotation and height it would land. It's blue when valid (with a ring on the connection it makes and "✓ Connects here" or "✓ Place here") and red with a dashed "✕ reason" when not.
+  - R or the Rotate button turns it.
+  - Escape, or dropping it invalid or off the map, changes nothing.
+- **Selecting:** click a piece or control.
+  - The inspector offers Rotate, Remove, and Replace with another part of the same group. Signals also get green, amber, red and offset in seconds.
+  - Drag a selected piece to move it, with the same preview.
+  - Delete or Backspace removes it.
+- **Undo and redo:** buttons in the drawer, plus Ctrl or ⌘ Z and Shift Ctrl or ⌘ Z, over whole-scene history. Opening another scene starts a fresh history.
+- **When edits apply:** in Ready, Ended and Paused. The parts are disabled while traffic runs.
+  - Paused mid-run, the run carries on over the edited network (`TrafficSimulation.continueFrom`). The clock, counts and arrivals continue; vehicles stay put and reroute; vehicles on removed road leave and count as blocked.
+  - In Ready, or after a run ends, it starts afresh from Ready.
+- An edit makes the scene unsaved: Save and Reset apply, as in T11.

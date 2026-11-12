@@ -140,7 +140,7 @@ let blockedAtEntries = null;
 let hoverTag = null;
 runChecks.noHeaderAndViewFillsWindow = await runPage.evaluate(() => {
   const view = document.querySelector('.viewport').getBoundingClientRect();
-  return !document.querySelector('header') && view.top === 0 && view.height === innerHeight && view.width === innerWidth;
+  return !document.querySelector('#app > header, body > header') && view.top === 0 && view.height === innerHeight && view.width === innerWidth;
 });
 runChecks.dockFloatsAtBottomCentre = await runPage.evaluate(() => {
   const dock = document.querySelector('.dock').getBoundingClientRect();
@@ -312,6 +312,102 @@ if (isDevServer) {
   await page2.close();
 }
 
+// Editor (T12): drag parts with a preview that matches the drop, invalid drops, Escape, undo/redo, selection, signal timing, paused edits.
+const editorChecks = {};
+if (isDevServer) {
+  const page3 = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+  const editorErrors = [];
+  page3.on('pageerror', (e) => editorErrors.push(String(e)));
+  const editorUrl = new URL(url);
+  editorUrl.searchParams.set('scene', 'blank-board');
+  await page3.goto(editorUrl.toString());
+  await page3.evaluate(() => localStorage.clear());
+  await page3.reload();
+  await page3.waitForSelector('.status', { state: 'hidden', timeout: 30000 });
+  const pieces = () => page3.evaluate(() => window.__trafficDebug.scene().pieces.length);
+  await page3.getByRole('button', { name: 'Parts' }).click();
+  editorChecks.drawerGroupsParts = (await page3.locator('.parts-group').count()) === 6 && (await page3.locator('.parts-drawer').isVisible());
+  /** Drag a part from the drawer to a board point; returns what the preview showed just before release. */
+  const dragPart = async (part, x, z, { release = true, escape = false } = {}) => {
+    const box = await page3.locator(`[data-part="${part}"]`).boundingBox();
+    await page3.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page3.mouse.down();
+    const target = await page3.evaluate(([x, z]) => window.__trafficDebug.screenOf(x, z), [x, z]);
+    for (let i = 1; i <= 8; i++) await page3.mouse.move(box.x + ((target.x - box.x) * i) / 8, box.y + ((target.y - box.y) * i) / 8);
+    await page3.waitForTimeout(300);
+    await page3.mouse.move(target.x + 1, target.y);
+    await page3.waitForTimeout(80);
+    const preview = await page3.evaluate(() => JSON.parse(JSON.stringify(window.__trafficDebug.preview())));
+    const label = await page3.locator('.placement-reason').textContent();
+    if (escape) await page3.keyboard.press('Escape');
+    if (release) await page3.mouse.up();
+    await page3.waitForTimeout(500);
+    return { preview, label };
+  };
+  const startCount = await pieces();
+  const valid = await dragPart('straight', 1.6, 8.6);
+  await page3.screenshot({ path: `${outDir}/23-editor-dropped.png` });
+  const placed = await page3.evaluate(() => window.__trafficDebug.scene().pieces.at(-1));
+  editorChecks.previewMatchesDrop = valid.preview?.valid === true && JSON.stringify(valid.preview.placement) === JSON.stringify(placed) && (await pieces()) === startCount + 1;
+  editorChecks.validPreviewSaysConnects = (valid.label ?? '').includes('Connects here');
+  // A roundabout (3 × 3) centred on a corner tile would hang off the board.
+  const invalid = await dragPart('roundabout', 0.6, 15.4);
+  editorChecks.invalidDropExplainsAndChangesNothing = invalid.preview?.valid === false && (invalid.label ?? '').includes('Off the board') && (await pieces()) === startCount + 1;
+  editorChecks.invalidReason = invalid.label;
+  await dragPart('straight', 2.6, 8.6, { escape: true });
+  editorChecks.escapeCancels = (await pieces()) === startCount + 1;
+  await page3.getByRole('button', { name: 'Undo' }).click();
+  await page3.waitForTimeout(400);
+  editorChecks.undoRestores = (await pieces()) === startCount;
+  await page3.getByRole('button', { name: 'Redo' }).click();
+  await page3.waitForTimeout(400);
+  editorChecks.redoReapplies = (await pieces()) === startCount + 1;
+  // Clicking a piece selects it: the inspector shows it and can remove it.
+  const stub = await page3.evaluate(() => window.__trafficDebug.screenOf(1.5, 8.5));
+  await page3.mouse.click(stub.x, stub.y);
+  editorChecks.clickSelectsPiece = await page3.locator('.inspector').isVisible();
+  await page3.locator('.inspector').getByRole('button', { name: 'Remove' }).click();
+  await page3.waitForTimeout(400);
+  editorChecks.removeFromInspector = (await pieces()) === startCount;
+
+  // Main Street: retime a light from the inspector; edit while paused mid-run.
+  await page3.getByRole('button', { name: 'Previous scene' }).click();
+  await page3.getByRole('button', { name: 'Discard and switch' }).click().catch(() => {});
+  await page3.waitForSelector('.status', { state: 'hidden', timeout: 30000 });
+  while ((await page3.locator('.scene-name').textContent())?.trim() !== 'Main Street') {
+    await page3.getByRole('button', { name: 'Next scene' }).click();
+    await page3.getByRole('button', { name: 'Discard and switch' }).click({ timeout: 500 }).catch(() => {});
+    await page3.waitForSelector('.status', { state: 'hidden', timeout: 30000 });
+  }
+  await page3.evaluate(() => window.__trafficDebug.select({ kind: 'control', index: 0 }));
+  await page3.locator('[data-timing="green"]').fill('20');
+  await page3.getByRole('button', { name: 'Apply timing' }).click();
+  await page3.waitForTimeout(600);
+  editorChecks.signalTimingChanges = (await page3.evaluate(() => window.__trafficDebug.scene().controls[0].timing.green)) === 20;
+  await page3.screenshot({ path: `${outDir}/24-editor-signal.png` });
+  // A stop sign dropped on a side street's approach to the first junction.
+  const controlsBefore = await page3.evaluate(() => window.__trafficDebug.scene().controls.length);
+  await page3.evaluate(() => window.__trafficDebug.select(null));
+  const stop = await dragPart('stop', 3.5, 9.1);
+  editorChecks.controlPlacedOnApproach = stop.preview?.valid === true && (await page3.evaluate(() => window.__trafficDebug.scene().controls.length)) >= controlsBefore;
+  await page3.getByRole('button', { name: 'Play' }).click();
+  await page3.waitForTimeout(1500);
+  editorChecks.partsLockedWhileRunning = await page3.evaluate(() => [...document.querySelectorAll('[data-part]')].every((b) => b.disabled));
+  await page3.getByRole('button', { name: 'Pause' }).click();
+  editorChecks.partsUnlockedWhenPaused = await page3
+    .waitForFunction(() => [...document.querySelectorAll('[data-part]')].every((b) => !b.disabled), null, { timeout: 2000 })
+    .then(() => true, () => false);
+  const before = await page3.evaluate(() => ({ time: window.__trafficDebug.counts(), vehicles: window.__trafficDebug.vehicles().length }));
+  await page3.evaluate(() => window.__trafficDebug.editScene());
+  await page3.waitForTimeout(800);
+  const after = await page3.evaluate(() => ({ time: window.__trafficDebug.counts(), vehicles: window.__trafficDebug.vehicles().length, state: document.querySelector('.dock').dataset.state }));
+  editorChecks.pausedEditKeepsRun = after.state === 'paused' && after.time.due === before.time.due && Math.abs(after.vehicles - before.vehicles) <= 1;
+  editorChecks.noPageErrors = editorErrors.length === 0;
+  editorChecks.errors = editorErrors.slice(0, 3);
+  await page3.evaluate(() => localStorage.clear());
+  await page3.close();
+}
+
 // Presets (T8+): open each other preset on the dev server (?scene=), check it loads, has traffic and queues, and screenshot it.
 const presetChecks = {};
 if (isDevServer) {
@@ -400,6 +496,7 @@ const result = {
   hoverTag: hoverTag,
   presetChecks,
   carouselChecks,
+  editorChecks,
   blockedAtEntries,
 };
 writeFileSync(`${outDir}/result.json`, JSON.stringify(result, null, 2));

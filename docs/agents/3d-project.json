@@ -345,6 +345,17 @@
         ],
         "result": "pass: arrows enabled in Ready and locked during a run; cycles all five scenes and back; each opens Ready; Save/Reset appear with edits; leave dialog with message, cancel, save-and-switch; saved version kept; Reset restores the design. Screenshots 21-blank-board.png and 22-leave-dialog.png inspected.",
         "previews": "artifacts/3d/previews/ (git-ignored)"
+      },
+      {
+        "date": "2026-11-12",
+        "check": "T12 editor (#14)",
+        "command": "npm test (246/246), npm run build, npm run dev then npm run verify:browser and :headed",
+        "browser": "Google Chrome 157 on macOS, headless and headed, 1440x900",
+        "assets": [
+          "road and control GLBs loaded as translucent previews; all scene assets"
+        ],
+        "result": "pass: drawer with six groups; a dragged straight previews at exactly the placement the drop makes ('✓ Connects here'); an invalid drop says '✕ Off the board' and changes nothing; Escape cancels; undo/redo; click selects and Remove works; signal green retimed from the inspector; a stop sign placed on an approach; parts locked while running and unlocked when paused; an edit while paused keeps the run (same counts, vehicles kept). No page errors. Screenshots 23-editor-dropped.png and 24-editor-signal.png inspected.",
+        "previews": "artifacts/3d/previews/ (git-ignored)"
       }
     ]
   },

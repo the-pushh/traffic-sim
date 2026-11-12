@@ -1,4 +1,6 @@
-import { PCFSoftShadowMap, PerspectiveCamera, Timer, WebGLRenderer } from 'three';
+import { type Group, type Object3D, PCFSoftShadowMap, PerspectiveCamera, Timer, WebGLRenderer } from 'three';
+import type { SceneDefinition } from '../simulation/network/scene';
+import { createEditor } from './editor';
 import { createDock } from '../components/dock';
 import { createFirstVisitTip } from '../components/firstVisitTip';
 import { createResultsCard } from '../components/resultsCard';
@@ -193,40 +195,56 @@ function setCameraControlsEnabled(enabled: boolean) {
 
 let tooltip: ReturnType<typeof createVehicleTooltip> | null = null;
 
-/** Open the scene the store has on screen: its own layout, demand, warm-up traffic and camera, ready to play. */
-let currentView: { dispose(): void; scene: { remove(...objects: unknown[]): unknown } } | null = null;
-let currentLayers: unknown[] = [];
+let currentView: Awaited<ReturnType<typeof createSceneView>> | null = null;
+let currentLayers: Object3D[] = [];
+let vehicleModels: Group[] | null = null;
+let joystick: CameraJoystick | null = null;
+/** Opening scenes and applying edits one at a time, in order. */
+let loading: Promise<boolean> = Promise.resolve(true);
 
-/** Open the scene the store has on screen; resolves true once it's showing. */
-async function start(): Promise<boolean> {
+/**
+ * Show the scene the store has on screen. `open`: a scene opened from the pill (Ready,
+ * framed afresh). `edit`: the player changed it (camera kept; a paused run carries on).
+ */
+function start(mode: 'open' | 'edit' = 'open'): Promise<boolean> {
+  loading = loading.then(() => show(mode));
+  return loading;
+}
+
+async function show(mode: 'open' | 'edit'): Promise<boolean> {
   const currentScene = store.current();
-  renderer.setAnimationLoop(null);
-  // Free what the last scene built for itself (vehicles and badges are shared and stay).
-  currentView?.scene.remove(...currentLayers);
-  currentView?.dispose();
-  currentView = null;
-  bottomStack.inert = true;
-  // A new scene starts from Ready: fresh traffic, nothing measured yet.
-  if (run.state !== 'ready') run.restart();
-  syncPill();
-  setCameraControlsEnabled(false);
-  detachInput?.();
-  detachInput = null;
-  observer = null;
-  status.hidden = false;
-  status.className = 'status';
-  status.innerHTML = '<p>Loading roads and vehicles…</p>';
+  const opening = mode === 'open' || !session || !observer;
+  if (opening) {
+    renderer.setAnimationLoop(null);
+    bottomStack.inert = true;
+    // A new scene starts from Ready: fresh traffic, nothing measured yet.
+    if (run.state !== 'ready') run.restart();
+    syncPill();
+    setCameraControlsEnabled(false);
+    detachInput?.();
+    detachInput = null;
+    observer = null;
+    status.hidden = false;
+    status.className = 'status';
+    status.innerHTML = '<p>Loading roads and vehicles…</p>';
+  }
   try {
     const load = createAssetLoader(import.meta.env.BASE_URL);
-    const [view, vehicleModels] = await Promise.all([
+    const [view, models] = await Promise.all([
       createSceneView(currentScene, import.meta.env.BASE_URL),
-      Promise.all(VEHICLE_MODEL_NAMES.map((name) => load.model(`models/vehicles/${name}.glb`))),
+      vehicleModels ?? Promise.all(VEHICLE_MODEL_NAMES.map((name) => load.model(`models/vehicles/${name}.glb`))),
     ]);
+    vehicleModels = models;
+    // Swap the views: free what the last one built for itself (vehicles and badges are shared and stay).
+    renderer.setAnimationLoop(null);
+    currentView?.scene.remove(...currentLayers);
+    currentView?.dispose();
     const { scene, bounds, graph, updateSignals, updateBlocked } = view;
-    const traffic = createTrafficLayer(graph, new Map(VEHICLE_MODEL_NAMES.map((name, i) => [name, vehicleModels[i]])));
+    const traffic = createTrafficLayer(graph, new Map(VEHICLE_MODEL_NAMES.map((name, i) => [name, models[i]])));
     scene.add(traffic.group);
-    session = new TrafficSession(currentScene, graph, run);
-    const queueLabels = createQueueLabels(session.approaches);
+    if (opening) session = new TrafficSession(currentScene, graph, run);
+    else session!.edit(currentScene, graph);
+    const queueLabels = createQueueLabels(session!.approaches);
     scene.add(queueLabels.group);
     tooltip ??= createVehicleTooltip(viewport, renderer.domElement);
     const pickVehicle = createVehiclePicker(traffic.group);
@@ -241,20 +259,26 @@ async function start(): Promise<boolean> {
       queues: () => session!.approaches.map((a, i) => ({ approach: a.name, live: session!.liveQueues()[i] })),
       queueLabelsShown: queueLabels.visibleCount,
       store,
+      apply: (edited) => applyEdit(edited),
+      preview: () => editor.preview(),
+      select: (target) => editor.select(target),
     });
-    observer = ObserverCamera.framing(camera, bounds, { coveredBottom });
-    const joystick = new CameraJoystick(observer);
-    const detachViewport = attachViewportInput(renderer.domElement, observer);
-    const detachJoystick = attachJoystickControl(joystickElement, joystick);
-    detachInput = () => {
-      detachViewport();
-      detachJoystick();
-    };
-    timer.reset();
+    if (opening) {
+      observer = ObserverCamera.framing(camera, bounds, { coveredBottom });
+      joystick = new CameraJoystick(observer);
+      const detachViewport = attachViewportInput(renderer.domElement, observer);
+      const detachJoystick = attachJoystickControl(joystickElement, joystick);
+      detachInput = () => {
+        detachViewport();
+        detachJoystick();
+      };
+      editor.reset();
+      timer.reset();
+    }
     renderer.setAnimationLoop((time) => {
       timer.update(time);
       const delta = Math.min(timer.getDelta(), 0.1);
-      joystick.update(delta);
+      joystick!.update(delta);
       const current = session!;
       current.advance(run.tick(delta * TIME_SCALE));
       traffic.sync(current.simulation);
@@ -263,6 +287,7 @@ async function start(): Promise<boolean> {
       queueLabels.update(current.liveQueues());
       tooltip!.update((ndc) => pickVehicle(camera, ndc), current.simulation, time);
       syncRunUi();
+      editor.sync();
       renderer.render(scene, camera);
     });
     status.hidden = true;
@@ -272,6 +297,7 @@ async function start(): Promise<boolean> {
   } catch (error) {
     console.error(error);
     const message = error instanceof AssetLoadError || error instanceof SceneDefinitionError ? error.message : 'Couldn’t start the 3D scene.';
+    status.hidden = false;
     status.className = 'status error';
     status.innerHTML = `<p></p><button type="button" class="primary" data-action="retry">Retry</button>`;
     status.querySelector('p')!.textContent = message;
@@ -291,5 +317,24 @@ async function start(): Promise<boolean> {
     return false;
   }
 }
+
+/** The player edited the map: it becomes the scene on screen (unsaved) and the traffic adapts. */
+async function applyEdit(scene: SceneDefinition) {
+  store.edit(scene);
+  await start('edit');
+}
+
+const editor = createEditor({
+  stack: bottomStack,
+  viewport,
+  canvas: renderer.domElement,
+  camera,
+  scene: () => store.current(),
+  view: () => currentView?.scene ?? null,
+  model: (name) => createAssetLoader(import.meta.env.BASE_URL).model(`models/roads/${name}.glb`),
+  apply: (scene) => applyEdit(scene).then(() => undefined),
+  canEdit: () => run.state !== 'running',
+});
+dock.element.append(editor.toggle);
 
 start();
