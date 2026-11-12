@@ -1,10 +1,10 @@
 import type { PiecePlacement, SceneDefinition } from '../simulation/network/scene';
+import { range } from './layout';
 
 const straightsEastWest = (z: number, xs: number[]): PiecePlacement[] => xs.map((x) => ({ piece: 'straight', at: [x + 0.5, z], rotation: 0 }));
 const straightsNorthSouth = (x: number, zs: number[]): PiecePlacement[] => zs.map((z) => ({ piece: 'straight', at: [x, z + 0.5], rotation: 90 }));
 const NORTH_SOUTH = { green: 18, amber: 3, red: 21, offset: 0 };
 const EAST_WEST = { green: 18, amber: 3, red: 21, offset: -21 };
-const range = (from: number, to: number) => Array.from({ length: to - from }, (_, i) => from + i);
 
 /**
  * Hidden test scene that exercises the lane network: a signalised crossroads, a

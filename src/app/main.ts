@@ -12,7 +12,7 @@ import { fitCameraToViewport } from '../three/controls/cameraViewport';
 import { ObserverCamera } from '../three/controls/observerCamera';
 import { attachViewportInput } from '../three/controls/viewportInput';
 import { AssetLoadError } from '../three/loaders/assetLoader';
-import { mainStreet } from '../scenes/mainStreet';
+import { PRESETS } from '../scenes/presets';
 import { createAssetLoader } from '../three/loaders/assetLoader';
 import { createSceneView, SceneDefinitionError } from '../three/scene/createSceneView';
 import { createQueueLabels } from '../three/scene/queueLabels';
@@ -21,8 +21,15 @@ import { createVehiclePicker } from '../three/scene/vehiclePicker';
 import { exposeTrafficDebug } from './devHooks';
 import { TrafficSession } from '../simulation/traffic/trafficSession';
 
-/** The scene the app opens on; the scene carousel (T11) will cycle through the presets. */
-const currentScene = mainStreet;
+/**
+ * The scene the app opens on: the first preset (Main Street). Until the scene carousel (T11), the dev server
+ * can open another preset with `?scene=<id>` for checking it in the browser.
+ */
+function openingScene() {
+  const id = import.meta.env.DEV ? new URLSearchParams(location.search).get('scene') : null;
+  return PRESETS.find((p) => p.id === id) ?? PRESETS[0];
+}
+const currentScene = openingScene();
 
 const ZOOM_STEP = 0.8;
 
