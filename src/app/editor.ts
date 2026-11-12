@@ -9,11 +9,11 @@ import { placePart, type PlacementResult } from '../editor/placement';
 import { CONTROL_MODELS } from '../three/scene/controlModels';
 import { signPose } from '../three/scene/createSceneView';
 import { icon } from '../components/icons';
+import { renderThumbnails } from '../three/thumbnails/partThumbnails';
 
 /** What the editor needs from the app around it. */
 export interface EditorHost {
-  /** Panels go here (the bottom stack, above the dock) and the inspector beside the view. */
-  stack: HTMLElement;
+  /** The Parts tray (bottom-right) and the inspector (top-left) sit over the view. */
   viewport: HTMLElement;
   canvas: HTMLCanvasElement;
   camera: Camera;
@@ -78,12 +78,16 @@ export function createEditor(host: EditorHost) {
     <div class="parts-groups">
       ${GROUPS.map(
         (group) => `<div class="parts-group" role="group" aria-label="${group}"><h3>${group}</h3>${PARTS.filter((p) => p.group === group)
-          .map((p) => `<button type="button" class="part" data-part="${p.id}" title="${laneNote(p.id)}" aria-describedby="parts-hint">${p.label}</button>`)
+          .map(
+            (p) =>
+              `<button type="button" class="part" data-part="${p.id}" title="${laneNote(p.id)}" aria-describedby="parts-hint"><span class="part-picture" aria-hidden="true"></span><span class="part-label">${p.label}</span></button>`,
+          )
           .join('')}</div>`,
       ).join('')}
     </div>
   `;
-  host.stack.prepend(drawer);
+  // The tray sits bottom-right over the map, clear of the dock, so the map stays in view.
+  host.viewport.append(drawer);
   const toggle = document.createElement('button');
   toggle.type = 'button';
   toggle.className = 'parts-toggle';
@@ -92,7 +96,28 @@ export function createEditor(host: EditorHost) {
   toggle.addEventListener('click', () => {
     drawer.hidden = !drawer.hidden;
     toggle.setAttribute('aria-expanded', String(!drawer.hidden));
+    if (!drawer.hidden) showPictures();
   });
+
+  // Pictures of the parts, drawn the first time the tray opens (not at start-up).
+  let picturesDrawn = false;
+  function showPictures() {
+    if (picturesDrawn) return;
+    picturesDrawn = true;
+    const models = new Map(PARTS.map((p) => [p.id, host.model(p.kind === 'control' ? CONTROL_MODELS[p.id as ControlPlacement['type']] : PIECES[p.id].model)]));
+    void renderThumbnails(models)
+      .then((pictures) => {
+        for (const [id, url] of pictures) {
+          const slot = drawer.querySelector<HTMLElement>(`[data-part="${id}"] .part-picture`);
+          if (slot) slot.style.backgroundImage = `url("${url}")`;
+        }
+        drawer.classList.add('pictured');
+      })
+      .catch(() => {
+        // Text labels still work; let a later opening try again.
+        picturesDrawn = false;
+      });
+  }
 
   // ---- Inspector and the label beside the preview ----
   const inspector = document.createElement('section');

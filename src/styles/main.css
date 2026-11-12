@@ -929,8 +929,15 @@ button.primary:hover:not(:disabled),
 }
 
 .parts-drawer {
-  width: min(760px, 100%);
-  max-height: 32vh;
+  /* Bottom-right over the map, below the camera panel. Where the window is too narrow for
+     it to sit beside the dock, it rises above the dock's line instead. */
+  --tray-top: 340px; /* clears the camera panel (top-right) */
+  --tray-bottom: calc(var(--space-4) + var(--dock-clearance));
+  position: absolute;
+  right: var(--space-4);
+  bottom: var(--tray-bottom);
+  width: 320px;
+  max-height: calc(100% - var(--tray-top) - var(--tray-bottom));
   overflow-y: auto;
   padding: var(--space-3);
   border: 1px solid var(--glass-border);
@@ -939,6 +946,14 @@ button.primary:hover:not(:disabled),
   box-shadow: var(--glass-highlight), var(--shadow-floating);
   -webkit-backdrop-filter: var(--glass-blur);
   backdrop-filter: var(--glass-blur);
+  --dock-clearance: 88px; /* the dock's height and gap */
+}
+
+/* Wide enough for the tray to sit beside the dock (about 840px wide, centred). */
+@media (min-width: 1560px) {
+  .parts-drawer {
+    --dock-clearance: 0px;
+  }
 }
 
 .parts-drawer header {
@@ -950,36 +965,68 @@ button.primary:hover:not(:disabled),
 }
 
 .parts-drawer h2 {
-  margin: 0;
+  margin: 0 auto 0 0;
   font-size: var(--font-body);
 }
 
 .parts-hint {
-  flex: 1;
+  order: 1;
+  flex-basis: 100%;
   font-size: var(--font-meta);
   color: var(--color-text-muted);
 }
 
 .parts-groups {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: var(--space-3);
 }
 
+.parts-group {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-1);
+}
+
 .parts-group h3 {
-  margin: 0 0 var(--space-1);
+  grid-column: 1 / -1;
+  margin: 0;
   font-size: var(--font-meta);
   color: var(--color-text-muted);
   font-weight: 600;
 }
 
+/* A part: its picture over its name. */
 .parts-group .part {
-  display: block;
-  width: 100%;
-  margin-bottom: var(--space-1);
-  text-align: left;
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  height: auto;
+  padding: var(--space-1);
+  font-size: var(--font-meta);
+  line-height: 1.2;
+  text-align: center;
   cursor: grab;
   touch-action: none;
+}
+
+.part-label {
+  display: -webkit-box;
+  max-width: 100%;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+.part-picture {
+  width: 52px;
+  height: 52px;
+  background: center / contain no-repeat;
+}
+
+/* Until the pictures are drawn, keep the tiles short rather than showing empty squares. */
+.parts-drawer:not(.pictured) .part-picture {
+  height: 0;
 }
 
 .parts-drawer.locked .part {
@@ -1070,33 +1117,6 @@ body.placing canvas {
 .placement-reason.invalid {
   color: var(--color-error);
   border-style: dashed;
-}
-
-/* Compact drawer: every group visible at once in a strip above the dock. */
-.parts-drawer {
-  width: min(1040px, 100%);
-  max-height: 26vh;
-  padding: var(--space-2) var(--space-3);
-}
-
-.parts-groups {
-  grid-template-columns: repeat(6, minmax(0, 1fr));
-  gap: var(--space-2);
-}
-
-.parts-group .part {
-  height: 28px;
-  padding: 0 var(--space-2);
-  font-size: var(--font-meta);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-@media (max-width: 900px) {
-  .parts-groups {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
 }
 
 .duration .segment {

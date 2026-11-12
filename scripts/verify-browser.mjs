@@ -357,7 +357,9 @@ if (isDevServer) {
   editorChecks.drawerGroupsParts = (await page3.locator('.parts-group').count()) === 6 && (await page3.locator('.parts-drawer').isVisible());
   /** Drag a part from the drawer to a board point; returns what the preview showed just before release. */
   const dragPart = async (part, x, z, { release = true, escape = false } = {}) => {
-    const box = await page3.locator(`[data-part="${part}"]`).boundingBox();
+    const tile = page3.locator(`[data-part="${part}"]`);
+    await tile.scrollIntoViewIfNeeded(); // the tray scrolls
+    const box = await tile.boundingBox();
     await page3.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
     await page3.mouse.down();
     const target = await page3.evaluate(([x, z]) => window.__trafficDebug.screenOf(x, z), [x, z]);
@@ -480,6 +482,32 @@ const dockChecks = {};
   });
   dockChecks.labelsUnchanged = (await page.getByRole('button', { name: 'Parts' }).count()) === 1 && (await page.getByRole('button', { name: 'Restart run' }).count()) === 1;
   await page.locator('.dock').screenshot({ path: `${outDir}/30-dock-icons.png` });
+  await page.close();
+}
+
+// Parts tray (P5): a picture of every part, bottom-right, clear of the map's centre and the dock.
+const trayChecks = {};
+for (const [width, height] of [[1440, 900], [1280, 800]]) {
+  const page = await browser.newPage({ viewport: { width, height } });
+  await page.goto(url);
+  await page.waitForSelector('.status', { state: 'hidden', timeout: 60000 });
+  await page.getByRole('button', { name: 'Parts' }).click();
+  const pictured = await page.waitForSelector('.parts-drawer.pictured', { timeout: 20000 }).then(() => true, () => false);
+  const layout = await page.evaluate(() => {
+    const tray = document.querySelector('.parts-drawer').getBoundingClientRect();
+    const dock = document.querySelector('.dock').getBoundingClientRect();
+    const tiles = [...document.querySelectorAll('.part-picture')];
+    const overlaps = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+    return {
+      everyPartPictured: tiles.length > 0 && tiles.every((t) => getComputedStyle(t).backgroundImage.startsWith('url("data:image/png')),
+      bottomRight: innerWidth - tray.right < 40 && tray.left > innerWidth / 2,
+      centreClear: !(tray.left < innerWidth / 2 && tray.top < innerHeight / 2),
+      clearOfDock: !overlaps(tray, dock),
+    };
+  });
+  trayChecks[`at${width}`] = pictured && Object.values(layout).every(Boolean);
+  if (!trayChecks[`at${width}`]) trayChecks[`detail${width}`] = layout; // shown only on failure
+  await page.screenshot({ path: `${outDir}/33-tray-${width}.png` });
   await page.close();
 }
 
@@ -613,7 +641,9 @@ if (isDevServer) {
   await page.getByRole('button', { name: 'Parts' }).click();
   /** Drag a part from the drawer to tile (x, z); answers whether the preview said valid just before release. */
   const drop = async (part, x, z) => {
-    const box = await page.locator(`[data-part="${part}"]`).boundingBox();
+    const tile = page.locator(`[data-part="${part}"]`);
+    await tile.scrollIntoViewIfNeeded(); // the tray scrolls
+    const box = await tile.boundingBox();
     await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
     await page.mouse.down();
     const target = await page.evaluate(([x, z]) => window.__trafficDebug.screenOf(x, z), [x, z]);
@@ -754,6 +784,7 @@ const result = {
   carouselChecks,
   editorChecks,
   dockChecks,
+  trayChecks,
   backgroundChecks,
   pressChecks,
   presetRunChecks,
@@ -786,6 +817,7 @@ const ok =
   retryRecovered &&
   Object.values(runChecks).every(Boolean) &&
   passed(dockChecks) &&
+  passed(trayChecks) &&
   passed(backgroundChecks) &&
   passed(pressChecks) &&
   passed(presetRunChecks) &&

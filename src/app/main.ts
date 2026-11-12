@@ -329,7 +329,6 @@ async function applyEdit(scene: SceneDefinition, fromHistory = false) {
 }
 
 const editor = createEditor({
-  stack: bottomStack,
   viewport,
   canvas: renderer.domElement,
   camera,

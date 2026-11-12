@@ -297,3 +297,10 @@ Owner agreed the spec and the T1–T13 ticket breakdown and authorised implement
 - **Icons:** [Phosphor](https://phosphoricons.com) via `@phosphor-icons/core` 2.1.1 (MIT licence), imported as raw SVG at build time (`src/components/icons.ts`). Icons take `currentColor` and are hidden from screen readers; each control keeps its text label or `aria-label`. Play and Pause use the fill weight; the rest use bold.
 - **Dock order:** Play/Pause, Restart, then the clock and progress bar with the run length (clock icon, 30/60/90 s) beside them | Intensity (gauge icon) | Parts (wrench and hammer).
 - The camera panel's zoom and theme buttons use Phosphor plus, minus, moon and sun.
+
+## Parts tray (P5, #35) — 2026-11-13
+
+- **Pictures:** `renderThumbnails` (`src/three/thumbnails/partThumbnails.ts`) draws each part's model along the map's starting view diagonal, in a short-lived 128 px WebGL context. It reads each picture back as a PNG data URL, then frees the context. This happens the first time the tray opens, not at start-up, and takes about 150–750 ms. Until then, the tiles show their names only.
+- **Placement:** the tray is absolute in the viewport, bottom-right, 320 px wide, below the camera panel (`--tray-top` 340 px). From 1560 px wide it sits beside the dock; narrower, it rises above the dock's line (`--dock-clearance`). It scrolls when the window is short.
+- **Tiles:** three per row, with the picture above the name (up to two lines). The lane note stays in the tooltip.
+- **Removed:** the old full-width strip drawer rules.
