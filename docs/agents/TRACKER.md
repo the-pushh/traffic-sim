@@ -49,7 +49,7 @@ Owner's nine points: Pause doesn't work; Phosphor icons; a simpler results card;
 
 | Issue | Ticket | Blocked by | Status | Verification note |
 | --- | --- | --- | --- | --- |
-| [#31](https://github.com/the-pushh/traffic-sim/issues/31) | P1 — Pause and Reset work with a real click | — | todo | |
+| [#31](https://github.com/the-pushh/traffic-sim/issues/31) | P1 — Pause and Reset work with a real click | — | done | Cause: the dock rewrote the Play/Pause icon every frame, so a real press (~100 ms) ended on a new element and Chrome dropped the click; Reset was disabled while running. Fix: icon swapped only when Play/Pause flips; Reset works any time (ends the run, restores the network). Browser check presses like a person: red on the old dock (`pauseStopsRun: false`), green after, twice; 254/254 tests; tsc clean. Review (Standards + Spec): tightened the press check (exact selector, state waits, missed presses fail); no other control rebuilds under a press. Reset-while-running is checked on the dev server only (the edit uses the debug hook). Merged in #39. |
 | [#32](https://github.com/the-pushh/traffic-sim/issues/32) | P2 — Dock redesign with Phosphor icons | P1 | todo | |
 | [#33](https://github.com/the-pushh/traffic-sim/issues/33) | P3 — Results card: headline numbers with Show details | — | todo | |
 | [#34](https://github.com/the-pushh/traffic-sim/issues/34) | P4 — Background of faint vertical colour columns | — | todo | |

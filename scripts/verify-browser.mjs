@@ -449,36 +449,31 @@ const pressChecks = {};
     return true;
   };
   const state = () => page.evaluate(() => document.querySelector('.dock')?.dataset.state);
-  const playPause = page.locator('.dock [data-action="play-pause"], .dock button').first();
-  await press(playPause);
-  await page.waitForTimeout(1500);
-  pressChecks.playStartsRun = (await state()) === 'running';
-  await press(playPause);
-  await page.waitForTimeout(300);
-  pressChecks.pauseStopsRun = (await state()) === 'paused';
+  const reaches = (wanted, timeout = 3000) =>
+    page.waitForFunction((wanted) => document.querySelector('.dock')?.dataset.state === wanted, wanted, { timeout }).then(() => true, () => false);
+  const sceneName = () => page.evaluate(() => document.querySelector('.scene-name')?.textContent);
+  const playPause = page.locator('.dock [data-action="play-pause"]');
+  pressChecks.playStartsRun = (await press(playPause)) && (await reaches('running'));
+  await page.waitForTimeout(1000); // let the clock tick under the next press
+  pressChecks.pauseStopsRun = (await press(playPause)) && (await reaches('paused'));
   // Reset on the pill while traffic runs: stops the run and restores the designer's network.
-  await press(playPause);
-  await page.waitForTimeout(300);
-  const before = await page.evaluate(() => document.querySelector('.scene-name')?.textContent);
+  // Dev server only: the edit that makes Reset appear goes through the debug hook.
   if (isDevServer) {
-    await press(playPause); // pause to edit
+    const before = await sceneName();
     await page.evaluate(() => window.__trafficDebug.select({ kind: 'piece', index: 0 }));
     const removed = await page
       .getByRole('button', { name: 'Remove' })
       .click({ timeout: 3000 })
       .then(() => true, () => false);
-    await page.waitForTimeout(300);
-    await press(playPause); // running again with the edit
+    const runningAgain = (await press(playPause)) && (await reaches('running'));
     await page.waitForTimeout(500);
-    const runningBeforeReset = (await state()) === 'running';
     const pressedReset = await press(page.getByRole('button', { name: 'Reset', exact: true }));
-    await page.waitForTimeout(1500);
     pressChecks.resetWorksWhileRunning =
-      pressedReset &&
       removed &&
-      runningBeforeReset &&
-      (await state()) === 'ready' &&
-      (await page.evaluate(() => document.querySelector('.scene-name')?.textContent)) === before &&
+      runningAgain &&
+      pressedReset &&
+      (await reaches('ready', 10000)) &&
+      (await sceneName()) === before &&
       (await page.getByRole('button', { name: 'Reset', exact: true }).isHidden());
   }
   pressChecks.noPageErrors = errors.length === 0;
