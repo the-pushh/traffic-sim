@@ -6,8 +6,8 @@ export interface PillState {
   name: string;
   /** Arrows are locked while a run is under way (running or paused). */
   canSwitch: boolean;
-  /** Save and Reset work whenever edits do: not while the run is going (paused is fine). */
-  canEdit: boolean;
+  /** Save works whenever edits do: not while the run is going (paused is fine). Reset always works; it also ends the run. */
+  canSave: boolean;
   /** The scene on screen has edits that aren't saved. */
   unsaved: boolean;
   /** The scene on screen differs from the designer's network. */
@@ -55,7 +55,7 @@ export function createScenePill(container: HTMLElement, actions: PillActions) {
       }
       button('save').hidden = !state.unsaved;
       button('reset').hidden = !state.differsFromDesign;
-      button('save').disabled = button('reset').disabled = !state.canEdit;
+      button('save').disabled = !state.canSave;
     },
     /** Put keyboard focus back on a control after the scene reloads. */
     focus(action: 'previous' | 'next') {

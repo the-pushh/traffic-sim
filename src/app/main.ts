@@ -95,9 +95,8 @@ const pill = createScenePill(bottomStack, {
   save: saveScene,
   reset: () => void resetScene(),
 });
-/** Back to the designer's network (it also clears the run). Allowed while paused, when edits are. */
+/** Back to the designer's network. Works at any time: a run under way ends, as on opening a scene. */
 async function resetScene() {
-  if (run.state === 'running') return;
   store.reset();
   if (await start()) pill.focus('next');
 }
@@ -115,7 +114,7 @@ function syncRunUi() {
 }
 
 function syncPill() {
-  pill.sync({ name: store.current().name, canSwitch: !runUnderWay(), canEdit: run.state !== 'running', unsaved: store.isUnsaved(), differsFromDesign: store.differsFromDesign() });
+  pill.sync({ name: store.current().name, canSwitch: !runUnderWay(), canSave: run.state !== 'running', unsaved: store.isUnsaved(), differsFromDesign: store.differsFromDesign() });
 }
 
 // Transparent canvas: the page's --color-background token shows behind the scene.

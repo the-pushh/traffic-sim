@@ -39,6 +39,25 @@ Spec: `docs/agents/specs/sim-experience.md`. Each ticket is a GitHub issue with 
 | [#14](https://github.com/the-pushh/traffic-sim/issues/14) | T12 — Editor | T6, T11 | done | 254/254 pass after review. Placement rules TDD (6: snap to open end, grid placement, reasons, one-way continued, ramp height, controls on approaches) + edits (5: remove/move/rotate/replace with controls, timing, undo/redo) + carry-over of a paused run onto an edited network (1) + session edits (2); 246/246 pass; browser headless + visible: drawer, preview = drop, invalid reason, Escape, undo/redo, select/remove, signal timing, stop on approach, locked while running, paused edit keeps the run. Review (Standards + Spec) fixed: demand follows entries when letters move, paused carry-over keeps routes, commitments and crossings, controls movable and replaceable with a matching preview, selection outline, keyboard placement, drops over panels, ghost race, R before any pointer move; tests for a placed stop changing behaviour, Ready edits, reselection. Merged in #29 as `f10723d`. |
 | [#15](https://github.com/the-pushh/traffic-sim/issues/15) | T13 — Verification and delivery report | all | done | Production: all four presets run on https://traffic-sim-one.vercel.app (pill cycles all five scenes, Play, clock passes 0:01, no page errors). Dev server: a Main Street retime gives the same arrivals and different peak queues, side by side on the results card. A Blank board signalised crossroads built from the drawer (31 drops, each previewed valid) runs 90 s to results (70 due · 43 entered · 11 finished) and saves. The behaviour items are covered by named Vitest tests. Element types 15/22 (68%) in `ASSETS.md`; report in `decisions/sim-experience.md`. The script's exit code now gates on these checks. Review (Standards + Spec) fixed: checks didn't fail the run, an empty clock counted as moving, the group row leaked into queue parsing, Save checked by name only, arrivals not compared, missing `3d-project.json` entry. Merged in #30. |
 
+## Plan 02 — Owner feedback after the first build (2026-11-12)
+
+Owner's nine points: Pause doesn't work; Phosphor icons; a simpler results card; faint vertical columns instead of the gradient; part previews, duration beside the progress bar, and icons in the dock; the parts tray bottom-right; Space rotates while dragging; Reset doesn't reset; a performance evaluation. Owner agreed this breakdown. Their answers:
+- **Reset:** the pill's Reset. It's disabled while running, and with Pause broken the run couldn't be stopped, so it looked dead.
+- **Space:** rotates only while dragging or placing a part.
+- **Terrain:** the Kenney Nature Kit, which the owner downloads (kenney.nl refuses automated downloads).
+- **Results:** four headline numbers.
+
+| Issue | Ticket | Blocked by | Status | Verification note |
+| --- | --- | --- | --- | --- |
+| [#31](https://github.com/the-pushh/traffic-sim/issues/31) | P1 — Pause and Reset work with a real click | — | todo | |
+| [#32](https://github.com/the-pushh/traffic-sim/issues/32) | P2 — Dock redesign with Phosphor icons | P1 | todo | |
+| [#33](https://github.com/the-pushh/traffic-sim/issues/33) | P3 — Results card: headline numbers with Show details | — | todo | |
+| [#34](https://github.com/the-pushh/traffic-sim/issues/34) | P4 — Background of faint vertical colour columns | — | todo | |
+| [#35](https://github.com/the-pushh/traffic-sim/issues/35) | P5 — Parts tray: previews, docked bottom-right | P2 | todo | |
+| [#36](https://github.com/the-pushh/traffic-sim/issues/36) | P6 — Space rotates a part while dragging | P5 | todo | |
+| [#37](https://github.com/the-pushh/traffic-sim/issues/37) | P7 — Performance evaluation and fixes | P1–P6 | todo | |
+| [#38](https://github.com/the-pushh/traffic-sim/issues/38) | P8 — Scenery from the Kenney Nature Kit | owner's Nature Kit ZIP | blocked | |
+
 ## Flags from task 1
 
 - **Transcript missing.** The owner's request says to use a supplied transcript, but none was attached. Worked from `START_HERE.md` and `design.md`.

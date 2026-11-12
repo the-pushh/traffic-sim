@@ -102,15 +102,21 @@ export function createDock(container: HTMLElement, run: RunController, callbacks
   const lockHint = dock.querySelector<HTMLElement>('.lock-hint')!;
 
   let lastRendered = '';
+  let shownRunning: boolean | null = null;
   function sync() {
     const key = `${run.state}|${run.clock}|${run.duration}|${run.intensity}`;
     if (key === lastRendered) return;
     lastRendered = key;
 
+    // Swap the icon only when Play/Pause flips: replacing it on every clock tick puts a new
+    // element under a press in progress, and the browser then drops the click.
     const running = run.state === 'running';
-    playPause.innerHTML = running ? ICONS.pause : ICONS.play;
-    playPause.setAttribute('aria-label', running ? 'Pause' : 'Play');
-    playPause.title = running ? 'Pause' : 'Play';
+    if (running !== shownRunning) {
+      shownRunning = running;
+      playPause.innerHTML = running ? ICONS.pause : ICONS.play;
+      playPause.setAttribute('aria-label', running ? 'Pause' : 'Play');
+      playPause.title = running ? 'Pause' : 'Play';
+    }
     dock.dataset.state = run.state;
 
     clock.textContent = `${formatClock(run.clock)} / ${formatClock(run.duration)}`;
