@@ -8,6 +8,7 @@ interface KeyPress {
   repeat: boolean;
   ctrlKey: boolean;
   metaKey: boolean;
+  altKey: boolean;
 }
 
 /**
@@ -19,7 +20,7 @@ interface KeyPress {
 export function placementKeyAction(press: KeyPress, mode: PlacingMode): PlacementKeyAction | null {
   const placing = mode !== 'idle';
   if (press.key === ' ') return placing && !press.repeat ? 'rotate' : null;
-  if (press.key === 'r' || press.key === 'R') return press.ctrlKey || press.metaKey ? null : 'rotate';
+  if (press.key === 'r' || press.key === 'R') return press.ctrlKey || press.metaKey || press.altKey ? null : 'rotate';
   if (press.key === 'Enter') return mode === 'keyboard' ? 'drop' : null;
   if (press.key === 'Escape') return placing ? 'cancel' : null;
   return null;

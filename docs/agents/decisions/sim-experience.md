@@ -255,7 +255,7 @@ Owner agreed the spec and the T1–T13 ticket breakdown and authorised implement
   - Vehicles keep as much of their route as still exists, with their commitment and crossing reservations, so a vehicle committed to a junction clears it.
   - Controls can be moved (drag the selected sign) and replaced (inspector). Their preview stands and faces exactly as the placed sign will.
   - The selection gets a pink outline on the map.
-  - Keyboard placement: Enter on a part, arrow keys move it a tile, R rotates, Enter drops, Escape cancels.
+  - Keyboard placement: Enter (or Space) on a part, arrow keys move it a tile, Space or R turns it (P6), Enter drops, Escape cancels.
   - A release over a panel drops nothing; the preview hides and says "Drop it on the map". Pointer capture is released, so touch and pen drags reach the map.
 
 ## Verification and delivery report (T13) — 2026-11-12
@@ -311,3 +311,13 @@ Owner agreed the spec and the T1–T13 ticket breakdown and authorised implement
   - The browser check confirms the board's four corners stay clear of the tray at 1440×900 and 1280×800.
 - **Tiles:** three to a row, with the picture above a name of up to two lines. The lane note stays in the tooltip.
 - **Removed:** the old full-width strip drawer rules.
+
+## Space turns a part (P6, #36) — 2026-11-13
+
+- **Owner's choice:** while a part is being placed (dragged, or moved with the keyboard), each Space press turns it a quarter. A held Space doesn't keep spinning it. Otherwise Space pans the map as before.
+- `placementKeyAction` (`src/editor/placementKeys.ts`, unit-tested) decides what each placement key does:
+  - Space or R turns the part;
+  - Enter drops a part placed with the keyboard (Space no longer drops it);
+  - Escape cancels.
+- The editor handles these keys in the capture phase, ahead of the map's Space-pan, and only while placing. With nothing being placed, R just sets the next part's turn and the key carries on as usual. Key-ups always pass through, so the pan state can't stick.
+- **Tip:** the first placement of a road piece shows "Press Space to turn it" under the ✓/✕ label. It's remembered in this browser (`traffic-sim:space-turns-tip-seen`) once shown, and isn't shown for signs, where turning doesn't apply.

@@ -64,13 +64,17 @@ function createOnceTip(key: string) {
     }
   };
   const tip = {
+    /** This placement may show the tip; `shown` once it actually has. */
     showing: false,
+    shown: false,
     start() {
       tip.showing = !seen();
+      tip.shown = false;
     },
     finish() {
-      if (!tip.showing) return;
-      tip.showing = false;
+      const wasShown = tip.shown;
+      tip.showing = tip.shown = false;
+      if (!wasShown) return;
       try {
         localStorage.setItem(key, '1');
       } catch {
@@ -295,7 +299,8 @@ export function createEditor(host: EditorHost) {
     reasonLabel.hidden = false;
     reasonLabel.className = `placement-reason ${valid ? 'valid' : 'invalid'}`;
     reasonLabel.textContent = text;
-    if (spaceTip.showing) {
+    if (spaceTip.showing && drag && partById(drag.part).kind === 'piece') {
+      spaceTip.shown = true;
       const tip = document.createElement('span');
       tip.className = 'placement-tip';
       tip.innerHTML = 'Press <kbd>Space</kbd> to turn it';
@@ -401,24 +406,18 @@ export function createEditor(host: EditorHost) {
   window.addEventListener(
     'keydown',
     (event) => {
-      if ((event.target as HTMLElement)?.closest?.('input, textarea, select')) return;
+      if ((event.target as HTMLElement)?.closest?.('input, textarea, select, [contenteditable]')) return;
       const mode: PlacingMode = !drag ? 'idle' : drag.screen ? 'dragging' : 'keyboard';
       const action = placementKeyAction(event, mode);
+      // With nothing being placed, R just sets the turn for the next part; the key carries on as usual.
+      if (mode === 'idle') return void (action === 'rotate' && rotate());
       // A held Space while placing does nothing, but mustn't start a pan either.
-      if (!action && !(event.key === ' ' && mode !== 'idle')) return;
+      if (!action && event.key !== ' ') return;
       event.preventDefault();
       event.stopImmediatePropagation();
       if (action === 'rotate') rotate();
       if (action === 'drop') void drop();
       if (action === 'cancel') cancelDrag();
-    },
-    { capture: true },
-  );
-  window.addEventListener(
-    'keyup',
-    (event) => {
-      // The Space that turned the part doesn't reach the map's pan handling either.
-      if (event.key === ' ' && drag) event.stopImmediatePropagation();
     },
     { capture: true },
   );

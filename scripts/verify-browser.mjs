@@ -407,6 +407,27 @@ if (isDevServer) {
     await page3.keyboard.press('Escape');
     await page3.mouse.up();
     await page3.waitForTimeout(300);
+    // Space never gets stuck in pan mode: not when it starts a keyboard placement on a tile,
+    // nor when it's held before a drag and released during it.
+    const spaceStuck = () => page3.evaluate(() => 'spaceHeld' in document.querySelector('canvas').dataset);
+    const centre = await page3.evaluate(() => window.__trafficDebug.screenOf(8, 8));
+    await page3.mouse.move(centre.x, centre.y);
+    await tile.focus();
+    await page3.keyboard.press(' '); // starts keyboard placement
+    await page3.waitForTimeout(200);
+    const placingFromSpace = (await page3.evaluate(() => window.__trafficDebug.preview() !== null));
+    await page3.keyboard.press('Escape');
+    const stuckAfterKeyboardStart = await spaceStuck();
+    await page3.keyboard.down(' ');
+    await page3.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page3.mouse.down();
+    await page3.mouse.move(target.x, target.y, { steps: 6 });
+    await page3.waitForTimeout(200);
+    await page3.keyboard.up(' ');
+    await page3.keyboard.press('Escape');
+    await page3.mouse.up();
+    await page3.waitForTimeout(200);
+    editorChecks.spaceNeverStuck = placingFromSpace && !stuckAfterKeyboardStart && !(await spaceStuck());
   }
   const startCount = await pieces();
   const valid = await dragPart('straight', 1.6, 8.6);

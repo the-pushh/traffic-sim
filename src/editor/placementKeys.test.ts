@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { placementKeyAction } from './placementKeys';
 
-const key = (k: string, extra: Partial<{ repeat: boolean; ctrlKey: boolean; metaKey: boolean }> = {}) => ({ key: k, repeat: false, ctrlKey: false, metaKey: false, ...extra });
+const key = (k: string, extra: Partial<{ repeat: boolean; ctrlKey: boolean; metaKey: boolean; altKey: boolean }> = {}) => ({ key: k, repeat: false, ctrlKey: false, metaKey: false, altKey: false, ...extra });
 
 describe('keys while placing a part', () => {
   it('turns the part a quarter with each Space press while it is being placed, by mouse or keyboard', () => {
@@ -29,5 +29,6 @@ describe('keys while placing a part', () => {
     expect(placementKeyAction(key('R'), 'idle')).toBe('rotate'); // sets the turn for the next part
     expect(placementKeyAction(key('r', { metaKey: true }), 'dragging')).toBeNull();
     expect(placementKeyAction(key('r', { ctrlKey: true }), 'idle')).toBeNull();
+    expect(placementKeyAction(key('r', { altKey: true }), 'dragging')).toBeNull();
   });
 });
