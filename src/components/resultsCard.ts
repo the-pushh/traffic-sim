@@ -2,7 +2,7 @@ import type { RunState } from '../simulation/runController';
 import type { LabelledResults } from '../simulation/traffic/trafficSession';
 import { INTENSITY_LABELS } from './dock';
 
-const escape = (text: string) => text.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
+const escapeHtml = (text: string) => text.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 
 function label(r: LabelledResults) {
   return `${r.scene} · ${INTENSITY_LABELS[r.intensity]} · ${r.duration} s`;
@@ -21,7 +21,26 @@ export function createResultsCard(container: HTMLElement, results: () => Labelle
   card.className = 'results-card';
   card.setAttribute('aria-label', 'Run results');
   card.hidden = true;
-  container.prepend(card);
+  // Reopens the card after it's closed, while the run stays ended.
+  const reopen = document.createElement('button');
+  reopen.type = 'button';
+  reopen.className = 'results-reopen';
+  reopen.textContent = 'Show results';
+  reopen.hidden = true;
+  // Announces new results to screen readers without moving focus.
+  const announcer = document.createElement('p');
+  announcer.className = 'visually-hidden';
+  announcer.setAttribute('aria-live', 'polite');
+  container.prepend(card, reopen, announcer);
+
+  const show = (visible: boolean) => {
+    card.hidden = !visible;
+    reopen.hidden = visible || !latest || state() !== 'ended';
+  };
+  reopen.addEventListener('click', () => {
+    show(true);
+    card.querySelector<HTMLButtonElement>('.results-close')?.focus();
+  });
 
   let latest: LabelledResults | null = null;
   let previous: LabelledResults | null = null;
@@ -31,7 +50,7 @@ export function createResultsCard(container: HTMLElement, results: () => Labelle
     if (!latest) return;
     const runs = previous ? [latest, previous] : [latest];
     const cells = (f: (r: LabelledResults) => string) => runs.map((r) => `<td>${f(r)}</td>`).join('');
-    const approaches = latest.peakQueues.map((q, i) => `<tr><th scope="row">${escape(q.approach)}</th>${cells((r) => String(r.peakQueues[i]?.approach === q.approach ? r.peakQueues[i].peak : '—'))}</tr>`).join('');
+    const approaches = latest.peakQueues.map((q, i) => `<tr><th scope="row">${escapeHtml(q.approach)}</th>${cells((r) => String(r.peakQueues[i]?.approach === q.approach ? r.peakQueues[i].peak : '—'))}</tr>`).join('');
     card.innerHTML = `
       <header>
         <h2>Results</h2>
@@ -39,18 +58,19 @@ export function createResultsCard(container: HTMLElement, results: () => Labelle
       </header>
       <div class="results-scroll">
         <table>
-          <thead><tr><td></td>${runs.map((r, i) => `<th scope="col"><span class="run-name">${i === 0 ? 'This run' : 'Previous run'}</span><span class="run-label">${escape(label(r))}</span></th>`).join('')}</tr></thead>
+          <thead><tr><td></td>${runs.map((r, i) => `<th scope="col"><span class="run-name">${i === 0 ? 'This run' : 'Previous run'}</span><span class="run-label">${escapeHtml(label(r))}</span></th>`).join('')}</tr></thead>
           <tbody>
             <tr><th scope="row">Trips due · entered · finished</th>${cells((r) => `${r.due} · ${r.entered} · ${r.finished}`)}</tr>
             <tr><th scope="row">Average travel time</th>${cells(travelTime)}</tr>
-            <tr><th scope="row">Blocked trips</th>${cells((r) => String(r.blocked))}</tr>
-            <tr class="group"><th scope="rowgroup" colspan="${runs.length + 1}">Peak queue, vehicles</th></tr>
+            <tr><th scope="row">Blocked trips</th>${cells((r) => `${r.blocked} <span class="sample">of ${r.due} due</span>`)}</tr>
+            <tr class="group"><th scope="rowgroup" colspan="${runs.length + 1}">Peak queue, vehicles <span class="sample">· ${latest.peakQueues.length} approaches</span></th></tr>
             ${approaches}
           </tbody>
         </table>
       </div>`;
     card.querySelector('.results-close')!.addEventListener('click', () => {
-      card.hidden = true;
+      show(false);
+      reopen.focus();
     });
   };
 
@@ -64,8 +84,12 @@ export function createResultsCard(container: HTMLElement, results: () => Labelle
         previous = latest;
         latest = results();
         render();
-        card.hidden = false;
-      } else if (now === 'running' || now === 'ready') card.hidden = true;
+        show(true);
+        announcer.textContent = `Run ended. Results: ${latest.finished} of ${latest.due} trips finished.`;
+      } else if (now === 'running' || now === 'ready') {
+        show(false);
+        announcer.textContent = '';
+      }
       lastState = now;
     },
   };

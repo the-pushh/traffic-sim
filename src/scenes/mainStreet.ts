@@ -12,14 +12,15 @@ const JUNCTION_COLUMNS = [3.5, 9.5, 11.5];
 const ARTERIAL_GREEN = 30;
 const SIDE_GREEN = 24;
 const AMBER = 3;
-const CYCLE = ARTERIAL_GREEN + AMBER + SIDE_GREEN + AMBER;
 /**
- * When each junction's arterial green starts, seconds into the cycle. Staggered by the
- * eastbound driving time between junctions (52.5 m ≈ 4 s, then 17.5 m ≈ 1.5 s) so an
- * eastbound group can sometimes get through all three; westbound is out of step, so the
- * short block fills and backs into the middle junction.
+ * When each junction's arterial green starts, seconds into the cycle. The middle light
+ * follows the first by about the eastbound driving time (52.5 m ≈ 5 s), so a group from
+ * the first light can get through all three. The last light turns red 2 s before the
+ * middle one, so westbound traffic isn't caught in the short block (which would shut out
+ * the last side street's turners); eastbound stragglers do get caught there, filling it
+ * and holding the middle junction's traffic back.
  */
-const GREEN_STARTS = [0, 4, -2];
+const GREEN_STARTS = [0, 5, 3];
 
 const arterialTiming = (start: number): SignalTiming => ({ green: ARTERIAL_GREEN, amber: AMBER, red: SIDE_GREEN + AMBER, offset: -start });
 const sideTiming = (start: number): SignalTiming => ({ green: SIDE_GREEN, amber: AMBER, red: ARTERIAL_GREEN + AMBER, offset: -(start + ARTERIAL_GREEN + AMBER) });
@@ -67,4 +68,3 @@ export const mainStreet: SceneDefinition = {
   demand: { gateways: { H: 1, D: 1, A: 0.25, B: 0.25, C: 0.25, F: 0.25, G: 0.25 }, destinations: { E: 1, I: 1, A: 0.2, B: 0.2, C: 0.2, F: 0.2, G: 0.2 } },
 };
 
-export const MAIN_STREET_CYCLE = CYCLE;

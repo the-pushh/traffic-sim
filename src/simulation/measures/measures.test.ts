@@ -27,7 +27,7 @@ function run(s: TrafficSimulation, seconds: number, each?: () => void) {
 
 describe('measures', () => {
   it('names each approach by its junction and the direction traffic arrives in', () => {
-    expect(describeApproaches(pieces, controls).map((a) => a.name)).toEqual(['Crossing 1 · eastbound', 'Crossing 1 · westbound']);
+    expect(describeApproaches(pieces, graph, controls).map((a) => a.name)).toEqual(['Crossing 1 · eastbound', 'Crossing 1 · westbound']);
   });
 
   it('counts the vehicles queued at each approach, live and at their peak', () => {
@@ -46,7 +46,7 @@ describe('measures', () => {
     const s = new TrafficSimulation(graph, { seed: 2, controls, demand: { tripsPerMinute: 12, entries: { B: 1 } } });
     const queues = new QueueTracker(controls.length);
     run(s, 60, () => queues.sample(s.queueLengths()));
-    const results = summariseRun(s, queues, describeApproaches(pieces, controls));
+    const results = summariseRun(s, queues, describeApproaches(pieces, graph, controls));
     const { due, entered, finished, blocked } = s.counts;
     expect(results).toMatchObject({ due, entered, finished, blocked, travelTimeSamples: finished });
     expect(finished).toBeGreaterThan(3);
@@ -63,7 +63,7 @@ describe('measures', () => {
 
   it('has no average travel time until a trip finishes', () => {
     const s = new TrafficSimulation(graph, { seed: 3, controls });
-    const results = summariseRun(s, new QueueTracker(controls.length), describeApproaches(pieces, controls));
+    const results = summariseRun(s, new QueueTracker(controls.length), describeApproaches(pieces, graph, controls));
     expect(results.averageTravelTime).toBeNull();
     expect(results.travelTimeSamples).toBe(0);
   });

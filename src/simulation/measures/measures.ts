@@ -1,4 +1,6 @@
-import { portPose } from '../network/buildLaneGraph';
+import { type LaneGraph, portPose } from '../network/buildLaneGraph';
+import { findConflicts } from '../network/conflicts';
+import { junctionClusters } from '../network/junctions';
 import type { PiecePlacement } from '../network/scene';
 import type { ApproachControl } from '../traffic/signals';
 import type { TrafficSimulation } from '../traffic/trafficSimulation';
@@ -6,8 +8,8 @@ import type { TrafficSimulation } from '../traffic/trafficSimulation';
 /** A controlled approach as players see it: a name and where its stop line is (board tiles). */
 export interface Approach {
   name: string;
-  /** Centre of the approach's stop line on the board, tiles: [x, level, z]. */
-  at: [number, number, number];
+  /** Centre of the approach's stop line on the board, tiles: [x, level, z]; null for a control placed by hand without a piece. */
+  at: [number, number, number] | null;
   /** Unit vector pointing back up the approach (towards arriving traffic), [x, z]. */
   upstream: [number, number];
 }
@@ -41,59 +43,66 @@ function groupKind(piece: string) {
 }
 
 /**
- * Name each approach by its junction (pieces that touch count as one, numbered west to
- * east then north to south within each kind) and the direction traffic arrives in.
+ * Name each approach by its junction (the same grouping the simulation drives by: junction
+ * pieces whose lanes join directly are one junction, e.g. the two tiles where a divided
+ * road meets a side street), numbered west to east then north to south within each kind,
+ * and the direction traffic arrives in.
  */
-export function describeApproaches(pieces: PiecePlacement[], controls: ApproachControl[]): Approach[] {
-  const controlled = [...new Set(controls.map((c) => c.piece).filter((p): p is number => p !== undefined))];
-  // Group touching pieces (e.g. the two tiles where a divided road crosses a side street).
-  const group = new Map<number, number>(controlled.map((p) => [p, p]));
-  const root = (p: number): number => (group.get(p) === p ? p : root(group.get(p)!));
-  for (const a of controlled)
-    for (const b of controlled) {
-      const [pa, pb] = [pieces[a].at, pieces[b].at];
-      if (a < b && Math.abs(pa[0] - pb[0]) + Math.abs(pa[1] - pb[1]) <= 1 + 1e-9) group.set(root(b), root(a));
-    }
-  const roots = [...new Set(controlled.map(root))];
-  const centre = (r: number) => {
-    const members = controlled.filter((p) => root(p) === r).map((p) => pieces[p].at);
-    return [members.reduce((s, m) => s + m[0], 0) / members.length, members.reduce((s, m) => s + m[1], 0) / members.length];
+export function describeApproaches(pieces: PiecePlacement[], graph: LaneGraph, controls: ApproachControl[]): Approach[] {
+  const cluster = junctionClusters(graph, findConflicts(graph));
+  // Which junction each controlled piece belongs to: its cluster, or the piece itself (e.g. a crossing).
+  const junctionOf = (piece: number) => {
+    const lane = graph.lanes.find((l) => l.piece === piece);
+    return lane && cluster[lane.id] >= 0 ? `c${cluster[lane.id]}` : `p${piece}`;
   };
-  const names = new Map<number, string>();
+  const controlled = [...new Set(controls.map((c) => c.piece).filter((p): p is number => p !== undefined))];
+  const members = new Map<string, number[]>();
+  for (const piece of controlled) members.set(junctionOf(piece), [...(members.get(junctionOf(piece)) ?? []), piece]);
+  const centre = (key: string) => {
+    const at = members.get(key)!.map((p) => pieces[p].at);
+    return [at.reduce((s, a) => s + a[0], 0) / at.length, at.reduce((s, a) => s + a[1], 0) / at.length];
+  };
+  const names = new Map<string, string>();
   const counters = new Map<string, number>();
-  for (const r of roots.sort((a, b) => centre(a)[0] - centre(b)[0] || centre(a)[1] - centre(b)[1])) {
-    const kind = groupKind(pieces[r].piece);
+  for (const key of [...members.keys()].sort((a, b) => centre(a)[0] - centre(b)[0] || centre(a)[1] - centre(b)[1])) {
+    const kind = groupKind(pieces[members.get(key)![0]].piece);
     counters.set(kind, (counters.get(kind) ?? 0) + 1);
-    names.set(r, `${kind} ${counters.get(kind)}`);
+    names.set(key, `${kind} ${counters.get(kind)}`);
   }
   return controls.map((control, i) => {
-    if (control.piece === undefined || control.port === undefined) return { name: `Approach ${i + 1}`, at: [0, 0, 0], upstream: [0, 0] };
+    if (control.piece === undefined || control.port === undefined) return { name: `Approach ${i + 1}`, at: null, upstream: [0, 0] };
     const { centre: at, facing } = portPose(pieces[control.piece], control.port);
     // Traffic arrives heading against the port's outward direction.
     const heading = [-facing[0], -facing[1]];
     const direction = DIRECTIONS.find(([x, z]) => Math.abs(heading[0] - x) < 0.5 && Math.abs(heading[1] - z) < 0.5)?.[2] ?? 'arriving';
-    return { name: `${names.get(root(control.piece))} · ${direction}`, at, upstream: [facing[0], facing[1]] };
+    return { name: `${names.get(junctionOf(control.piece))} · ${direction}`, at, upstream: [facing[0], facing[1]] };
   });
 }
 
 /** Live and peak queue length at each approach over a run. */
 export class QueueTracker {
-  live: number[];
-  peak: number[];
+  /** Vehicles queued at each approach at the last sample. */
+  readonly live: number[];
+  /** The most queued at each approach since the last reset. */
+  readonly peak: number[];
 
   constructor(approaches: number) {
     this.live = Array(approaches).fill(0);
     this.peak = Array(approaches).fill(0);
   }
 
-  sample(queues: number[]) {
-    this.live = [...queues];
-    this.peak = this.peak.map((p, i) => Math.max(p, queues[i] ?? 0));
+  /** Record this moment's queues (updated in place: cheap enough to call every step). */
+  sample(queues: readonly number[]) {
+    for (let i = 0; i < this.live.length; i++) {
+      this.live[i] = queues[i] ?? 0;
+      if (this.live[i] > this.peak[i]) this.peak[i] = this.live[i];
+    }
   }
 
+  /** Start a new run's peaks. */
   reset() {
-    this.live = this.live.map(() => 0);
-    this.peak = this.peak.map(() => 0);
+    this.live.fill(0);
+    this.peak.fill(0);
   }
 }
 

@@ -7,7 +7,7 @@ import type { TrafficSimulation } from '../simulation/traffic/trafficSimulation'
  * vehicle is on screen and why it is doing what it does, and closing pieces to check blocked
  * trips. Not included in production builds.
  */
-export function exposeTrafficDebug(canvas: HTMLCanvasElement, camera: Camera, traffic: Object3D, graph: LaneGraph, simulation: () => TrafficSimulation, queues: () => { approach: { name: string }; live: number }[]) {
+export function exposeTrafficDebug(canvas: HTMLCanvasElement, camera: Camera, traffic: Object3D, graph: LaneGraph, simulation: () => TrafficSimulation, queues: () => { approach: string; live: number }[], queueLabelsShown: () => number) {
   if (!import.meta.env.DEV) return;
   (window as unknown as { __trafficDebug: unknown }).__trafficDebug = {
     vehicles: () =>
@@ -19,7 +19,9 @@ export function exposeTrafficDebug(canvas: HTMLCanvasElement, camera: Camera, tr
       }),
     counts: () => simulation().counts,
     blocked: () => simulation().blockedAtEntries(),
-    queues: () => queues().map((q) => ({ approach: q.approach.name, live: q.live })),
+    queues,
+    /** Queue labels currently drawn over approaches. */
+    queueLabelsShown,
     /** Close every lane of these pieces, as an edit removing them would (until T12's editor exists). */
     closePieces: (pieces: number[]) => simulation().setClosed(graph.lanes.filter((l) => pieces.includes(l.piece)).map((l) => l.id)),
   };

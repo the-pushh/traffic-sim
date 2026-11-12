@@ -305,3 +305,35 @@ describe('junctions: controls change the outcome', () => {
     expect(iWait(true)).toBe(false); // a stop sign on their side: I go first
   });
 });
+
+describe('junctions: turning across traffic on a signal', () => {
+  const pieces = fourArms({ piece: 'crossroad', at: [8.5, 8.5], rotation: 0 }, 0.5);
+  const g = buildLaneGraph(pieces);
+  const label = (x: number, z: number) => g.gateways.find((w) => w.at[0] === x && w.at[1] === z)!.label;
+  const [N, E, W] = [label(8.5, 0), label(16, 8.5), label(0, 8.5)];
+  // East–west green for the first 15 s, amber to 18 s, then red until 38 s.
+  const EAST_WEST = { green: 15, amber: 3, red: 20, offset: 0 };
+  const NORTH_SOUTH = { green: 17, amber: 3, red: 18, offset: -18 };
+
+  it('finishes a turn it was waiting to make once the light turns amber and oncoming traffic stops', () => {
+    const s = new TrafficSimulation(g, {
+      seed: 5,
+      controls: resolveControls(pieces, g, [
+        { type: 'signal', piece: 0, port: 'w', timing: EAST_WEST },
+        { type: 'signal', piece: 0, port: 'e', timing: EAST_WEST },
+        { type: 'signal', piece: 0, port: 'n', timing: NORTH_SOUTH },
+        { type: 'signal', piece: 0, port: 's', timing: NORTH_SOUTH },
+      ]),
+    });
+    // Waiting at the west line to turn left (north), with a steady oncoming stream from the east.
+    const turner = s.addVehicle({ type: 'sedan', profile: 'steady', from: W, to: N, position: 69.5, speed: 0 });
+    for (let i = 0; i < 6; i++) s.addVehicle({ type: 'sedan', profile: 'steady', from: E, to: W, position: 66 - i * 18, speed: 12 });
+    let turnedAt = Infinity;
+    run(s, 40, () => {
+      if (turnedAt === Infinity && s.has(turner) && g.lanes[s.vehicle(turner).route[s.vehicle(turner).routeIndex]].piece === 0) turnedAt = s.time;
+    });
+    // It goes in the amber (or the moment after), not a whole cycle later.
+    expect(turnedAt).toBeGreaterThan(14);
+    expect(turnedAt).toBeLessThan(20);
+  });
+});

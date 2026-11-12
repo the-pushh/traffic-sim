@@ -1,5 +1,6 @@
 import type { LaneGraph } from '../network/buildLaneGraph';
 import { type Conflict, findConflicts, type Turn, turnBetween, turnOf } from '../network/conflicts';
+import { junctionClusters } from '../network/junctions';
 import { type Driver, type ProfileId, sampleDriver } from './drivers';
 import { Random } from './random';
 import { Router } from './routing';
@@ -40,6 +41,8 @@ const CURVE_ACCELERATION = 2.5;
 const COURTESY_RANGE = 70;
 /** Speed a courteous driver slows to while letting someone out, m/s. */
 const COURTESY_SPEED = 3;
+/** A driver this close to the stop line (beyond the stop margin) is waiting at it, metres. */
+const AT_THE_LINE = 1.5;
 /** Where lanes split, a vehicle on the other branch blocks the split until its rear is this far along, metres. */
 const DIVERGE_CLEARANCE = 3;
 /** Gateways closer than this (tiles) are one road: the two carriageways of a divided road are 1 tile apart. */
@@ -59,6 +62,9 @@ const REROUTE_SHARE = 0.15;
 const FRUSTRATED_ROUTE_WEIGHT = 4;
 /** A trip waiting at an entry reconsiders its route this often while the entrance is full, seconds. */
 const ENTRY_ROUTE_REFRESH = 1;
+
+/** A path through a whole junction: the lane it enters by and which way it turns overall. */
+type Movement = { entry: number; turn: Turn };
 
 /** Why a vehicle is doing what it does, as shown on hover. */
 export type Reason =
@@ -217,6 +223,7 @@ export class TrafficSimulation {
   private readonly controlOnLane = new Map<number, ApproachControl>();
   /** Every controlled approach, in the order given (`controls`, then `signals`). */
   private readonly controls: ApproachControl[];
+  private readonly controlIndex: Map<ApproachControl, number>;
   private readonly conflicts: Map<number, Conflict[]>;
   private readonly turns: Turn[];
   /**
@@ -247,6 +254,8 @@ export class TrafficSimulation {
   private readonly exitLanes: ReadonlySet<number>;
   /** Each gateway's entry lanes and its exit lanes as a set, by label. */
   private readonly gateways: Map<string, { entryLanes: number[]; exits: ReadonlySet<number> }>;
+  /** Every trip that has arrived at an entry, in order: what Restart must replay exactly. */
+  readonly arrivals: { at: number; from: string; to: string; type: VehicleTypeId; profile: ProfileId }[] = [];
   /** Seconds each finished trip took from entering the board to leaving it. */
   travelTimes: number[] = [];
   private readonly enteredAt = new Map<number, number>();
@@ -268,6 +277,7 @@ export class TrafficSimulation {
     const controls: ApproachControl[] = [...(options.controls ?? []), ...(options.signals ?? []).map((s) => ({ type: 'signal' as const, lanes: s.lanes, timing: s.timing }))];
     for (const control of controls) for (const lane of control.lanes) this.controlOnLane.set(lane, control);
     this.controls = controls;
+    this.controlIndex = new Map(controls.map((c, i) => [c, i]));
     this.conflicts = findConflicts(graph);
     this.turns = graph.lanes.map(turnOf);
     this.junctionOf = junctionClusters(graph, this.conflicts);
@@ -465,6 +475,7 @@ export class TrafficSimulation {
       while (this.time >= entry.nextArrival) {
         const trip = this.newTrip(entry.label);
         if (trip) {
+          this.arrivals.push({ at: this.time, from: entry.label, to: trip.to, type: trip.type, profile: trip.driver.profile });
           this.due++;
           entry.waiting.push(trip);
         }
@@ -538,16 +549,17 @@ export class TrafficSimulation {
   /**
    * Vehicles queued at each controlled approach right now, in the order the controls were
    * given: everyone held up (below walking pace) whose next control is that approach.
+   * Fills and returns `into` when given, so callers sampling every step don't allocate.
    */
-  queueLengths(): number[] {
-    const queues = this.controls.map(() => 0);
-    const index = new Map(this.controls.map((c, i) => [c, i]));
+  queueLengths(into: number[] = []): number[] {
+    into.length = this.controls.length;
+    into.fill(0);
     for (const v of this.vehicles.values()) {
       if (v.speed >= HELD_UP) continue;
       const next = this.nextStopLine(v);
-      if (next) queues[index.get(next.control)!]++;
+      if (next) into[this.controlIndex.get(next.control)!]++;
     }
-    return queues;
+    return into;
   }
 
   /** Trips turned away at each entry since counting started because there was no way through, by gateway label. */
@@ -999,7 +1011,7 @@ export class TrafficSimulation {
           const toConflict = this.distanceToPoint(other, conflict.lane, conflict.otherAt * METRES_PER_TILE);
           if (toConflict === null || toConflict + other.type.length < 0 || toConflict > LOOKAHEAD) continue;
           if (this.heldByLight(other, toConflict)) continue;
-          const relation = this.priority(mine, myMovement, conflict.lane, this.movement(other.route, other.route.indexOf(conflict.lane, other.routeIndex > 0 ? other.routeIndex - 1 : 0)));
+          const relation = this.priority(mine, myMovement, conflict.lane, this.movement(other.route, other.route.indexOf(conflict.lane)));
           if (relation === 'go' && other.committedJunction === null && this.junctionOf[other.route[other.routeIndex]] !== this.junctionOf[conflict.lane]) continue;
           // They're hanging back to let us out.
           if (other.decisions.get(`courtesy:${v.id}`) === true && other.committedJunction === null) continue;
@@ -1046,7 +1058,7 @@ export class TrafficSimulation {
    * overall (a left turn across a divided road is straight on each tile but left overall).
    * Null if `index` isn't on the route.
    */
-  private movement(route: number[], index: number): { entry: number; turn: Turn } | null {
+  private movement(route: number[], index: number): Movement | null {
     if (index < 0) return null;
     const junction = this.junctionOf[route[index]];
     let [start, end] = [index, index];
@@ -1163,7 +1175,7 @@ export class TrafficSimulation {
    * `entryLane`) and traffic on `other`: `yield` (I give way), `go` (they give way), or
    * `mutual` (neither has priority: whoever reaches the conflict first goes).
    */
-  private priority(mine: number, myMovement: { entry: number; turn: Turn } | null, other: number, theirMovement: { entry: number; turn: Turn } | null): 'yield' | 'go' | 'mutual' {
+  private priority(mine: number, myMovement: Movement | null, other: number, theirMovement: Movement | null): 'yield' | 'go' | 'mutual' {
     const entryLane = myMovement?.entry ?? mine;
     const myTurn = myMovement?.turn ?? this.turns[mine];
     // By the time I reach a lane that continues within its piece (round a ring) I'm circulating: no approach control.
@@ -1243,9 +1255,12 @@ export class TrafficSimulation {
     const aspect = aspectAt(next.control.timing!, this.time);
     if (aspect === 'green') return null;
     const canStop = next.distance > (v.speed * v.speed) / (2 * v.driver.comfortBraking);
-    // Waiting at the line to turn across oncoming traffic: on amber the oncoming stream
-    // stops, so finish the turn (the junction's conflict checks still apply).
-    const turningOnAmber = aspect === 'amber' && v.reason === 'Waiting for a gap' && next.distance < STOP_LINE_MARGIN + 1.5;
+    // At the line waiting to turn across oncoming traffic, or already committed and pulling
+    // away: on amber the oncoming stream stops, so finish the turn (the junction's conflict
+    // checks still apply).
+    const atLine = next.distance < STOP_LINE_MARGIN + AT_THE_LINE;
+    const committedHere = v.committedJunction !== null && this.junctionOf[v.committedJunction] === this.junctionOf[next.lane];
+    const turningOnAmber = aspect === 'amber' && atLine && (v.reason === 'Waiting for a gap' || committedHere);
     if (aspect === 'amber' && (!canStop || turningOnAmber)) {
       v.committedThrough = next.lane;
       return null;
@@ -1303,21 +1318,6 @@ const OBSTACLE_REASONS: Record<Exclude<Obstacle['kind'], 'car'>, Reason> = {
   exit: 'Exit lane full',
   closed: 'Road closed ahead',
 };
-
-/** Group junction pieces (pieces with conflicting lanes) that join directly into one junction; -1 per lane elsewhere. */
-function junctionClusters(graph: LaneGraph, conflicts: Map<number, Conflict[]>): number[] {
-  const junctionPiece = new Set(graph.lanes.filter((l) => conflicts.get(l.id)!.length > 0).map((l) => l.piece));
-  const parent = new Map([...junctionPiece].map((p) => [p, p]));
-  const root = (p: number): number => (parent.get(p) === p ? p : root(parent.get(p)!));
-  for (const lane of graph.lanes) {
-    if (!junctionPiece.has(lane.piece)) continue;
-    for (const next of lane.next) {
-      const other = graph.lanes[next].piece;
-      if (junctionPiece.has(other)) parent.set(root(other), root(lane.piece));
-    }
-  }
-  return graph.lanes.map((l) => (junctionPiece.has(l.piece) ? root(l.piece) : -1));
-}
 
 /** Tightest turning radius along a polyline (from each three consecutive points), tiles; Infinity if straight. */
 function tightestRadius(points: [number, number, number][]): number {

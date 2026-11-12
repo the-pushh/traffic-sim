@@ -10,6 +10,7 @@ export function textSprite(text: string, color: string) {
   return sprite;
 }
 
+/** The shared material for a badge with this text and colour. */
 export function badgeMaterial(text: string, color: string) {
   const key = `${text}|${color}`;
   let material = badgeMaterials.get(key);

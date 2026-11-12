@@ -504,3 +504,8 @@ button.primary {
   color: var(--color-text);
   font-weight: bold;
 }
+
+.results-reopen {
+  border-radius: var(--radius-pill);
+  box-shadow: var(--shadow-floating);
+}

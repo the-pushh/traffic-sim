@@ -3,21 +3,26 @@ import { boardToWorld } from '../../scenes/board';
 import type { Approach } from '../../simulation/measures/measures';
 import { badgeMaterial, textSprite } from './badges';
 
+/** Amber with white bold numerals (about 3.6:1, enough for large bold text over the 3D scene). */
 const QUEUE_COLOR = '#b86e00';
-/** How far back up the approach from the stop line the label sits, tiles; and how high, world units. */
-const BACK = 0.7;
-const HEIGHT = 1.8;
+/** How far back up the approach from the stop line the label sits, tiles. */
+const LABEL_SETBACK = 0.7;
+/** How high above the road the label floats, world units. */
+const LABEL_HEIGHT = 1.8;
+/** Queue labels are a little smaller than gateway badges (world units). */
+const LABEL_SIZE = 1.5;
 
 /** A live queue count floating over each controlled approach, hidden while it's empty. */
 export function createQueueLabels(approaches: Approach[]) {
   const group = new Group();
   group.name = 'queue-labels';
-  const labels: Sprite[] = approaches.map((approach) => {
+  const labels: (Sprite | null)[] = approaches.map((approach) => {
+    if (!approach.at) return null;
     const [x, level, z] = approach.at;
-    const [wx, wy, wz] = boardToWorld([x + approach.upstream[0] * BACK, level, z + approach.upstream[1] * BACK]);
+    const [wx, wy, wz] = boardToWorld([x + approach.upstream[0] * LABEL_SETBACK, level, z + approach.upstream[1] * LABEL_SETBACK]);
     const label = textSprite('0', QUEUE_COLOR);
-    label.position.set(wx, wy + HEIGHT, wz);
-    label.scale.setScalar(1.5);
+    label.position.set(wx, wy + LABEL_HEIGHT, wz);
+    label.scale.setScalar(LABEL_SIZE);
     label.visible = false;
     label.name = `queue-${approach.name}`;
     group.add(label);
@@ -27,13 +32,16 @@ export function createQueueLabels(approaches: Approach[]) {
   return {
     group,
     /** Show each approach's live queue (vehicles); updates only labels whose count changed. */
-    update(live: number[]) {
+    update(live: readonly number[]) {
       live.forEach((count, i) => {
-        if (count === shown[i]) return;
+        const label = labels[i];
+        if (!label || count === shown[i]) return;
         shown[i] = count;
-        labels[i].visible = count > 0;
-        if (count > 0) labels[i].material = badgeMaterial(count > 99 ? '99+' : String(count), QUEUE_COLOR);
+        label.visible = count > 0;
+        if (count > 0) label.material = badgeMaterial(count > 99 ? '99+' : String(count), QUEUE_COLOR);
       });
     },
+    /** How many queue labels are showing (for the browser check). */
+    visibleCount: () => labels.filter((l) => l?.visible).length,
   };
 }

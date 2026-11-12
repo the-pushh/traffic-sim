@@ -174,6 +174,11 @@ runChecks.resultsCardOnEnd = await runPage.evaluate(() => {
   return text.includes('Main Street · Medium · 30 s') && /Trips due · entered · finished\s*\d+ · \d+ · \d+/.test(text) && text.includes('Peak queue') && text.includes('Junction 1 · eastbound');
 });
 await runPage.locator('.bottom-stack').screenshot({ path: `${outDir}/16-results-first-run.png` });
+await runPage.getByRole('button', { name: 'Close results' }).click();
+runChecks.resultsCloseAndReopen =
+  (await runPage.locator('.results-card').isHidden()) &&
+  (await runPage.evaluate(() => document.activeElement?.textContent === 'Show results')) &&
+  (await runPage.getByRole('button', { name: 'Show results' }).click().then(() => runPage.locator('.results-card').isVisible()));
 await runPage.locator('.dock').screenshot({ path: `${outDir}/13-dock-ended.png` });
 // Click Play and read the clock in the same task, so the check doesn't depend on timing.
 runChecks.playAfterEndContinuesFromZero = await runPage.evaluate(() => {
@@ -211,7 +216,7 @@ if (isDevServer) {
   const vehicles = await runPage.evaluate(() => window.__trafficDebug.vehicles());
   runChecks.trafficOnTheRoad = vehicles.length >= 1;
   runChecks.someQueuedOrStoppedAtRed = sawQueue;
-  runChecks.liveQueueShownOnApproach = await runPage.evaluate(() => window.__trafficDebug.queues().some((q) => q.live > 0));
+  runChecks.liveQueueShownOnApproach = await runPage.evaluate(() => window.__trafficDebug.queues().some((q) => q.live > 0) && window.__trafficDebug.queueLabelsShown() > 0);
   const target = vehicles.find((v) => v.x > 100 && v.x < 1300 && v.y > 80 && v.y < 650);
   if (target) {
     await runPage.mouse.move(target.x, target.y);

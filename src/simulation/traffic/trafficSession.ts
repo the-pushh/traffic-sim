@@ -36,6 +36,7 @@ export class TrafficSession {
   private readonly controls: ApproachControl[];
   private readonly queues: QueueTracker;
   private builtFor = -1;
+  private readonly queueBuffer: number[] = [];
   private lastState: RunState = 'ready';
 
   constructor(
@@ -44,7 +45,7 @@ export class TrafficSession {
     private readonly run: RunController,
   ) {
     this.controls = resolveControls(scene.pieces, graph, scene.controls);
-    this.approaches = describeApproaches(scene.pieces, this.controls);
+    this.approaches = describeApproaches(scene.pieces, graph, this.controls);
     this.queues = new QueueTracker(this.controls.length);
     this.rebuild();
   }
@@ -60,7 +61,7 @@ export class TrafficSession {
     this.lastState = this.run.state;
     for (let i = 0; i < steps; i++) {
       this.simulation.step(STEP);
-      this.queues.sample(this.simulation.queueLengths());
+      this.queues.sample(this.simulation.queueLengths(this.queueBuffer));
     }
   }
 
@@ -69,9 +70,9 @@ export class TrafficSession {
     return { scene: this.scene.name, intensity: this.run.intensity, duration: this.run.duration, ...summariseRun(this.simulation, this.queues, this.approaches) };
   }
 
-  /** Vehicles queued at each approach right now. */
-  liveQueues(): { approach: Approach; live: number }[] {
-    return this.approaches.map((approach, i) => ({ approach, live: this.queues.live[i] }));
+  /** Vehicles queued at each approach right now, in `approaches` order. */
+  liveQueues(): readonly number[] {
+    return this.queues.live;
   }
 
   private rebuild() {

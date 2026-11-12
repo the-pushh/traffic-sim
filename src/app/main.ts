@@ -139,7 +139,7 @@ async function start() {
     scene.add(queueLabels.group);
     tooltip ??= createVehicleTooltip(viewport, renderer.domElement);
     const pickVehicle = createVehiclePicker(traffic.group);
-    exposeTrafficDebug(renderer.domElement, camera, traffic.group, graph, () => session!.simulation, () => session!.liveQueues());
+    exposeTrafficDebug(renderer.domElement, camera, traffic.group, graph, () => session!.simulation, () => session!.approaches.map((a, i) => ({ approach: a.name, live: session!.liveQueues()[i] })), queueLabels.visibleCount);
     observer = ObserverCamera.framing(camera, bounds, { coveredBottom });
     const joystick = new CameraJoystick(observer);
     const detachViewport = attachViewportInput(renderer.domElement, observer);
@@ -158,7 +158,7 @@ async function start() {
       traffic.sync(current.simulation);
       updateSignals(current.simulation.time);
       updateBlocked(current.simulation.blockedAtEntries());
-      queueLabels.update(current.liveQueues().map((q) => q.live));
+      queueLabels.update(current.liveQueues());
       tooltip!.update((ndc) => pickVehicle(camera, ndc), current.simulation, time);
       syncRunUi();
       renderer.render(scene, camera);

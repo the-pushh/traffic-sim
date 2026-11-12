@@ -50,40 +50,52 @@ describe('Main Street preset', () => {
       expect(entered).toBeGreaterThan(due * 0.8);
       expect(finished).toBeGreaterThan(due * 0.5);
       // Side-street turners into the short block can miss a green or two, but nobody is stuck.
-      expect(longestStop).toBeLessThan(150);
+      expect(longestStop).toBeLessThan(130);
     }
   });
 
   it('sometimes lets an eastbound group through all three lights without stopping', () => {
-    const s = simulate('medium', 3);
-    const stopped = new Set<number>();
-    const passedAll: number[] = [];
-    const seen = new Map<number, number>(); // vehicle → time it crossed the first junction
-    for (let i = 0; i < 240 * 30; i++) {
-      s.step(STEP);
-      for (const v of s.allVehicles()) {
-        const [x, z] = xOf(s, v.id);
-        if (z !== 8.5) continue; // eastbound carriageway only
-        if (x > 3.5 && v.speed < 1) stopped.add(v.id);
-        if (x === 3.5 && !seen.has(v.id)) seen.set(v.id, s.time);
-        if (x > 11.5 && seen.has(v.id) && !stopped.has(v.id) && !passedAll.includes(v.id)) passedAll.push(v.id);
+    // At High, queues released by the first light leave as groups.
+    const groupGetsThrough = (seed: number) => {
+      const s = simulate('high', seed);
+      const stopped = new Set<number>();
+      const passedAll: number[] = [];
+      const seen = new Map<number, number>(); // vehicle → time it crossed the first junction
+      for (let i = 0; i < 240 * 30; i++) {
+        s.step(STEP);
+        for (const v of s.allVehicles()) {
+          const [x, z] = xOf(s, v.id);
+          if (z !== 8.5) continue; // eastbound carriageway only
+          if (x > 3.5 && v.speed < 1) stopped.add(v.id);
+          if (x === 3.5 && !seen.has(v.id)) seen.set(v.id, s.time);
+          if (x > 11.5 && seen.has(v.id) && !stopped.has(v.id) && !passedAll.includes(v.id)) passedAll.push(v.id);
+        }
       }
-    }
-    // A group: at least three vehicles that crossed the first light within 8 s of each other and never stopped after it.
-    const times = passedAll.map((id) => seen.get(id)!).sort((a, b) => a - b);
-    const group = times.some((t, i) => i + 2 < times.length && times[i + 2] - t < 8);
-    expect(group).toBe(true);
+      // A group: three vehicles that crossed the first light within 10 s of each other and never stopped after it.
+      const times = passedAll.map((id) => seen.get(id)!).sort((a, b) => a - b);
+      return times.some((t, i) => i + 2 < times.length && times[i + 2] - t < 10);
+    };
+    expect([1, 2, 3, 4].filter(groupGetsThrough).length).toBeGreaterThanOrEqual(2);
   });
 
-  it('has a short block that fills and holds traffic back at the junction before it', () => {
+  it('has a short block that fills and backs eastbound traffic up into the junction before it', () => {
+    // Moments when the eastbound short block (one tile, two lanes) holds traffic and a driver
+    // at the middle junction waits for room in it.
     let heldBack = 0;
     for (const seed of [1, 2]) {
       const s = simulate('high', seed);
       for (let i = 0; i < 180 * 30; i++) {
         s.step(STEP);
-        for (const v of s.allVehicles()) {
-          const [x] = xOf(s, v.id);
-          if (v.reason === 'Exit lane full' && x >= 8.5 && x <= 12.5) heldBack++;
+        const all = s.allVehicles();
+        const blockOccupied = all.some((v) => {
+          const [x, z] = xOf(s, v.id);
+          return x === 10.5 && z === 8.5;
+        });
+        if (!blockOccupied) continue;
+        for (const v of all) {
+          const [x, z] = xOf(s, v.id);
+          const atMiddleJunction = (x === 8.5 && z === 8.5) || (x === 9.5 && (z === 6.5 || z === 9.5));
+          if (atMiddleJunction && v.reason === 'Exit lane full' && v.route.some((l) => mainStreet.pieces[graph.lanes[l].piece].at[0] === 10.5 && mainStreet.pieces[graph.lanes[l].piece].at[1] === 8.5)) heldBack++;
         }
       }
     }

@@ -126,20 +126,24 @@ Owner agreed the spec and the T1–T13 ticket breakdown and authorised implement
   - Drivers commit to the whole crossing, reserve crossings on both tiles, and never stop between them.
   - Conflicts are checked where the path enters each tile.
   - Turns are judged over the whole movement: a left across the divided road counts as a left turn.
-- **Main Street timing:** a 60 s cycle with arterial green 30 s, side green 24 s and 3 s amber.
-  - Arterial greens start at 0 s, 4 s and −2 s at the three junctions. An eastbound group can get through all three, while the short block still fills.
-  - The −2 s start keeps westbound traffic out of the short block when the middle light turns red. Otherwise the side street at the last junction could never turn into it.
+- **Main Street timing:** a 60 s cycle with arterial green 30 s, side green 24 s and 3 s amber. Arterial greens start at 0 s, 5 s and 3 s at the three junctions.
+  - The middle light follows the first by the eastbound driving time, so groups get through all three.
+  - The last light turns red 2 s before the middle one, so westbound traffic isn't caught in the short block.
+  - Eastbound stragglers are caught there instead, filling it and holding traffic back at the middle junction.
 - **Demand:** arterial entries weigh 1 and side streets 0.25. Destinations favour the arterial exits (1 against 0.2). No trip leaves by the road it came in on (gateways within 1.5 tiles).
 - **Driver fixes from Main Street:**
   - Traffic a red light will hold doesn't count as conflicting.
-  - A driver waiting at the line to turn finishes the turn on amber.
+  - A driver waiting at the line to turn, or already committed and pulling away, finishes the turn on amber.
   - A driver stopped by their own junction's light drops their commitment.
   - At a lane split, a vehicle on the other branch counts as the car ahead until its rear is 3 m clear.
 - **Measures:**
   - A queue is the vehicles held up (below 1 m/s) whose next control is that approach.
   - Peaks are tracked per run.
   - Average travel time covers finished trips, shown with their count.
-  - Approaches are named "Junction n · eastbound", with touching pieces as one junction, numbered west to east.
+  - Approaches are named "Junction n · eastbound", grouped as the simulation drives them (lane-connected junction pieces) and numbered west to east.
   - Play after a run ends measures the continued run afresh.
-- **Results card:** opens above the scene pill when a run ends and shows this run beside the previous one, each labelled scene · intensity · duration. It hides on the next start and can be closed. Live queue counts float as amber badges over each approach and are hidden at zero.
-- **Before/after:** checked at the session seam: retimed signals plus Restart give the same trips and a different queue. Changing timings in the UI arrives with the editor (T12).
+- **Results card:** opens above the scene pill when a run ends and shows this run beside the previous one, each labelled scene · intensity · duration.
+  - Every measure shows its sample: travel time with its trip count, blocked trips "of N due", and peak queue "· N approaches".
+  - Screen readers hear "Run ended" without focus moving.
+  - It hides on the next start. Closing it leaves a "Show results" button that reopens it. Live queue counts float as amber badges over each approach and are hidden at zero.
+- **Before/after:** checked at the session seam on Main Street: retiming the middle junction and pressing Restart gives exactly the same arrivals (the simulation keeps an arrivals log) and different peak queues. Changing timings in the UI arrives with the editor (T12).
