@@ -186,3 +186,24 @@ Owner agreed the spec and the T1–T13 ticket breakdown and authorised implement
   - A vehicle straddling a merge point always counts as the car ahead.
   - At a merge, a crawling queue counts as queued.
   - A crossing stays reserved until the holder's rear is 2 m past it.
+
+## Flyover Bottleneck notes (T10) — 2026-11-12
+
+- **Layout:**
+  - A divided 70 km/h route runs west to east. Eastbound drivers can turn off at the T in column 1.
+  - The route narrows to one lane each way at a road split in column 5, climbs two ramps, crosses the bridge over the north–south surface road (column 8), descends, and widens again at column 11.
+  - The alternative merges back under a yield at the T in column 13.
+  - The 60 km/h surface alternative on row 11 has a signalled crossroads with the surface road. Its T at column 13 leaves the east arm open.
+- **Deviation from the sketch:** the narrowing is at column 5, not 3. With it right after the turn-off, the queue formed before the turn-off, where it delays both routes alike, so no driver could ever see a reason to divert.
+- **Levels:** bridge lanes and the road below are separate pieces with no connection and no conflicts; only ramp lanes change height (tested).
+- **Climbing:**
+  - Rising lanes cost every vehicle g × grade, capped at a realistic 5 % (the kit's ramps look steeper).
+  - A car still pulls away up the ramp; a heavy truck barely can (tested against the same truck on flat road).
+- **Entry lanes:** a trip entering a multi-lane road takes the emptier lane when its route is within 3 s of the best, so both lanes fill and drivers reach the narrowing from either side.
+- **Route choice now also sees:**
+  - trips kept waiting outside an entry growing impatient;
+  - traffic crawling at under half the limit (the time lost crossing the lane);
+  - a queue standing still for longer than a red light (30 s), which adds that extra wait.
+
+  So a breakdown on the bridge sends some eastbound drivers by the alternative.
+- **Demand:** west entry 2 (most traffic heads east over the flyover), east 0.4, surface road 0.3 each. School Run's "not stuck" bound is now 120 s: its drop-off peak queues at the all-way stop.

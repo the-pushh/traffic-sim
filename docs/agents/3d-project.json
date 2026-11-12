@@ -321,6 +321,19 @@
         ],
         "result": "pass: pill 'School Run', no failed requests, traffic, live queue, hover tag; screenshot 20-school-run.png inspected (divided main road with signal, links, shortcut with all-way stop, lay-by, school driveway marker, open south arm).",
         "previews": "artifacts/3d/previews/ (git-ignored)"
+      },
+      {
+        "date": "2026-11-12",
+        "check": "T10 Flyover Bottleneck (#12)",
+        "command": "npm test (218/218), npm run build, npm run dev then npm run verify:browser (opens ?scene=flyover-bottleneck)",
+        "browser": "Google Chrome 157 on macOS, headless, 1440x900",
+        "assets": [
+          "road-split, road-slant, tile-high, road-bridge, road-bend, road-intersection, road-crossroad, road-straight GLBs",
+          "signal and warning-sign models",
+          "vehicles"
+        ],
+        "result": "pass: pill 'Flyover Bottleneck', no failed requests, traffic, live queue, hover tag; screenshot 20-flyover-bottleneck.png inspected (narrowing, ramps on supports, bridge over the surface road, widening, links, signalled alternative, open east arm).",
+        "previews": "artifacts/3d/previews/ (git-ignored)"
       }
     ]
   },

@@ -360,3 +360,43 @@ describe('driving core: local trips and timed peaks', () => {
     expect(sim.counts.finished).toBeGreaterThan(local.length * 0.5);
   });
 });
+
+describe('driving core: climbing', () => {
+  // A road that climbs two ramps (tiles 6–7) onto a bridge (tile 8) and back down (tiles 9–10).
+  const climb: PiecePlacement[] = [
+    ...road.filter((_, i) => i < 6 || i > 10),
+    { piece: 'ramp', at: [6.5, 8.5], rotation: 0 },
+    { piece: 'support', at: [7.5, 8.5], rotation: 0 },
+    { piece: 'ramp', at: [7.5, 8.5], rotation: 0, level: 0.25 },
+    { piece: 'bridge', at: [8.5, 8.5], rotation: 90 },
+    { piece: 'support', at: [9.5, 8.5], rotation: 0 },
+    { piece: 'ramp', at: [9.5, 8.5], rotation: 180, level: 0.25 },
+    { piece: 'ramp', at: [10.5, 8.5], rotation: 180 },
+  ];
+  const climbGraph = buildLaneGraph(climb);
+  const west = climbGraph.gateways.find((gw) => gw.at[0] === 0)!.label;
+  const east = climbGraph.gateways.find((gw) => gw.at[0] === 16)!.label;
+
+  it('lets a car pull away up the climb while a heavy truck barely can', () => {
+    const speedGained = (type: 'sedan' | 'heavyTruck', pieces = climb, g = climbGraph) => {
+      const sim = new TrafficSimulation(g, { seed: 2 });
+      // Both reach the foot of the climb at 8 m/s, below what they'd like to do.
+      const v = sim.addVehicle({ type, profile: 'steady', from: west, to: east, position: 50, speed: 8 });
+      let atFoot = 0;
+      let atTop = 0;
+      run(sim, 15, () => {
+        if (!sim.has(v)) return;
+        const tile = pieces[g.lanes[sim.vehicle(v).route[sim.vehicle(v).routeIndex]].piece].at[0] - 0.5;
+        if (tile === 5) atFoot = sim.vehicle(v).speed;
+        if (tile === 8 && atTop === 0) atTop = sim.vehicle(v).speed;
+      });
+      return atTop - atFoot;
+    };
+    const truck = speedGained('heavyTruck');
+    const car = speedGained('sedan');
+    // Two tiles of 5 % climb (g × 0.05 ≈ 0.5 m/s² lost): a car has power to spare, a heavy truck hardly any.
+    expect(car).toBeGreaterThan(truck + 1);
+    // The same truck over the same stretch of flat road picks up clearly more speed.
+    expect(speedGained('heavyTruck', road, graph)).toBeGreaterThan(truck + 0.5);
+  });
+});
