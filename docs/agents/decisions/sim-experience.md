@@ -209,3 +209,16 @@ Owner agreed the spec and the T1–T13 ticket breakdown and authorised implement
   So a breakdown on the bridge (`breakDown(id, until)`, the seam the test uses) sends some eastbound drivers by the alternative. In ordinary heavy traffic the alternative's own signal and merge congest too, so few divert.
 - **Merging at the narrowing:** drivers pick the emptier lane as they enter and merge where the lanes meet, taking turns at the split. There's no lane changing, so drivers can't choose to merge early: that waits for a lane-change model.
 - **Demand:** west entry 2 (most traffic heads east over the flyover), east 0.4, surface road 0.3 each. School Run's "not stuck" bound is now 120 s: its drop-off peak queues at the all-way stop.
+
+## Scene carousel and saving notes (T11) — 2026-11-12
+
+- **Carousel:** the pill's ‹ › cycle Main Street → Market Roundabout → School Run → Flyover Bottleneck → Blank board, wrapping both ways.
+  - Each scene opens in Ready with its own layout, demand, warm-up traffic and camera framing.
+  - The arrows (and Save/Reset) are locked while a run is under way, running or paused.
+  - The dev server can still open a scene with `?scene=<id>`.
+- **Scene store** (`src/scenes/sceneStore.ts`): the designer's scenes, plus a saved version per scene in this browser (`localStorage`, key `traffic-sim:scene:<id>`; memory when storage is blocked), plus the unsaved edits on screen.
+  - Save appears only with unsaved edits; Reset appears whenever the network differs from the design.
+  - A saved version that no longer loads is ignored.
+- **Leaving with unsaved edits** asks "Leaving resets the road network to default." with Save and switch, Discard and switch, and × (or Escape) to cancel.
+- **Blank board:** a one-tile stub in the middle of each edge, each an entry/exit point with an open end. No trips run until the player joins edges up.
+- Edits arrive with the editor (T12). Until then, the dev-only `__trafficDebug.editScene()` stands in, to check Save, Reset and the dialog in the browser.

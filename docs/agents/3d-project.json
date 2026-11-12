@@ -334,6 +334,17 @@
         ],
         "result": "pass: pill 'Flyover Bottleneck', no failed requests, traffic, live queue, hover tag; screenshot 20-flyover-bottleneck.png inspected (narrowing, ramps on supports, bridge over the surface road, widening, links, signalled alternative, open east arm).",
         "previews": "artifacts/3d/previews/ (git-ignored)"
+      },
+      {
+        "date": "2026-11-12",
+        "check": "T11 scene carousel and saving (#13)",
+        "command": "npm test (228/228), npm run build, npm run dev then npm run verify:browser and :headed",
+        "browser": "Google Chrome 157 on macOS, headless and headed, 1440x900",
+        "assets": [
+          "all served road, control and vehicle GLBs across five scenes"
+        ],
+        "result": "pass: arrows enabled in Ready and locked during a run; cycles all five scenes and back; each opens Ready; Save/Reset appear with edits; leave dialog with message, cancel, save-and-switch; saved version kept; Reset restores the design. Screenshots 21-blank-board.png and 22-leave-dialog.png inspected.",
+        "previews": "artifacts/3d/previews/ (git-ignored)"
       }
     ]
   },

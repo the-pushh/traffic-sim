@@ -3,6 +3,7 @@ import { createDock } from '../components/dock';
 import { createFirstVisitTip } from '../components/firstVisitTip';
 import { createResultsCard } from '../components/resultsCard';
 import { attachJoystickControl, setJoystickEnabled } from '../components/joystickControl';
+import { createLeaveDialog } from '../components/leaveDialog';
 import { createScenePill } from '../components/scenePill';
 import { createVehicleTooltip } from '../components/vehicleTooltip';
 import { RunController } from '../simulation/runController';
@@ -13,6 +14,7 @@ import { ObserverCamera } from '../three/controls/observerCamera';
 import { attachViewportInput } from '../three/controls/viewportInput';
 import { AssetLoadError } from '../three/loaders/assetLoader';
 import { PRESETS } from '../scenes/presets';
+import { browserStorage, SceneStore } from '../scenes/sceneStore';
 import { createAssetLoader } from '../three/loaders/assetLoader';
 import { createSceneView, SceneDefinitionError } from '../three/scene/createSceneView';
 import { createQueueLabels } from '../three/scene/queueLabels';
@@ -22,14 +24,11 @@ import { exposeTrafficDebug } from './devHooks';
 import { TrafficSession } from '../simulation/traffic/trafficSession';
 
 /**
- * The scene the app opens on: the first preset (Main Street). Until the scene carousel (T11), the dev server
- * can open another preset with `?scene=<id>` for checking it in the browser.
+ * The scenes the pill cycles through, each as designed or as saved in this browser. The app
+ * opens on Main Street; the dev server can open another with `?scene=<id>` for browser checks.
  */
-function openingScene() {
-  const id = import.meta.env.DEV ? new URLSearchParams(location.search).get('scene') : null;
-  return PRESETS.find((p) => p.id === id) ?? PRESETS[0];
-}
-const currentScene = openingScene();
+const openingId = import.meta.env.DEV ? new URLSearchParams(location.search).get('scene') : null;
+const store = new SceneStore(PRESETS, browserStorage(), PRESETS.some((p) => p.id === openingId) ? openingId! : PRESETS[0].id);
 
 const ZOOM_STEP = 0.8;
 
@@ -68,7 +67,30 @@ const bottomStack = app.querySelector<HTMLElement>('.bottom-stack')!;
 // Run controls: created once, inert until the scene has loaded.
 const run = new RunController();
 const tip = createFirstVisitTip(bottomStack, () => run.duration);
-const pill = createScenePill(bottomStack, currentScene.name);
+const runUnderWay = () => run.state === 'running' || run.state === 'paused';
+const leaveDialog = createLeaveDialog(app);
+/** Move to another scene, asking first if there are unsaved edits. */
+async function switchScene(direction: 'previous' | 'next') {
+  if (runUnderWay()) return;
+  if (store.isUnsaved()) {
+    const choice = await leaveDialog.ask();
+    if (choice === 'cancel') return;
+    if (choice === 'save') store.save();
+  }
+  if (direction === 'next') store.next();
+  else store.previous();
+  void start();
+}
+const pill = createScenePill(bottomStack, {
+  previous: () => void switchScene('previous'),
+  next: () => void switchScene('next'),
+  save: () => store.save(),
+  reset: () => {
+    if (runUnderWay()) return;
+    store.reset();
+    void start();
+  },
+});
 const dock = createDock(bottomStack, run, { onPlay: () => tip.dismiss() });
 let session: TrafficSession | null = null;
 const results = createResultsCard(bottomStack, () => session!.results(), () => run.state);
@@ -79,6 +101,11 @@ function syncRunUi() {
   dock.sync();
   tip.sync();
   if (session) results.sync();
+  syncPill();
+}
+
+function syncPill() {
+  pill.sync({ name: store.current().name, canSwitch: !runUnderWay(), unsaved: store.isUnsaved(), differsFromDesign: store.differsFromDesign() });
 }
 
 // Transparent canvas: the page's --color-background token shows behind the scene.
@@ -159,7 +186,14 @@ function setCameraControlsEnabled(enabled: boolean) {
 
 let tooltip: ReturnType<typeof createVehicleTooltip> | null = null;
 
+/** Open the scene the store has on screen: its own layout, demand, warm-up traffic and camera, ready to play. */
 async function start() {
+  const currentScene = store.current();
+  renderer.setAnimationLoop(null);
+  bottomStack.inert = true;
+  // A new scene starts from Ready: fresh traffic, nothing measured yet.
+  if (run.state !== 'ready') run.restart();
+  syncPill();
   setCameraControlsEnabled(false);
   detachInput?.();
   detachInput = null;
@@ -181,7 +215,7 @@ async function start() {
     scene.add(queueLabels.group);
     tooltip ??= createVehicleTooltip(viewport, renderer.domElement);
     const pickVehicle = createVehiclePicker(traffic.group);
-    exposeTrafficDebug(renderer.domElement, camera, traffic.group, graph, () => session!.simulation, () => session!.approaches.map((a, i) => ({ approach: a.name, live: session!.liveQueues()[i] })), queueLabels.visibleCount);
+    exposeTrafficDebug(renderer.domElement, camera, traffic.group, graph, () => session!.simulation, () => session!.approaches.map((a, i) => ({ approach: a.name, live: session!.liveQueues()[i] })), queueLabels.visibleCount, store);
     observer = ObserverCamera.framing(camera, bounds, { coveredBottom });
     const joystick = new CameraJoystick(observer);
     const detachViewport = attachViewportInput(renderer.domElement, observer);

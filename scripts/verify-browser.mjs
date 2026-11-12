@@ -146,7 +146,7 @@ runChecks.dockFloatsAtBottomCentre = await runPage.evaluate(() => {
   const dock = document.querySelector('.dock').getBoundingClientRect();
   return Math.abs(dock.left + dock.width / 2 - innerWidth / 2) < 2 && innerHeight - dock.bottom < 40 && getComputedStyle(document.querySelector('.dock')).borderTopLeftRadius !== '0px';
 });
-runChecks.sceneArrowsInertUntilCarousel = await runPage.evaluate(() => [...document.querySelectorAll('.pill-arrow')].every((a) => a.disabled));
+runChecks.sceneArrowsEnabledWhenReady = await runPage.evaluate(() => [...document.querySelectorAll('.pill-arrow')].every((a) => !a.disabled));
 runChecks.pillShowsMainStreet = (await runPage.locator('.scene-name').textContent())?.trim() === 'Main Street';
 runChecks.tipShownOnFirstVisit = await runPage.locator('.first-visit-tip').isVisible();
 runChecks.readyClock = (await clockText()) === '0:00 / 0:30' && (await dockState()) === 'ready' && (await settingsEnabled());
@@ -156,6 +156,9 @@ await runPage.locator('.intensity input').fill('2');
 await runPage.locator('.dock').screenshot({ path: `${outDir}/11-dock-ready.png` });
 await runPage.getByRole('button', { name: 'Play' }).click();
 runChecks.playRunsAndLocksSettings = (await dockState()) === 'running' && (await settingsDisabled());
+runChecks.sceneArrowsLockedDuringRun = await runPage
+  .waitForFunction(() => [...document.querySelectorAll('.pill-arrow')].every((a) => a.disabled), null, { timeout: 2000 })
+  .then(() => true, () => false);
 runChecks.tipGoneAfterPlay = (await runPage.locator('.first-visit-tip').count()) === 0;
 await runPage.waitForTimeout(300);
 await runPage.getByRole('button', { name: 'Pause' }).click();
@@ -241,6 +244,54 @@ await runPage.reload();
 await runPage.waitForSelector('.status', { state: 'hidden', timeout: 30000 });
 runChecks.tipRememberedAfterReload = (await runPage.locator('.first-visit-tip').count()) === 0;
 await runPage.close();
+
+// Scene carousel and store (T11): cycle all five scenes, then Save / Reset / the leave dialog.
+const carouselChecks = {};
+if (isDevServer) {
+  const page2 = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+  await page2.goto(url);
+  await page2.evaluate(() => localStorage.clear());
+  await page2.reload();
+  const ready = () => page2.waitForSelector('.status', { state: 'hidden', timeout: 30000 });
+  const sceneName = async () => (await page2.locator('.scene-name').textContent())?.trim();
+  await ready();
+  const names = [await sceneName()];
+  for (let i = 0; i < 5; i++) {
+    await page2.getByRole('button', { name: 'Next scene' }).click();
+    await ready();
+    names.push(await sceneName());
+  }
+  carouselChecks.cyclesAllFiveScenes = JSON.stringify(names) === JSON.stringify(['Main Street', 'Market Roundabout', 'School Run', 'Flyover Bottleneck', 'Blank board', 'Main Street']);
+  await page2.getByRole('button', { name: 'Previous scene' }).click();
+  await ready();
+  carouselChecks.previousGoesBack = (await sceneName()) === 'Blank board';
+  carouselChecks.opensReady = (await page2.locator('.dock').getAttribute('data-state')) === 'ready';
+  await page2.screenshot({ path: `${outDir}/21-blank-board.png` });
+  await page2.getByRole('button', { name: 'Next scene' }).click();
+  await ready();
+  carouselChecks.saveHiddenWithoutEdits = await page2.getByRole('button', { name: 'Save', exact: true }).isHidden();
+  await page2.evaluate(() => window.__trafficDebug.editScene());
+  await page2.waitForTimeout(100);
+  carouselChecks.saveAndResetShowWithEdits = (await page2.getByRole('button', { name: 'Save', exact: true }).isVisible()) && (await page2.getByRole('button', { name: 'Reset', exact: true }).isVisible());
+  await page2.getByRole('button', { name: 'Next scene' }).click();
+  const dialog = page2.locator('dialog.leave-dialog');
+  carouselChecks.leaveAsksFirst = (await dialog.isVisible()) && (await dialog.textContent())?.includes('Leaving resets the road network to default.');
+  await page2.screenshot({ path: `${outDir}/22-leave-dialog.png` });
+  await page2.getByRole('button', { name: 'Cancel' }).click();
+  carouselChecks.cancelStays = !(await dialog.isVisible()) && (await sceneName()) === 'Main Street';
+  await page2.getByRole('button', { name: 'Next scene' }).click();
+  await page2.getByRole('button', { name: 'Save and switch' }).click();
+  await ready();
+  carouselChecks.saveAndSwitch = (await sceneName()) === 'Market Roundabout';
+  await page2.getByRole('button', { name: 'Previous scene' }).click();
+  await ready();
+  carouselChecks.savedVersionKept = (await page2.getByRole('button', { name: 'Reset', exact: true }).isVisible()) && (await page2.getByRole('button', { name: 'Save', exact: true }).isHidden());
+  await page2.getByRole('button', { name: 'Reset', exact: true }).click();
+  await ready();
+  carouselChecks.resetRestoresDesign = await page2.getByRole('button', { name: 'Reset', exact: true }).isHidden();
+  await page2.evaluate(() => localStorage.clear());
+  await page2.close();
+}
 
 // Presets (T8+): open each other preset on the dev server (?scene=), check it loads, has traffic and queues, and screenshot it.
 const presetChecks = {};
@@ -329,6 +380,7 @@ const result = {
   runChecks,
   hoverTag: hoverTag,
   presetChecks,
+  carouselChecks,
   blockedAtEntries,
 };
 writeFileSync(`${outDir}/result.json`, JSON.stringify(result, null, 2));

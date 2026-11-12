@@ -730,3 +730,49 @@ button.primary:hover:not(:disabled),
     max-width: 210px;
   }
 }
+
+/* Save and Reset in the scene pill. */
+.pill-action {
+  height: 28px;
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-pill);
+  font-size: var(--font-meta);
+}
+
+/* Asks before leaving a scene with unsaved edits. */
+.leave-dialog {
+  position: fixed;
+  width: min(380px, calc(100% - 2 * var(--space-4)));
+  padding: var(--space-5) var(--space-4) var(--space-4);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  background: var(--glass-bg-strong);
+  color: var(--color-text);
+  box-shadow: var(--glass-highlight), var(--shadow-floating);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+}
+
+.leave-dialog::backdrop {
+  background: rgb(0 0 0 / 0.25);
+}
+
+.leave-dialog p {
+  margin: 0 0 var(--space-4);
+}
+
+.leave-dialog .dialog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  justify-content: flex-end;
+}
+
+.leave-dialog .dialog-close {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
+  height: 28px;
+  min-width: 28px;
+  padding: 0;
+}
