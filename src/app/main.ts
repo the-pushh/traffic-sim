@@ -54,6 +54,7 @@ app.innerHTML = `
       <button type="button" data-action="zoom-in" disabled aria-label="Zoom in" title="Zoom in">+</button>
       <button type="button" data-action="zoom-out" disabled aria-label="Zoom out" title="Zoom out">−</button>
       <button type="button" data-action="reset-view" disabled class="primary">Reset View</button>
+      <button type="button" data-action="theme" class="theme-toggle"></button>
     </div>
     <div class="bottom-stack"></div>
     <div class="status" role="status" aria-live="polite"><p>Loading roads and vehicles…</p></div>
@@ -109,8 +110,42 @@ let detachInput: (() => void) | null = null;
 const joystickElement = app.querySelector<HTMLElement>('.joystick')!;
 const timer = new Timer();
 
+// Light or dark: follows the system until the player picks one, remembered in this browser.
+const THEME_KEY = 'traffic-sim:theme';
+const themeToggle = app.querySelector<HTMLButtonElement>('.theme-toggle')!;
+function currentTheme(): 'light' | 'dark' {
+  const chosen = document.documentElement.dataset.theme;
+  if (chosen === 'light' || chosen === 'dark') return chosen;
+  return matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+}
+function showTheme() {
+  const next = currentTheme() === 'dark' ? 'light' : 'dark';
+  themeToggle.textContent = next === 'dark' ? '☾' : '☀';
+  themeToggle.setAttribute('aria-label', `Switch to ${next} mode`);
+  themeToggle.title = `Switch to ${next} mode`;
+}
+try {
+  const saved = localStorage.getItem(THEME_KEY);
+  if (saved === 'light' || saved === 'dark') document.documentElement.dataset.theme = saved;
+} catch {
+  // Storage blocked: follow the system.
+}
+showTheme();
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', showTheme);
+
 cameraControls.addEventListener('click', (e) => {
   const action = (e.target as HTMLElement).closest('button')?.dataset.action;
+  if (action === 'theme') {
+    const theme = currentTheme() === 'dark' ? 'light' : 'dark';
+    document.documentElement.dataset.theme = theme;
+    try {
+      localStorage.setItem(THEME_KEY, theme);
+    } catch {
+      // Not remembered; it still applies now.
+    }
+    showTheme();
+    return;
+  }
   if (!observer) return;
   if (action === 'zoom-in') observer.zoom(ZOOM_STEP);
   if (action === 'zoom-out') observer.zoom(1 / ZOOM_STEP);
@@ -118,7 +153,7 @@ cameraControls.addEventListener('click', (e) => {
 });
 
 function setCameraControlsEnabled(enabled: boolean) {
-  for (const button of cameraControls.querySelectorAll('button')) button.disabled = !enabled;
+  for (const button of cameraControls.querySelectorAll('button:not(.theme-toggle)')) (button as HTMLButtonElement).disabled = !enabled;
   setJoystickEnabled(joystickElement, enabled);
 }
 
