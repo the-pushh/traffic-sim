@@ -374,6 +374,40 @@ if (isDevServer) {
     await page3.waitForTimeout(500);
     return { preview, label };
   };
+  // Space turns the part while it's dragged (P6), without panning the map; the first drag says so.
+  {
+    const tile = page3.locator('[data-part="bend"]');
+    await tile.scrollIntoViewIfNeeded();
+    const box = await tile.boundingBox();
+    await page3.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page3.mouse.down();
+    const target = await page3.evaluate(() => window.__trafficDebug.screenOf(5.5, 3.5));
+    for (let i = 1; i <= 8; i++) await page3.mouse.move(box.x + ((target.x - box.x) * i) / 8, box.y + ((target.y - box.y) * i) / 8);
+    await page3.waitForTimeout(300);
+    const turn = () => page3.evaluate(() => window.__trafficDebug.preview()?.placement?.rotation);
+    const before = await turn();
+    const tipOnFirstDrag = ((await page3.locator('.placement-tip').textContent()) ?? '').includes('Space');
+    await page3.keyboard.press(' ');
+    await page3.waitForTimeout(100);
+    const after = await turn();
+    const panning = await page3.evaluate(() => 'spaceHeld' in document.querySelector('canvas').dataset);
+    await page3.keyboard.press('Escape');
+    await page3.mouse.up();
+    await page3.waitForTimeout(300);
+    editorChecks.spaceTurnsWhileDragging = before !== undefined && after === (before + 90) % 360 && !panning;
+    editorChecks.spaceTipFirstDragOnly = tipOnFirstDrag;
+    // A second drag: no tip.
+    await page3.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page3.mouse.down();
+    for (let i = 1; i <= 8; i++) await page3.mouse.move(box.x + ((target.x - box.x) * i) / 8, box.y + ((target.y - box.y) * i) / 8);
+    await page3.waitForTimeout(300);
+    editorChecks.spaceTipFirstDragOnly &&= (await page3.locator('.placement-tip').count()) === 0;
+    // Turn back to the default for the drags below (Space pressed three more times = 360°).
+    for (let i = 0; i < 3; i++) await page3.keyboard.press(' ');
+    await page3.keyboard.press('Escape');
+    await page3.mouse.up();
+    await page3.waitForTimeout(300);
+  }
   const startCount = await pieces();
   const valid = await dragPart('straight', 1.6, 8.6);
   await page3.screenshot({ path: `${outDir}/23-editor-dropped.png` });
