@@ -36,6 +36,8 @@ export interface OpenEnd {
 
 /** A driveway: local trips start (entry lanes) and end (exit lanes) here. */
 export interface AccessPoint {
+  /** P1, P2, … numbered west to east, then north to south: how demand refers to it. */
+  label: string;
   at: [number, number];
   entryLanes: number[];
   exitLanes: number[];
@@ -283,7 +285,9 @@ function findLooseEnds(loose: PlacedPort[], lanes: Lane[]) {
 
   const accessPoints = loose
     .filter((port) => port.def.profile === 'access')
-    .map((port) => ({ at: [port.centre[0], port.centre[2]] as [number, number], entryLanes: startsAt(port.in), exitLanes: endsAt(port.out) }));
+    .map((port) => ({ at: [port.centre[0], port.centre[2]] as [number, number], entryLanes: startsAt(port.in), exitLanes: endsAt(port.out) }))
+    .sort((a, b) => a.at[0] - b.at[0] || a.at[1] - b.at[1])
+    .map((a, i) => ({ label: `P${i + 1}`, ...a }));
   const roadEnds = loose.filter((port) => port.def.profile !== 'access');
   const gateways = roadEnds
     .filter((port) => opensOffBoard(port))

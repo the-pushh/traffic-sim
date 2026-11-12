@@ -41,6 +41,10 @@ const CURVE_ACCELERATION = 2.5;
 const COURTESY_RANGE = 70;
 /** Speed a courteous driver slows to while letting someone out, m/s. */
 const COURTESY_SPEED = 3;
+/** How far ahead drivers look for a lower speed limit (or a curve), metres. */
+const LIMIT_LOOKAHEAD = 120;
+/** How far over the speed limit ahead a driver lets themselves drift before braking firmly, m/s. */
+const CAP_TOLERANCE = 0.1;
 /** A driver this close to the stop line (beyond the stop margin) is waiting at it, metres. */
 const AT_THE_LINE = 1.5;
 /** Where lanes split, a vehicle on the other branch blocks the split until its rear is this far along, metres. */
@@ -119,6 +123,8 @@ export interface VehicleState {
   blockedBy: string;
   /** Count of junctions passed: identifies the stretch of road the vehicle is on. */
   stretch: number;
+  /** How far over (or under) the limit this driver drives on this stretch: their speed factor, capped. */
+  limitFactor: number;
   /** When the driver next weighs up another route while held up. */
   routeCheckAt: number;
   /** Cut off from every exit by a closure: the route stops short of it and the vehicle waits there. */
@@ -134,8 +140,20 @@ export interface Demand {
   entries: Record<string, number>;
   /** Relative share of trips to each exit gateway; defaults to every reachable exit equally. */
   destinations?: Record<string, number>;
+  /** Extra trips during a time window (e.g. a school's drop-off peak), on top of the rest. */
+  peaks?: DemandPeak[];
   vehicleMix?: Partial<Record<VehicleTypeId, number>>;
   profileMix?: Partial<Record<ProfileId, number>>;
+}
+
+/** A burst of extra trips between `from` and `to` (simulation seconds), with their own entries and destinations (gateway or driveway labels). */
+export interface DemandPeak {
+  from: number;
+  to: number;
+  /** Trips per minute at an entry with weight 1. */
+  tripsPerMinute: number;
+  entries: Record<string, number>;
+  destinations: Record<string, number>;
 }
 
 export const DEFAULT_VEHICLE_MIX: Record<VehicleTypeId, number> = { compact: 20, sedan: 30, suv: 15, pickup: 10, van: 10, boxTruck: 8, heavyTruck: 5, tractor: 2 };
@@ -161,6 +179,8 @@ export interface SimulationOptions {
   /** Signals only; shorthand kept for signal-only scenes. */
   signals?: SignalControl[];
   demand?: Demand;
+  /** Speed limit of each lane, m/s (see `laneSpeedLimits`); defaults to 50 km/h everywhere. */
+  speedLimits?: number[];
 }
 
 /** A trip waiting at an entry; its vehicle and driver are fixed when it arrives. */
@@ -180,6 +200,10 @@ interface Entry {
   arrivals: Random;
   nextArrival: number;
   waiting: PendingTrip[];
+  /** Where this stream's trips go, if not the demand's own destinations. */
+  destinations?: Record<string, number>;
+  /** When this stream runs (a peak); always, if absent. */
+  window?: [number, number];
 }
 
 export interface NewVehicle {
@@ -234,6 +258,8 @@ export class TrafficSimulation {
   private readonly junctionOf: number[];
   /** Highest comfortable speed through each lane, from its tightest curve, m/s. */
   private readonly curveSpeed: number[];
+  /** Each lane's speed limit, m/s. */
+  private readonly speedLimit: number[];
   /** For each lane, the other lanes that end at the same merge point. */
   private readonly mergesWith: Map<number, number[]>;
   /** Simulated seconds since the simulation started. */
@@ -253,7 +279,7 @@ export class TrafficSimulation {
   private blockedAt: Record<string, number> = {};
   private readonly exitLanes: ReadonlySet<number>;
   /** Each gateway's entry lanes and its exit lanes as a set, by label. */
-  private readonly gateways: Map<string, { entryLanes: number[]; exits: ReadonlySet<number> }>;
+  private readonly gateways: Map<string, { at: [number, number]; entryLanes: number[]; exits: ReadonlySet<number> }>;
   /** Every trip that has arrived at an entry, in order: what Restart must replay exactly. */
   readonly arrivals: { at: number; from: string; to: string; type: VehicleTypeId; profile: ProfileId }[] = [];
   /** Seconds each finished trip took from entering the board to leaving it. */
@@ -282,19 +308,38 @@ export class TrafficSimulation {
     this.turns = graph.lanes.map(turnOf);
     this.junctionOf = junctionClusters(graph, this.conflicts);
     this.curveSpeed = graph.lanes.map((lane) => Math.sqrt(CURVE_ACCELERATION * tightestRadius(lane.points) * METRES_PER_TILE));
+    this.speedLimit = options.speedLimits ?? graph.lanes.map(() => DEFAULT_SPEED_LIMIT);
     this.router = new Router(graph, graph.lanes.map((lane) => this.freeFlowTime(lane.id)));
     this.queueDelay = graph.lanes.map(() => 0);
     this.exitLanes = new Set(graph.gateways.flatMap((g) => g.exitLanes));
-    this.gateways = new Map(graph.gateways.map((g) => [g.label, { entryLanes: g.entryLanes, exits: new Set(g.exitLanes) }]));
+    // Gateways and driveways alike: trips start and end at either.
+    this.gateways = new Map([...graph.gateways, ...graph.accessPoints].map((g) => [g.label, { at: g.at, entryLanes: g.entryLanes, exits: new Set(g.exitLanes) }]));
     this.mergesWith = new Map(graph.lanes.map((l) => [l.id, this.conflicts.get(l.id)!.filter((c) => c.kind === 'merge').map((c) => c.lane)]));
     this.demand = options.demand;
-    this.entries = Object.entries(options.demand?.entries ?? {})
-      .filter(([, weight]) => weight > 0)
-      .map(([label, weight], i) => {
+    const demand = options.demand;
+    const streams: { label: string; weight: number; tripsPerMinute: number; destinations?: Record<string, number>; window?: [number, number] }[] = [
+      ...Object.entries(demand?.entries ?? {}).map(([label, weight]) => ({ label, weight, tripsPerMinute: demand!.tripsPerMinute })),
+      ...(demand?.peaks ?? []).flatMap((peak) =>
+        Object.entries(peak.entries).map(([label, weight]) => ({ label, weight, tripsPerMinute: peak.tripsPerMinute, destinations: peak.destinations, window: [peak.from, peak.to] as [number, number] })),
+      ),
+    ];
+    // Base streams come first, so adding a peak doesn't change the other arrivals.
+    this.entries = streams
+      .map((stream, i) => ({ ...stream, i }))
+      .filter((stream) => stream.weight > 0)
+      .map(({ label, weight, tripsPerMinute, destinations, window, i }) => {
         const arrivals = this.random.fork('entries', i);
-        const ratePerSecond = (options.demand!.tripsPerMinute * weight) / 60 || 0;
-        return { label, ratePerSecond, arrivals, nextArrival: ratePerSecond > 0 ? arrivals.exponential(ratePerSecond) : Infinity, waiting: [] };
+        const ratePerSecond = (tripsPerMinute * weight) / 60 || 0;
+        const entry: Entry = { label, ratePerSecond, arrivals, nextArrival: Infinity, waiting: [], destinations, window };
+        entry.nextArrival = ratePerSecond > 0 ? this.scheduleFrom(entry, window?.[0] ?? 0) : Infinity;
+        return entry;
       });
+  }
+
+  /** The stream's next arrival after `time`, or Infinity once its window has closed. */
+  private scheduleFrom(entry: Entry, time: number) {
+    const next = Math.max(time, entry.window?.[0] ?? 0) + entry.arrivals.exponential(entry.ratePerSecond);
+    return entry.window && next > entry.window[1] ? Infinity : next;
   }
 
   get counts(): TripCounts {
@@ -392,7 +437,9 @@ export class TrafficSimulation {
       const signal = controls.get(v) ?? null;
       const carAccel = this.idmAcceleration(v, car);
       const signalAccel = signal ? this.idmAcceleration(v, signal) : Infinity;
-      v.acceleration = Math.min(carAccel, signalAccel, v.courtesyBraking > 0 ? -v.courtesyBraking : Infinity);
+      // Over the limit for the road ahead (a lower speed limit): brake at the comfortable rate the limit profile was laid out for.
+      const capAccel = v.speed > this.limitAhead(v) + CAP_TOLERANCE ? -v.driver.comfortBraking : Infinity;
+      v.acceleration = Math.min(carAccel, signalAccel, capAccel, v.courtesyBraking > 0 ? -v.courtesyBraking : Infinity);
       v.reason = describe(v, signalAccel < carAccel ? signal : car);
     }
     this.time += dt;
@@ -443,6 +490,7 @@ export class TrafficSimulation {
       random: this.random.fork('decisions', id),
       blockedBy: '',
       stretch: 0,
+      limitFactor: 1,
       routeCheckAt: 0,
       stranded: false,
       blocked: false,
@@ -473,13 +521,13 @@ export class TrafficSimulation {
   private arriveAndEnter() {
     for (const entry of this.entries) {
       while (this.time >= entry.nextArrival) {
-        const trip = this.newTrip(entry.label);
+        const trip = this.newTrip(entry.label, entry.destinations);
         if (trip) {
           this.arrivals.push({ at: this.time, from: entry.label, to: trip.to, type: trip.type, profile: trip.driver.profile });
           this.due++;
           entry.waiting.push(trip);
         }
-        entry.nextArrival += entry.arrivals.exponential(entry.ratePerSecond);
+        entry.nextArrival = this.scheduleFrom(entry, entry.nextArrival);
       }
       const trip = entry.waiting[0];
       if (!trip) continue;
@@ -514,9 +562,9 @@ export class TrafficSimulation {
   }
 
   /** Draw a trip's destination, vehicle and driver from its own seeded generator. */
-  private newTrip(from: string): PendingTrip | null {
+  private newTrip(from: string, streamDestinations?: Record<string, number>): PendingTrip | null {
     const random = this.random.fork('trips', this.tripCount++);
-    const destinations = this.demand?.destinations ?? Object.fromEntries(this.graph.gateways.filter((g) => g.label !== from).map((g) => [g.label, 1]));
+    const destinations = streamDestinations ?? this.demand?.destinations ?? Object.fromEntries(this.graph.gateways.filter((g) => g.label !== from).map((g) => [g.label, 1]));
     const reachable = Object.fromEntries(Object.entries(destinations).filter(([to, w]) => w > 0 && !this.sameRoad(from, to) && this.designedRoute(from, to)));
     if (!Object.keys(reachable).length) return null;
     const to = random.weighted(reachable);
@@ -536,7 +584,7 @@ export class TrafficSimulation {
 
   /** Whether two gateways are the same road (one label, or the two carriageways of a divided road): no trip turns back the way it came. */
   private sameRoad(a: string, b: string) {
-    const [ga, gb] = [this.graph.gateways.find((g) => g.label === a)!, this.graph.gateways.find((g) => g.label === b)!];
+    const [ga, gb] = [this.gateway(a), this.gateway(b)];
     return Math.hypot(ga.at[0] - gb.at[0], ga.at[1] - gb.at[1]) < SAME_ROAD;
   }
 
@@ -723,6 +771,7 @@ export class TrafficSimulation {
       v.position -= this.laneLength[leaving];
       v.routeIndex++;
       const entering = v.route[v.routeIndex];
+      if (this.speedLimit[entering] !== this.speedLimit[leaving]) this.setCruisingSpeed(v);
       if (this.graph.lanes[entering].piece !== this.graph.lanes[leaving].piece) {
         // Into a new piece: any stop at the previous line is done with.
         v.stoppedAt = null;
@@ -811,13 +860,27 @@ export class TrafficSimulation {
     return null;
   }
 
-  /** Highest speed now that still lets the driver slow comfortably to each curve's speed ahead. */
-  private curveLimit(v: VehicleState) {
-    let limit = this.curveSpeed[v.route[v.routeIndex]];
+  /** Highest speed now that still lets the driver slow comfortably to a lower speed limit ahead, as they keep limits. */
+  private limitAhead(v: VehicleState) {
+    let limit = this.speedLimit[v.route[v.routeIndex]] * v.limitFactor;
     let distance = this.laneLength[v.route[v.routeIndex]] - v.position;
-    for (let i = v.routeIndex + 1; i < v.route.length && distance <= 120; i++) {
+    for (let i = v.routeIndex + 1; i < v.route.length && distance <= LIMIT_LOOKAHEAD; i++) {
       const lane = v.route[i];
-      limit = Math.min(limit, Math.sqrt(this.curveSpeed[lane] ** 2 + 2 * v.driver.comfortBraking * distance));
+      limit = Math.min(limit, Math.sqrt((this.speedLimit[lane] * v.limitFactor) ** 2 + 2 * v.driver.comfortBraking * distance));
+      distance += this.laneLength[lane];
+    }
+    return limit;
+  }
+
+  /** Highest speed now that still lets the driver slow comfortably to each curve's speed (or lower limit) ahead. */
+  private curveLimit(v: VehicleState) {
+    // Each lane's curve speed, or its speed limit as this driver keeps it, whichever is lower.
+    const highest = (lane: number) => Math.min(this.curveSpeed[lane], this.speedLimit[lane] * v.limitFactor);
+    let limit = highest(v.route[v.routeIndex]);
+    let distance = this.laneLength[v.route[v.routeIndex]] - v.position;
+    for (let i = v.routeIndex + 1; i < v.route.length && distance <= LIMIT_LOOKAHEAD; i++) {
+      const lane = v.route[i];
+      limit = Math.min(limit, Math.sqrt(highest(lane) ** 2 + 2 * v.driver.comfortBraking * distance));
       distance += this.laneLength[lane];
     }
     return limit;
@@ -1133,8 +1196,13 @@ export class TrafficSimulation {
   /** Preferred speed on the current stretch: up to the limit, or modestly over it if the driver decides to speed here. */
   private setPreferredSpeed(v: VehicleState) {
     const speeding = v.driver.speedFactor > 1 && this.decide(v, `speed:${v.stretch}`);
-    const factor = speeding ? Math.min(v.driver.speedFactor, 1.15) : Math.min(v.driver.speedFactor, 1);
-    v.preferredSpeed = Math.min(v.type.maxSpeed, DEFAULT_SPEED_LIMIT * factor);
+    v.limitFactor = speeding ? Math.min(v.driver.speedFactor, 1.15) : Math.min(v.driver.speedFactor, 1);
+    this.setCruisingSpeed(v);
+  }
+
+  /** The speed this driver wants on the lane they're on: its limit, adjusted by how they drive. */
+  private setCruisingSpeed(v: VehicleState) {
+    v.preferredSpeed = Math.min(v.type.maxSpeed, this.speedLimit[v.route[v.routeIndex]] * v.limitFactor);
   }
 
   /**
@@ -1298,7 +1366,7 @@ export class TrafficSimulation {
    * speed, plus the usual wait at its control (half the red time on average for a signal).
    */
   private freeFlowTime(lane: number) {
-    const time = this.laneLength[lane] / Math.min(DEFAULT_SPEED_LIMIT, this.curveSpeed[lane]);
+    const time = this.laneLength[lane] / Math.min(this.speedLimit[lane], this.curveSpeed[lane]);
     const control = this.controlOnLane.get(lane);
     if (!control) return time;
     if (control.type === 'signal') {

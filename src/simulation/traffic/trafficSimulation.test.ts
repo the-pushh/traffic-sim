@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { buildLaneGraph } from '../network/buildLaneGraph';
 import type { PiecePlacement } from '../network/scene';
+import { laneSpeedLimits } from '../network/scene';
 import { resolveSignals } from './signals';
 import { TrafficSimulation } from './trafficSimulation';
 import { VEHICLE_TYPES } from './vehicleTypes';
@@ -291,5 +292,62 @@ describe('driver profiles', () => {
           expect(hi - lo, `${a.label} vs ${b.label} on ${key}`).toBeGreaterThan(0);
         }
     }
+  });
+});
+
+describe('driving core: speed limits', () => {
+  // Tiles 6–9 are a 30 km/h zone on an otherwise 50 km/h road; tiles 12–15 are 70 km/h.
+  const zoned: PiecePlacement[] = road.map((p, i) => (i >= 6 && i <= 9 ? { ...p, speedLimit: 30 } : i >= 12 ? { ...p, speedLimit: 70 } : p));
+  const zonedGraph = buildLaneGraph(zoned);
+
+  it('keeps to each stretch’s limit, slowing before a lower one and picking up after it', () => {
+    const sim = new TrafficSimulation(zonedGraph, { seed: 3, speedLimits: laneSpeedLimits(zoned, zonedGraph) });
+    const car = sim.addVehicle({ type: 'sedan', profile: 'steady', from: westGate.label, to: eastGate.label, speed: 13 });
+    const fastest = new Map<string, number>();
+    run(sim, 30, () => {
+      if (!sim.has(car)) return;
+      const v = sim.vehicle(car);
+      const tile = zoned[zonedGraph.lanes[v.route[v.routeIndex]].piece].at[0] - 0.5;
+      const zone = tile >= 6 && tile <= 9 ? 'slow' : tile >= 13 ? 'fast' : tile < 5 ? 'before' : 'other';
+      fastest.set(zone, Math.max(fastest.get(zone) ?? 0, v.speed));
+    });
+    expect(fastest.get("slow")!).toBeLessThan((30 / 3.6) * 1.15); // at most modest speeding, decided once per stretch
+    expect(fastest.get('before')!).toBeGreaterThan(40 / 3.6);
+    expect(fastest.get('fast')!).toBeGreaterThan(55 / 3.6);
+  });
+});
+
+describe('driving core: local trips and timed peaks', () => {
+  // A road with a driveway on its south side at tile 8: an access point for local trips.
+  const withDriveway: PiecePlacement[] = road.map((p, i) => (i === 8 ? { ...p, piece: 'driveway' } : p));
+  const g = buildLaneGraph(withDriveway);
+
+  it('labels driveways so trips can start and end there', () => {
+    expect(g.accessPoints.map((a) => a.label)).toEqual(['P1']);
+  });
+
+  it('adds a peak of trips to and from the driveway only during its time window', () => {
+    const sim = new TrafficSimulation(g, {
+      seed: 4,
+      demand: {
+        tripsPerMinute: 6,
+        entries: { A: 1, B: 1 },
+        destinations: { A: 1, B: 1 },
+        peaks: [
+          { from: 20, to: 50, tripsPerMinute: 20, entries: { A: 1, B: 1 }, destinations: { P1: 1 } },
+          { from: 20, to: 50, tripsPerMinute: 10, entries: { P1: 1 }, destinations: { A: 1, B: 1 } },
+        ],
+      },
+    });
+    let reachedDriveway = 0;
+    run(sim, 90, () => {
+      for (const v of sim.allVehicles()) if (v.destination === 'P1' && v.routeIndex === v.route.length - 1) reachedDriveway++;
+    });
+    const local = sim.arrivals.filter((a) => a.to === 'P1' || a.from === 'P1');
+    expect(local.length).toBeGreaterThan(8);
+    for (const trip of local) expect(trip.at >= 20 && trip.at <= 50).toBe(true);
+    expect(sim.arrivals.filter((a) => a.to !== 'P1' && a.from !== 'P1').length).toBeGreaterThan(5);
+    expect(reachedDriveway).toBeGreaterThan(0);
+    expect(sim.counts.finished).toBeGreaterThan(local.length * 0.5);
   });
 });
