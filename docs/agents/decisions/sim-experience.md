@@ -297,3 +297,17 @@ Owner agreed the spec and the T1–T13 ticket breakdown and authorised implement
 - **Icons:** [Phosphor](https://phosphoricons.com) via `@phosphor-icons/core` 2.1.1 (MIT licence), imported as raw SVG at build time (`src/components/icons.ts`). Icons take `currentColor` and are hidden from screen readers; each control keeps its text label or `aria-label`. Play and Pause use the fill weight; the rest use bold.
 - **Dock order:** Play/Pause, Restart, then the clock and progress bar with the run length (clock icon, 30/60/90 s) beside them | Intensity (gauge icon) | Parts (wrench and hammer).
 - The camera panel's zoom and theme buttons use Phosphor plus, minus, moon and sun.
+
+## Parts tray (P5, #35) — 2026-11-13
+
+- **Pictures:** `renderThumbnails` (`src/three/thumbnails/partThumbnails.ts`) draws each part's model along the map's starting view diagonal, under the scene's own lights. It uses a short-lived 112 px WebGL context that it frees afterwards.
+  - This runs the first time the tray opens, not at start-up, and each picture appears as soon as it's drawn.
+  - A model that won't load is skipped; its tile keeps just its name.
+  - The editor's models are loaded once and cached (`main.ts`), and are shared by the pictures and the drag preview. The preview tints its own copies and no longer disposes the shared materials.
+- **Placement:** the tray sits bottom-right, `--tray-width` (320 px) wide.
+  - On opening (and on resize), the editor measures the camera panel and the dock to set `--tray-top` (below the camera panel) and `--tray-bottom` (beside the dock if there's room, otherwise above its top edge).
+  - The tray scrolls when the window is short.
+- **The map stays in view:** while the tray is open, `fitCameraToViewport(…, coveredRight)` centres the view in the space left of it. It renders part of a wider virtual view, so the camera's position, orbit and the run are untouched.
+  - The browser check confirms the board's four corners stay clear of the tray at 1440×900 and 1280×800.
+- **Tiles:** three to a row, with the picture above a name of up to two lines. The lane note stays in the tooltip.
+- **Removed:** the old full-width strip drawer rules.

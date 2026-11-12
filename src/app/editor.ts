@@ -9,12 +9,17 @@ import { placePart, type PlacementResult } from '../editor/placement';
 import { CONTROL_MODELS } from '../three/scene/controlModels';
 import { signPose } from '../three/scene/createSceneView';
 import { icon } from '../components/icons';
+import { renderThumbnails } from '../three/thumbnails/partThumbnails';
 
 /** What the editor needs from the app around it. */
 export interface EditorHost {
-  /** Panels go here (the bottom stack, above the dock) and the inspector beside the view. */
-  stack: HTMLElement;
+  /** The Parts tray (bottom-right) and the inspector (top-left) sit over the view. */
   viewport: HTMLElement;
+  /** Panels the tray keeps clear of: the camera panel above it, the dock beside or below. */
+  cameraPanel: HTMLElement;
+  dock: HTMLElement;
+  /** The tray opened, closed or moved: the view re-centres in the space it leaves. */
+  trayToggled(): void;
   canvas: HTMLCanvasElement;
   camera: Camera;
   /** The scene on screen and the 3D scene showing it. */
@@ -41,6 +46,9 @@ const GROUPS: PartGroup[] = ['Roads', 'Curves', 'Junctions', 'Ends', 'Flyovers',
 /** A press on the map becomes a drag (moving the selection) after this many pixels. */
 const DRAG_THRESHOLD = 6;
 const CONTROL_TYPES: ControlPlacement['type'][] = ['signal', 'stop', 'yield'];
+
+/** The model file a part is shown with. */
+const partModel = (part: PartId) => (partById(part).kind === 'control' ? CONTROL_MODELS[part as ControlPlacement['type']] : PIECES[part].model);
 
 /** Lanes each part carries, shown with it in the drawer. */
 function laneNote(part: PartId) {
@@ -78,12 +86,16 @@ export function createEditor(host: EditorHost) {
     <div class="parts-groups">
       ${GROUPS.map(
         (group) => `<div class="parts-group" role="group" aria-label="${group}"><h3>${group}</h3>${PARTS.filter((p) => p.group === group)
-          .map((p) => `<button type="button" class="part" data-part="${p.id}" title="${laneNote(p.id)}" aria-describedby="parts-hint">${p.label}</button>`)
+          .map(
+            (p) =>
+              `<button type="button" class="part" data-part="${p.id}" title="${laneNote(p.id)}" aria-describedby="parts-hint"><span class="part-picture" aria-hidden="true"></span><span class="part-label">${p.label}</span></button>`,
+          )
           .join('')}</div>`,
       ).join('')}
     </div>
   `;
-  host.stack.prepend(drawer);
+  // The tray sits bottom-right over the map, clear of the dock, so the map stays in view.
+  host.viewport.append(drawer);
   const toggle = document.createElement('button');
   toggle.type = 'button';
   toggle.className = 'parts-toggle';
@@ -92,7 +104,47 @@ export function createEditor(host: EditorHost) {
   toggle.addEventListener('click', () => {
     drawer.hidden = !drawer.hidden;
     toggle.setAttribute('aria-expanded', String(!drawer.hidden));
+    if (!drawer.hidden) {
+      placeTray();
+      showPictures();
+    }
+    host.trayToggled();
   });
+  window.addEventListener('resize', () => {
+    if (drawer.hidden) return;
+    placeTray();
+    host.trayToggled();
+  });
+
+  /**
+   * Fit the tray in the bottom-right corner: under the camera panel, and beside the dock
+   * when there's room, otherwise above the dock's top edge.
+   */
+  function placeTray() {
+    const area = host.viewport.getBoundingClientRect();
+    const camera = host.cameraPanel.getBoundingClientRect();
+    const dock = host.dock.getBoundingClientRect();
+    const gap = parseFloat(getComputedStyle(drawer).right) || 0;
+    const besideDock = area.right - gap - drawer.offsetWidth > dock.right + gap;
+    drawer.style.setProperty('--tray-top', `${camera.bottom - area.top + gap}px`);
+    drawer.style.setProperty('--tray-bottom', besideDock ? `${gap}px` : `${area.bottom - dock.top + gap}px`);
+  }
+
+  // Pictures of the parts, drawn the first time the tray opens (not at start-up).
+  let picturesDrawn = false;
+  function showPictures() {
+    if (picturesDrawn) return;
+    picturesDrawn = true;
+    void renderThumbnails(
+      PARTS.map((p) => p.id),
+      (id) => host.model(partModel(id)),
+      (id, url) => {
+        const slot = drawer.querySelector<HTMLElement>(`[data-part="${id}"] .part-picture`);
+        if (slot) slot.style.backgroundImage = `url("${url}")`;
+        drawer.classList.add('pictured');
+      },
+    );
+  }
 
   // ---- Inspector and the label beside the preview ----
   const inspector = document.createElement('section');
@@ -136,8 +188,8 @@ export function createEditor(host: EditorHost) {
   }
 
   async function makeGhost(part: PartId) {
-    const def = partById(part);
-    const model = await host.model(def.kind === 'control' ? CONTROL_MODELS[part as ControlPlacement['type']] : PIECES[part].model);
+    // A copy of the shared, cached model: its geometry is shared, its materials are swapped.
+    const model = (await host.model(partModel(part))).clone();
     model.scale.setScalar(TILE_SIZE);
     const materials: MeshBasicMaterial[] = [];
     // Translucent copies of the model's materials, tinted by validity.
@@ -145,7 +197,6 @@ export function createEditor(host: EditorHost) {
       const mesh = object as Mesh;
       if (!mesh.isMesh) return;
       const material = new MeshBasicMaterial({ color: VALID_COLOUR, transparent: true, opacity: GHOST_OPACITY, depthWrite: false });
-      for (const old of [mesh.material].flat() as Material[]) old.dispose?.();
       mesh.material = material;
       materials.push(material);
     });
@@ -499,6 +550,8 @@ export function createEditor(host: EditorHost) {
   let lockedShown: boolean | null = null;
   return {
     toggle,
+    /** The parts tray (the app centres the view beside it while it's open). */
+    tray: drawer,
     /** Where the part being placed would land right now (for checks); null when not placing. */
     preview: () => drag?.latest ?? null,
     /** Select a piece or control as a click would (for checks). */
