@@ -1,17 +1,75 @@
+/** How long "Couldn't save" shows before Save returns, ms. */
+const SAVE_FAILED_MS = 3000;
+
+/** What the pill shows: the scene's name, whether its arrows work, and which of Save and Reset apply. */
+export interface PillState {
+  name: string;
+  /** Arrows are locked while a run is under way (running or paused). */
+  canSwitch: boolean;
+  /** Save and Reset work whenever edits do: not while the run is going (paused is fine). */
+  canEdit: boolean;
+  /** The scene on screen has edits that aren't saved. */
+  unsaved: boolean;
+  /** The scene on screen differs from the designer's network. */
+  differsFromDesign: boolean;
+}
+
+export interface PillActions {
+  previous(): void;
+  next(): void;
+  save(): void;
+  reset(): void;
+}
+
 /**
- * Scene pill above the dock: `‹ Scene name ›`. The arrows stay disabled until the
- * scene carousel exists (T11), which will also lock them during a run.
+ * Scene pill above the dock: `‹ Scene ›` cycles the scenes, with Save when there are
+ * unsaved edits and Reset when the network differs from the designer's.
  */
-export function createScenePill(container: HTMLElement, sceneName: string) {
+export function createScenePill(container: HTMLElement, actions: PillActions) {
   const pill = document.createElement('div');
   pill.className = 'scene-pill';
   pill.innerHTML = `
-    <button type="button" class="pill-arrow" data-action="previous-scene" aria-label="Previous scene" title="More scenes arrive with the carousel" disabled>‹</button>
-    <span class="scene-name"></span>
-    <button type="button" class="pill-arrow" data-action="next-scene" aria-label="Next scene" title="More scenes arrive with the carousel" disabled>›</button>
+    <button type="button" class="pill-arrow" data-action="previous" aria-label="Previous scene" title="Previous scene">‹</button>
+    <span class="scene-name" aria-live="polite"></span>
+    <button type="button" class="pill-arrow" data-action="next" aria-label="Next scene" title="Next scene">›</button>
+    <button type="button" class="pill-action primary" data-action="save" hidden>Save</button>
+    <button type="button" class="pill-action" data-action="reset" hidden title="Restore the designer’s road network">Reset</button>
   `;
-  pill.querySelector('.scene-name')!.textContent = sceneName;
+  const name = pill.querySelector<HTMLElement>('.scene-name')!;
+  const button = (action: keyof PillActions) => pill.querySelector<HTMLButtonElement>(`[data-action="${action}"]`)!;
+  for (const action of ['previous', 'next', 'save', 'reset'] as const) button(action).addEventListener('click', () => actions[action]());
   container.append(pill);
 
-  return { element: pill };
+  let shown = '';
+  return {
+    element: pill,
+    /** Show the scene's state; cheap to call every frame. */
+    sync(state: PillState) {
+      const key = JSON.stringify(state);
+      if (key === shown) return;
+      shown = key;
+      name.textContent = state.name;
+      for (const arrow of [button('previous'), button('next')]) {
+        arrow.disabled = !state.canSwitch;
+        arrow.title = state.canSwitch ? arrow.getAttribute('aria-label')! : 'Scenes can’t change during a run';
+      }
+      button('save').hidden = !state.unsaved;
+      button('reset').hidden = !state.differsFromDesign;
+      button('save').disabled = button('reset').disabled = !state.canEdit;
+    },
+    /** Put keyboard focus back on a control after the scene reloads. */
+    focus(action: 'previous' | 'next') {
+      button(action).focus();
+    },
+    /** Say the browser wouldn't keep the save (storage full or blocked); Save stays offered. */
+    saveFailed() {
+      const save = button('save');
+      save.textContent = 'Couldn’t save';
+      save.title = 'This browser wouldn’t keep the scene (storage full or blocked)';
+      setTimeout(() => {
+        save.textContent = 'Save';
+        save.title = '';
+      }, SAVE_FAILED_MS);
+    },
+  };
 }

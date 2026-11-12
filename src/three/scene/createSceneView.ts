@@ -54,6 +54,8 @@ export interface SceneView {
   updateBlocked(byEntry: Readonly<Record<string, number>>): void;
   /** World-space bounds of the board, for camera framing. */
   bounds: Box3;
+  /** Free the GPU resources this view created (not the shared models or badges); call when leaving the scene. */
+  dispose(): void;
 }
 
 const GROUND_TOP_COLOR = new Color('#7fa86a');
@@ -156,7 +158,23 @@ export async function createSceneView(definition: SceneDefinition, baseUrl: stri
     }
   };
   updateSignals(0);
-  return { scene, graph, updateSignals, updateBlocked, bounds: new Box3().setFromObject(board) };
+  // Geometry and materials the loaded models own: clones share them with the cache, so they stay.
+  const shared = new Set<object>();
+  for (const model of models)
+    model.traverse((object) => {
+      const mesh = object as Mesh;
+      if (mesh.geometry) shared.add(mesh.geometry);
+      for (const material of [mesh.material].flat()) if (material) shared.add(material);
+    });
+  const dispose = () => {
+    scene.traverse((object) => {
+      if (object instanceof Sprite) return; // badge materials are shared across scenes
+      const mesh = object as Mesh;
+      if (mesh.geometry && !shared.has(mesh.geometry)) mesh.geometry.dispose();
+      for (const material of [mesh.material].flat()) if (material && !shared.has(material)) material.dispose();
+    });
+  };
+  return { scene, graph, updateSignals, updateBlocked, bounds: new Box3().setFromObject(board), dispose };
 }
 
 /** Lane centrelines with direction arrows, labelled gateways, open road ends, and driveways. */
