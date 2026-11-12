@@ -2,6 +2,8 @@ import type { PiecePlacement, SceneDefinition } from '../simulation/network/scen
 
 const straightsEastWest = (z: number, xs: number[]): PiecePlacement[] => xs.map((x) => ({ piece: 'straight', at: [x + 0.5, z], rotation: 0 }));
 const straightsNorthSouth = (x: number, zs: number[]): PiecePlacement[] => zs.map((z) => ({ piece: 'straight', at: [x, z + 0.5], rotation: 90 }));
+const NORTH_SOUTH = { green: 18, amber: 3, red: 21, offset: 0 };
+const EAST_WEST = { green: 18, amber: 3, red: 21, offset: -21 };
 const range = (from: number, to: number) => Array.from({ length: to - from }, (_, i) => from + i);
 
 /**
@@ -39,11 +41,13 @@ export const testNetwork: SceneDefinition = {
     // Roundabout arms to the north and south edges.
     ...straightsNorthSouth(11.5, [...range(0, 7), ...range(10, 16)]),
   ],
+  // Two signal phases: north–south, then east–west.
   controls: [
-    { type: 'signal', piece: 3, port: 'n' },
-    { type: 'signal', piece: 3, port: 'e' },
-    { type: 'signal', piece: 3, port: 's' },
-    { type: 'signal', piece: 3, port: 'w' },
+    { type: 'signal', piece: 3, port: 'n', timing: NORTH_SOUTH },
+    { type: 'signal', piece: 3, port: 'e', timing: EAST_WEST },
+    { type: 'signal', piece: 3, port: 's', timing: NORTH_SOUTH },
+    { type: 'signal', piece: 3, port: 'w', timing: EAST_WEST },
   ],
-  demand: { gateways: {} },
+  // Eight entries share one central corridor: half weight each keeps it busy without saturating it.
+  demand: { gateways: { A: 0.5, B: 0.5, C: 0.5, D: 0.5, E: 0.5, F: 0.5, G: 0.5, H: 0.5 } },
 };

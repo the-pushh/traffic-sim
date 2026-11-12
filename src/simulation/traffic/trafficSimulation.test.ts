@@ -284,7 +284,7 @@ describe('driving core: safety and fairness (review findings)', () => {
 describe('driver profiles', () => {
   it('overlap one another on every preference, so drivers of different profiles can still behave alike', () => {
     const profiles = Object.values(PROFILE_RANGES);
-    for (const key of ['speedFactor', 'headway', 'minGap', 'acceleration', 'comfortBraking', 'acceptedGap'] as const) {
+    for (const key of ['speedFactor', 'headway', 'minGap', 'acceleration', 'comfortBraking', 'acceptedGap', 'compliance', 'patience', 'courtesy'] as const) {
       for (const a of profiles)
         for (const b of profiles) {
           const [lo, hi] = [Math.max(a[key][0], b[key][0]), Math.min(a[key][1], b[key][1])];
