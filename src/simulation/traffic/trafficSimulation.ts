@@ -47,8 +47,10 @@ const LIMIT_LOOKAHEAD = 120;
 const CROSSING_CLEAR = 2;
 /** The kit's ramps rise steeply for the eye; drivers feel at most a realistic flyover gradient (5 %). */
 const MAX_GRADE = 0.05;
-/** m/s². */
+/** Acceleration due to gravity, m/s². */
 const GRAVITY = 9.81;
+/** The most of a vehicle's pull a climb can take, so a loaded truck can still restart on a ramp. */
+const CLIMB_SHARE = 0.6;
 /** Drivers pull out of a driveway at no more than this, m/s. */
 const DRIVEWAY_SPEED = 3;
 /** A car waiting to pull out has its front this far into the driveway's lane, metres. */
@@ -68,8 +70,10 @@ const STOP_DELAY = 4;
 const YIELD_DELAY = 1.5;
 /** A queue standing still for longer than this, seconds, adds the extra wait to what drivers expect (longer than a red light). */
 const STAGNANT_AFTER = 30;
-/** Traffic moving slower than this share of the lane's limit counts as crawling in a queue (for route choice). */
+/** Drivers going slower than this share of the speed they'd like count as crawling in a queue (for route choice)… */
 const CRAWLING = 0.5;
+/** …when at least this many of them are on the lane. */
+const CRAWLING_QUEUE = 2;
 /** Time each queued vehicle adds for drivers behind it, seconds (for route choice). */
 const QUEUE_DISCHARGE = 2;
 /** Held up this long, a driver starts weighing up other routes, seconds; and checks again this often. */
@@ -145,6 +149,8 @@ export interface VehicleState {
   limitFactor: number;
   /** When the driver next weighs up another route while held up. */
   routeCheckAt: number;
+  /** Broken down and not moving until this time (see `breakDown`). */
+  brokenDownUntil: number;
   /** Cut off from every exit by a closure: the route stops short of it and the vehicle waits there. */
   stranded: boolean;
   /** Can no longer reach its destination (counted as a blocked trip). */
@@ -297,6 +303,10 @@ export class TrafficSimulation {
   private readonly designedRoutes = new Map<string, number[] | null>();
   private readonly router: Router;
   private readonly queueDelay: number[];
+  /** Scratch space for `queueDelays`, one entry per lane. */
+  private readonly crawlShare: Float64Array;
+  private readonly crawlCount: Float64Array;
+  private readonly stuckFor: Float64Array;
   private queueDelayAt = -1;
   private tripCount = 0;
   private peakTripCount = 0;
@@ -351,6 +361,9 @@ export class TrafficSimulation {
       (from, to) => this.uTurnAcrossJunction(from, to),
     );
     this.queueDelay = graph.lanes.map(() => 0);
+    this.crawlShare = new Float64Array(graph.lanes.length);
+    this.crawlCount = new Float64Array(graph.lanes.length);
+    this.stuckFor = new Float64Array(graph.lanes.length);
     this.exitLanes = new Set(graph.gateways.flatMap((g) => g.exitLanes));
     // Gateways and driveways alike: trips start and end at either.
     this.gateways = new Map([...graph.gateways, ...graph.accessPoints].map((g) => [g.label, { at: g.at, entryLanes: g.entryLanes, exits: new Set(g.exitLanes) }]));
@@ -485,6 +498,7 @@ export class TrafficSimulation {
     this.time += dt;
     const moves = new Map<VehicleState, number>();
     for (const v of all) {
+      if (this.time < v.brokenDownUntil) v.acceleration = -v.type.maxBraking;
       v.speed = Math.max(0, v.speed + v.acceleration * dt);
       moves.set(v, v.speed * dt);
     }
@@ -539,6 +553,7 @@ export class TrafficSimulation {
       stretch: 0,
       limitFactor: 1,
       routeCheckAt: 0,
+      brokenDownUntil: -Infinity,
       stranded: false,
       blocked: false,
     };
@@ -659,8 +674,8 @@ export class TrafficSimulation {
         .entryLanes.map((lane) => ({ lane, path: this.router.path([lane], targets, extra) }))
         .filter((o): o is { lane: number; path: { lanes: number[]; cost: number } } => o.path !== null);
       const best = Math.min(...options.map((o) => o.path.cost));
-      const room = (lane: number) => this.leaderAhead([lane], 0, 0, null)?.gap ?? Infinity;
-      const chosen = options.filter((o) => o.path.cost <= best + ENTRY_LANE_SLACK).sort((a, b) => room(b.lane) - room(a.lane) || a.path.cost - b.path.cost)[0];
+      const near = options.filter((o) => o.path.cost <= best + ENTRY_LANE_SLACK).map((o) => ({ ...o, room: this.leaderAhead([o.lane], 0, 0, null)?.gap ?? Infinity }));
+      const chosen = near.sort((a, b) => b.room - a.room || a.path.cost - b.path.cost)[0];
       trip.routed = { lanes: chosen?.path.lanes ?? null, at: this.time };
     }
     return trip.routed.lanes;
@@ -692,6 +707,14 @@ export class TrafficSimulation {
       if (next) into[this.controlIndex.get(next.control)!]++;
     }
     return into;
+  }
+
+  /**
+   * Stop a vehicle where it is until `until` (simulation seconds), as if it had broken down:
+   * everything behind it has to queue or find another way.
+   */
+  breakDown(id: number, until: number) {
+    this.vehicle(id).brokenDownUntil = until;
   }
 
   /** Trips turned away at each entry since counting started because there was no way through, by gateway label. */
@@ -830,31 +853,36 @@ export class TrafficSimulation {
   /** Extra time the queue on each lane adds, seconds, from the vehicles held up on it this step. */
   private queueDelays() {
     if (this.queueDelayAt === this.time) return this.queueDelay;
-    this.queueDelay.fill(0);
-    const moving = new Map<number, { total: number; count: number }>();
-    const stuck = new Map<number, number>();
+    const { queueDelay, crawlShare, crawlCount, stuckFor } = this;
+    queueDelay.fill(0);
+    crawlShare.fill(0);
+    crawlCount.fill(0);
+    stuckFor.fill(0);
     for (const v of this.vehicles.values()) {
       const lane = v.route[v.routeIndex];
       if (v.speed < HELD_UP) {
-        this.queueDelay[lane] += QUEUE_DISCHARGE;
-        stuck.set(lane, Math.max(stuck.get(lane) ?? 0, v.heldUp));
+        queueDelay[lane] += QUEUE_DISCHARGE;
+        stuckFor[lane] = Math.max(stuckFor[lane], v.heldUp);
       } else {
-        const sum = moving.get(lane) ?? { total: 0, count: 0 };
-        sum.total += v.speed;
-        sum.count++;
-        moving.set(lane, sum);
+        // How slow each driver is going compared with the speed they'd like here (a tractor isn't a queue).
+        crawlShare[lane] += v.speed / Math.max(v.preferredSpeed, HELD_UP);
+        crawlCount[lane]++;
       }
     }
-    // A queue that hasn't moved for longer than any red light (a breakdown, a blocked exit) looks as bad as it is.
-    for (const [lane, longest] of stuck) this.queueDelay[lane] += Math.max(0, longest - STAGNANT_AFTER);
-    // Traffic crawling well below the limit (a queue easing through a narrowing) costs the time lost crossing the lane.
-    for (const [lane, { total, count }] of moving) {
-      const limit = Math.min(this.speedLimit[lane], this.curveSpeed[lane]);
-      const average = total / count;
-      if (average < CRAWLING * limit) this.queueDelay[lane] += this.laneLength[lane] / average - this.laneLength[lane] / limit;
+    for (let lane = 0; lane < queueDelay.length; lane++) {
+      // A queue that hasn't moved for longer than any red light (a breakdown, a blocked exit) looks as bad as it is.
+      if (stuckFor[lane] > STAGNANT_AFTER) queueDelay[lane] += stuckFor[lane] - STAGNANT_AFTER;
+      // Several drivers crawling well below the speed they'd like (a queue easing through a narrowing) cost the time lost crossing the lane.
+      if (crawlCount[lane] >= CRAWLING_QUEUE) {
+        const share = crawlShare[lane] / crawlCount[lane];
+        if (share < CRAWLING) {
+          const limit = Math.min(this.speedLimit[lane], this.curveSpeed[lane]);
+          queueDelay[lane] += this.laneLength[lane] / (share * limit) - this.laneLength[lane] / limit;
+        }
+      }
     }
     this.queueDelayAt = this.time;
-    return this.queueDelay;
+    return queueDelay;
   }
 
   /** The route the network was built to give this trip (cached), ignoring traffic and closures; null if none. */
@@ -1463,8 +1491,10 @@ export class TrafficSimulation {
     const a = v.type.maxAcceleration * v.driver.acceleration;
     const b = v.driver.comfortBraking;
     const target = Math.max(0.1, Math.min(v.preferredSpeed, v.speedCap));
-    // Climbing costs every vehicle the same g × grade; a truck with little to spare slows on the ramp.
-    let accel = a * (1 - (v.speed / target) ** DELTA) - GRAVITY * this.grade[v.route[v.routeIndex]];
+    // Climbing costs every vehicle the same g × grade, so a truck with little to spare slows on
+    // the ramp; it keeps enough pull to restart on it. Downhill, drivers hold their speed.
+    const climb = Math.min(GRAVITY * Math.max(0, this.grade[v.route[v.routeIndex]]), CLIMB_SHARE * a);
+    let accel = a * (1 - (v.speed / target) ** DELTA) - climb;
     if (ahead) {
       const approach = v.speed - ahead.speed;
       const desiredGap = v.driver.minGap + Math.max(0, v.speed * v.driver.headway + (v.speed * approach) / (2 * Math.sqrt(a * b)));

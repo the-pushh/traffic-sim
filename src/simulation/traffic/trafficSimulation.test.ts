@@ -399,4 +399,23 @@ describe('driving core: climbing', () => {
     // The same truck over the same stretch of flat road picks up clearly more speed.
     expect(speedGained('heavyTruck', road, graph)).toBeGreaterThan(truck + 0.5);
   });
+
+  it('lets a heavy truck with a cautious driver restart from a stop on the ramp', () => {
+    const sim = new TrafficSimulation(climbGraph, { seed: 2 });
+    // Stopped half-way up the first ramp (tile 6 starts 52.5 m in).
+    const truck = sim.addVehicle({ type: 'heavyTruck', profile: 'cautious', from: west, to: east, position: 57, speed: 0 });
+    run(sim, 8);
+    expect(sim.vehicle(truck).speed).toBeGreaterThan(1.5);
+  });
+
+  it('holds its speed going down the ramp rather than running past the limit', () => {
+    const sim = new TrafficSimulation(climbGraph, { seed: 2 });
+    const car = sim.addVehicle({ type: 'sedan', profile: 'steady', from: west, to: east, position: 75, speed: 10 });
+    const limit = sim.vehicle(car).preferredSpeed;
+    let fastest = 0;
+    run(sim, 6, () => {
+      if (sim.has(car)) fastest = Math.max(fastest, sim.vehicle(car).speed);
+    });
+    expect(fastest).toBeLessThanOrEqual(limit + 1e-6);
+  });
 });

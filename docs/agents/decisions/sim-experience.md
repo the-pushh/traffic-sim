@@ -197,13 +197,15 @@ Owner agreed the spec and the T1–T13 ticket breakdown and authorised implement
 - **Deviation from the sketch:** the narrowing is at column 5, not 3. With it right after the turn-off, the queue formed before the turn-off, where it delays both routes alike, so no driver could ever see a reason to divert.
 - **Levels:** bridge lanes and the road below are separate pieces with no connection and no conflicts; only ramp lanes change height (tested).
 - **Climbing:**
-  - Rising lanes cost every vehicle g × grade, capped at a realistic 5 % (the kit's ramps look steeper).
+  - Rising lanes cost every vehicle g × grade, capped at a realistic 5 % (the kit's ramps look steeper) and at 60 % of the vehicle's pull, so a loaded truck can still restart on the ramp.
   - A car still pulls away up the ramp; a heavy truck barely can (tested against the same truck on flat road).
+  - Downhill, drivers hold their speed: there's no free acceleration past the limit (tested).
 - **Entry lanes:** a trip entering a multi-lane road takes the emptier lane when its route is within 3 s of the best, so both lanes fill and drivers reach the narrowing from either side.
 - **Route choice now also sees:**
   - trips kept waiting outside an entry growing impatient;
-  - traffic crawling at under half the limit (the time lost crossing the lane);
+  - at least two drivers on a lane going under half the speed they'd like (the time lost crossing it), so a lone tractor or cars pulling away on green don't count;
   - a queue standing still for longer than a red light (30 s), which adds that extra wait.
 
-  So a breakdown on the bridge sends some eastbound drivers by the alternative.
+  So a breakdown on the bridge (`breakDown(id, until)`, the seam the test uses) sends some eastbound drivers by the alternative. In ordinary heavy traffic the alternative's own signal and merge congest too, so few divert.
+- **Merging at the narrowing:** drivers pick the emptier lane as they enter and merge where the lanes meet, taking turns at the split. There's no lane changing, so drivers can't choose to merge early: that waits for a lane-change model.
 - **Demand:** west entry 2 (most traffic heads east over the flyover), east 0.4, surface road 0.3 each. School Run's "not stuck" bound is now 120 s: its drop-off peak queues at the all-way stop.

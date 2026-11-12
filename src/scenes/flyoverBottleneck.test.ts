@@ -39,6 +39,20 @@ describe('Flyover Bottleneck preset', () => {
     }
   });
 
+  it('lets a car cross the bridge at speed over a car stopped on the road below', () => {
+    const s = simulateScene({ ...flyoverBottleneck, demand: { gateways: {} } }, 'medium', 5);
+    // Stopped on the surface road right under the bridge (the north arm is 4.5 tiles to the deck's centre line).
+    const below = s.addVehicle({ type: 'sedan', profile: 'steady', from: 'A', to: 'D', position: 4.5 * 8.75, speed: 0 });
+    s.breakDown(below, 60);
+    const over = s.addVehicle({ type: 'sedan', profile: 'steady', from: WEST_IN, to: EAST_OUT, position: 50, speed: 12 });
+    let slowestOnBridge = Infinity;
+    runScene(s, 10, () => {
+      if (s.has(over) && graph.lanes[s.vehicle(over).route[s.vehicle(over).routeIndex]].piece === BRIDGE) slowestOnBridge = Math.min(slowestOnBridge, s.vehicle(over).speed);
+    });
+    expect(slowestOnBridge).toBeGreaterThan(8);
+    expect(s.vehicle(below).speed).toBe(0);
+  }, SLOW_TEST);
+
   it('works as soon as it opens: traffic flows at Medium and nobody is stuck for long', () => {
     for (const seed of [1, 2, 3]) {
       const s = simulateScene(flyoverBottleneck, 'medium', seed);
@@ -68,9 +82,8 @@ describe('Flyover Bottleneck preset', () => {
         const s = simulateScene(flyoverBottleneck, 'medium', seed);
         runScene(s, 20);
         // 74 m along the eastbound route is on the bridge deck.
-        const truck = breakdown ? s.addVehicle({ type: 'heavyTruck', profile: 'steady', from: WEST_IN, to: EAST_OUT, position: 74, speed: 0 }) : null;
+        if (breakdown) s.breakDown(s.addVehicle({ type: 'heavyTruck', profile: 'steady', from: WEST_IN, to: EAST_OUT, position: 74, speed: 0 }), 80);
         runScene(s, 90, () => {
-          if (truck !== null && s.has(truck) && s.time < 80) s.vehicle(truck).speed = 0;
           // Any eastbound trip whose route goes by the alternative (chosen on entry or on rerouting).
           for (const v of s.allVehicles()) if (fromWest.has(v.route[0]) && v.destination === EAST_OUT && v.route.some(onAlternative)) diverted.add(`${seed}:${v.id}`);
         });
