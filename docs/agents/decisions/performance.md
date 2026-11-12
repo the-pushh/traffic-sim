@@ -51,7 +51,7 @@
 
 - The screen still updates 60 times a second in every case, and frame-time p95 is 16.8 ms or better. Frames drawn while running fell from 60 to 30 a second, one per simulation step, which looks identical. Draws per drawn frame are unchanged (every vehicle is still drawn).
 - Scene switches take 86–165 ms (before: 102–176 ms). The JS heap stayed at 9–17 MB.
-- Loading: see the tracker row for #37, measured on production after the deploy.
+- **Loading (production, after the deploy):** reload 1.5–2.1 s → about 240 ms, with 0 of 44 files re-checked; cold load about 0.7 s (1.7–2.2 s before, partly a colder edge cache).
 
 ## Not done (and why)
 
