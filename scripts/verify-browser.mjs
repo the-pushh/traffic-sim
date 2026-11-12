@@ -215,12 +215,21 @@ runChecks.resultsShowPreviousRun = await runPage.evaluate(() => {
   return !card.hidden && (card.textContent ?? '').includes('Previous run');
 });
 // Same scene twice: every headline says how it moved since the previous run.
-runChecks.resultsHeadlinesCompare = (await runPage.locator('.results-headlines .change').count()) === 4;
+runChecks.resultsHeadlinesCompare =
+  (await runPage.locator('.results-headlines .change').count()) === 4 &&
+  ((await runPage.locator('.results-caption').textContent()) ?? '').includes('compared with the previous run');
 await runPage.locator('.bottom-stack').screenshot({ path: `${outDir}/17-results-with-previous.png` });
 await runPage.getByRole('button', { name: '60 s' }).click();
 runChecks.resultsHiddenAfterFreshStart = await runPage
   .waitForFunction(() => document.querySelector('.results-card')?.hidden === true, null, { timeout: 2000 })
   .then(() => true, () => false);
+// A run at another duration isn't compared: the caption says why, and no arrows show.
+await runPage.getByRole('button', { name: 'Play' }).click();
+await runPage.waitForFunction(() => document.querySelector('.dock')?.dataset.state === 'ended', null, { timeout: runEndTimeout * 2 });
+runChecks.resultsNotComparedAcrossDurations =
+  (await runPage.locator('.results-headlines .change').count()) === 0 &&
+  ((await runPage.locator('.results-caption').textContent()) ?? '').includes('not compared: the previous run was Main Street · Medium · 30 s');
+await runPage.getByRole('button', { name: 'Restart run' }).click();
 runChecks.settingChangeAfterEndReturnsToReady = (await dockState()) === 'ready' && (await clockText()) === '0:00 / 1:00';
 // Traffic (T3): play for a while, pause, check vehicles queue at the red light and the hover tag explains them.
 if (isDevServer) {

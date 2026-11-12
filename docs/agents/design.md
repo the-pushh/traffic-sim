@@ -72,7 +72,7 @@ Model each vehicle as an agent. It follows a permitted route, responds to signal
 
 Offer **30 s**, **60 s**, and **90 s** runs measured in simulation time. End the run at the selected duration and show its results. Start with measures players can connect to what they saw, such as vehicles reaching their destinations, average wait, and longest queue. Use consistent labels and definitions across maps.
 
-Show the scene, traffic load, and duration alongside each run’s results. Let players keep load and duration constant while comparing a layout or control change. The exact comparison layout and saved-scene storage are open implementation decisions.
+Show the scene, traffic load, and duration alongside each run’s results. Let players keep load and duration constant while comparing a layout or control change. Comparison layout (decided 2026-11-13, P3): four headline numbers with their change against a previous run of the same scene, load and duration, with the full side-by-side table behind Show details. Saved scenes are kept in the browser (T11).
 
 ## 3D presentation
 
@@ -104,4 +104,4 @@ Make camera gestures discoverable and keep ordinary page scrolling available out
 
 ## Decisions to refine
 
-Confirm the final visual references, supported desktop browsers, saved-scene storage, run-comparison layout, and level of traffic realism. Measure performance using a representative scene once the target browser and hardware are agreed.
+Confirm the final visual references, supported desktop browsers, and level of traffic realism. Measure performance using a representative scene once the target browser and hardware are agreed.

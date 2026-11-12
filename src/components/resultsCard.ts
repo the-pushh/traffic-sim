@@ -1,7 +1,7 @@
 import type { RunState } from '../simulation/runController';
 import type { LabelledResults } from '../simulation/traffic/trafficSession';
 import { INTENSITY_LABELS } from './dock';
-import { resultsHeadlines, type Headline } from './resultsHeadlines';
+import { comparable, resultsHeadlines, type Headline } from './resultsHeadlines';
 
 const escapeHtml = (text: string) => text.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 
@@ -13,12 +13,20 @@ function travelTime(r: LabelledResults) {
   return r.averageTravelTime === null ? '—' : `${Math.round(r.averageTravelTime)} s <span class="sample">· ${r.travelTimeSamples} ${r.travelTimeSamples === 1 ? 'trip' : 'trips'}</span>`;
 }
 
+const CHANGE_WORDS = { better: 'Better', worse: 'Worse', same: 'Same' } as const;
+
+/** ▲/▼ and the amount; better is a filled badge and worse an outlined one, so colour isn't the only cue. */
 function changeTag(change: Headline['change']) {
   if (!change) return '';
-  if (change.better === null) return '<span class="change same" title="Same as the previous run">±0<span class="visually-hidden"> same as before</span></span>';
-  const arrow = change.amount > 0 ? '▲' : '▼';
-  const verdict = change.better ? 'better' : 'worse';
-  return `<span class="change ${verdict}" title="${verdict[0].toUpperCase() + verdict.slice(1)} than the previous run">${arrow} ${Math.abs(change.amount)}<span class="visually-hidden"> ${verdict}</span></span>`;
+  const was = `${CHANGE_WORDS[change.verdict]} than the previous run (${change.was})`.replace('Same than', 'Same as');
+  const shown = change.verdict === 'same' ? '±0' : `${change.amount > 0 ? '▲' : '▼'} ${Math.abs(change.amount)}${change.unit}`;
+  return `<span class="change ${change.verdict}" title="${escapeHtml(was)}"><span aria-hidden="true">${shown}</span><span class="visually-hidden">${escapeHtml(was)}</span></span>`;
+}
+
+/** Which run this is, and what it's compared with (only a run of the same scene, load and duration). */
+function runCaption(latest: LabelledResults, previous: LabelledResults | null) {
+  const versus = !previous ? '' : comparable(latest, previous) ? ' · compared with the previous run' : ` · not compared: the previous run was ${label(previous)}`;
+  return `<p class="results-caption">${escapeHtml(label(latest) + versus)}</p>`;
 }
 
 /**
@@ -68,9 +76,10 @@ export function createResultsCard(container: HTMLElement, results: () => Labelle
         <h2>Results</h2>
         <button type="button" class="results-close" aria-label="Close results">×</button>
       </header>
+      ${runCaption(latest, previous)}
       <dl class="results-headlines">
         ${resultsHeadlines(latest, previous)
-          .map((h) => `<div class="headline"><dt>${h.label}</dt><dd><span class="headline-value">${escapeHtml(h.value)}</span>${changeTag(h.change)}<span class="headline-detail" title="${escapeHtml(h.detail)}">${escapeHtml(h.detail)}</span></dd></div>`)
+          .map((h) => `<div class="headline"><dt>${escapeHtml(h.label)}</dt><dd><span class="headline-value">${escapeHtml(h.value)}</span>${changeTag(h.change)}<span class="headline-detail" title="${escapeHtml(h.detail)}">${escapeHtml(h.detail)}</span></dd></div>`)
           .join('')}
       </dl>
       <button type="button" class="results-details-toggle" aria-expanded="${detailsOpen}" aria-controls="results-details">${detailsOpen ? 'Hide details' : 'Show details'}</button>
