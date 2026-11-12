@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { mainStreet } from '../../scenes/mainStreet';
 import { testNetwork } from '../../scenes/testNetwork';
 import { buildLaneGraph } from '../network/buildLaneGraph';
 import { pointAlongLane } from '../network/laneGeometry';
@@ -31,9 +32,9 @@ function closest(a: [number, number, number][], b: [number, number, number][]) {
   return best;
 }
 
-function assertNoCollisions(pieces: PiecePlacement[], controls: Parameters<typeof resolveControls>[2], entries: Record<string, number>, seconds: number, seed: number, tripsPerMinute = 10) {
+function assertNoCollisions(pieces: PiecePlacement[], controls: Parameters<typeof resolveControls>[2], entries: Record<string, number>, seconds: number, seed: number, tripsPerMinute = 10, destinations?: Record<string, number>) {
   const g = buildLaneGraph(pieces);
-  const s = new TrafficSimulation(g, { seed, controls: resolveControls(pieces, g, controls), demand: { tripsPerMinute, entries } });
+  const s = new TrafficSimulation(g, { seed, controls: resolveControls(pieces, g, controls), demand: { tripsPerMinute, entries, destinations } });
   const touching: string[] = [];
   const stoppedSince = new Map<number, number>();
   let longestStop = 0;
@@ -65,6 +66,13 @@ describe('junction safety', () => {
     // Flowing, not gridlocked: most trips that arrive get through, and nobody waits longer than a couple of signal cycles.
     expect(counts.finished).toBeGreaterThan(counts.due * 0.6);
     expect(longestStop).toBeLessThan(90);
+  });
+
+  it('never lets vehicles overlap on Main Street, across the two-tile junctions of the divided road', () => {
+    for (const [seed, tripsPerMinute] of [[31, 10], [32, 16]]) {
+      const { touching } = assertNoCollisions(mainStreet.pieces, mainStreet.controls, mainStreet.demand.gateways, 180, seed, tripsPerMinute, mainStreet.demand.destinations);
+      expect(touching).toEqual([]);
+    }
   });
 
   it('resolves four-way give-way-to-the-right and two yield signs facing each other without a crash or a standoff', () => {

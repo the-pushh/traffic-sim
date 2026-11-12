@@ -94,7 +94,7 @@ Owner agreed the spec and the T1–T13 ticket breakdown and authorised implement
 - **Framing above the panels:** the camera's view is centred in the area above the scene pill and dock, and the board is fitted into that area. The first-visit tip is not counted.
 - **Driving side (assumed):** right-hand traffic; roundabouts circulate anticlockwise from above. Asked the owner to confirm (2026-11-12). The side is set in two places in the lane builder (`rightOf` lane placement and the roundabout ring direction).
 - **Road texture strip** retired: scenes are built from City Kit pieces only (T4).
-- **App scene during T5–T6:** the app opens on the **Test network** (signalised crossroads, roundabout, T-junction, overpass; every gateway at weight 0.25) so junction behaviour is visible; T3 used a one-road **Signal test** scene. Main Street replaces it in T7.
+- **App scene:** the app opens on **Main Street** (T7) until the scene carousel (T11). Earlier tickets used the Signal test (T3) and the Test network (T5–T6), which stay in code.
 - **Deferred from T3:** impatience building during delays (needs junction waiting and route choice, T5/T6) and use of the drivers' accepted-gap preference (gap acceptance, T5). Rule violations (speeding, rolling stops) are T5.
 - **Run measures** start at zero when a run starts; warm-up trips carry on but aren't counted.
 - **Signal lamps** show the aspect by colour and position (red top, amber middle, green bottom).
@@ -115,3 +115,35 @@ Owner agreed the spec and the T1–T13 ticket breakdown and authorised implement
 - **Shown in the scene:** only trips turned away at an entry get a badge. Vehicles cut off on the board show "Road closed ahead" on hover. Vehicles diverted to another exit aren't marked; the results card (T7) reports the total.
 - **Blocked trips** are counted in the run (`blocked`). Trips turned away at an entry show as a red count badge above that gateway's label. Destinations are drawn from the exits the scene was built to reach, so only closures produce blocked trips.
 - **Junction fixes found while testing routing:** a junction before a farther red light is still weighed up; "Exit lane full" also counts a queue whose last vehicle still has its rear in the junction's final lane.
+
+## Main Street and measures notes (T7) — 2026-11-12
+
+- **Main Street layout:**
+  - The arterial is two one-way carriageways of two lanes each: westbound on row 7, eastbound on row 8.
+  - Side streets have one lane each way and run at columns 3, 9 and 11. Column 11's south arm is the open connection.
+  - Signals sit on the outer approaches only, 11 in all.
+- **Two-tile junctions act as one:** junction pieces that join directly form one junction.
+  - Drivers commit to the whole crossing, reserve crossings on both tiles, and never stop between them.
+  - Conflicts are checked where the path enters each tile.
+  - Turns are judged over the whole movement: a left across the divided road counts as a left turn.
+- **Main Street timing:** a 60 s cycle with arterial green 30 s, side green 24 s and 3 s amber. Arterial greens start at 0 s, 5 s and 3 s at the three junctions.
+  - The middle light follows the first by the eastbound driving time, so groups get through all three.
+  - The last light turns red 2 s before the middle one, so westbound traffic isn't caught in the short block.
+  - Eastbound stragglers are caught there instead, filling it and holding traffic back at the middle junction.
+- **Demand:** arterial entries weigh 1 and side streets 0.25. Destinations favour the arterial exits (1 against 0.2). No trip leaves by the road it came in on (gateways within 1.5 tiles).
+- **Driver fixes from Main Street:**
+  - Traffic a red light will hold doesn't count as conflicting.
+  - A driver waiting at the line to turn, or already committed and pulling away, finishes the turn on amber.
+  - A driver stopped by their own junction's light drops their commitment.
+  - At a lane split, a vehicle on the other branch counts as the car ahead until its rear is 3 m clear.
+- **Measures:**
+  - A queue is the vehicles held up (below 1 m/s) whose next control is that approach.
+  - Peaks are tracked per run.
+  - Average travel time covers finished trips, shown with their count.
+  - Approaches are named "Junction n · eastbound", grouped as the simulation drives them (lane-connected junction pieces) and numbered west to east.
+  - Play after a run ends measures the continued run afresh.
+- **Results card:** opens above the scene pill when a run ends and shows this run beside the previous one, each labelled scene · intensity · duration.
+  - Every measure shows its sample: travel time with its trip count, blocked trips "of N due", and peak queue "· N approaches".
+  - Screen readers hear "Run ended" without focus moving.
+  - It hides on the next start. Closing it leaves a "Show results" button that reopens it. Live queue counts float as amber badges over each approach and are hidden at zero.
+- **Before/after:** checked at the session seam on Main Street: retiming the middle junction and pressing Restart gives exactly the same arrivals (the simulation keeps an arrivals log) and different peak queues. Changing timings in the UI arrives with the editor (T12).

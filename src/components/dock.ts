@@ -6,7 +6,7 @@ import {
   type RunController,
 } from '../simulation/runController';
 
-const INTENSITY_LABELS: Record<Intensity, string> = {
+export const INTENSITY_LABELS: Record<Intensity, string> = {
   'almost-empty': 'Almost empty',
   low: 'Low',
   medium: 'Medium',

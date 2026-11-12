@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { mainStreet } from '../../scenes/mainStreet';
 import { signalTest } from '../../scenes/signalTest';
 import { buildLaneGraph } from '../network/buildLaneGraph';
 import { RunController } from '../runController';
@@ -39,5 +40,56 @@ describe('traffic session', () => {
     run.play();
     session.advance(run.tick(1));
     expect(session.simulation).toBe(atEnd);
+  });
+});
+
+describe('traffic session measures', () => {
+  it('reports the run’s measures with its scene, intensity and duration, and live queues per approach', () => {
+    const run = new RunController();
+    const session = new TrafficSession(signalTest, graph, run);
+    run.play();
+    session.advance(run.tick(30));
+    expect(run.state).toBe('ended');
+    const results = session.results();
+    expect(results).toMatchObject({ scene: 'Signal test', intensity: 'medium', duration: 30 });
+    expect(results.due).toBe(session.simulation.counts.due);
+    expect(results.peakQueues.map((q) => q.approach)).toEqual(['Crossing 1 · eastbound', 'Crossing 1 · westbound']);
+    expect(results.peakQueues.some((q) => q.peak > 0)).toBe(true);
+    expect(session.approaches.map((a) => a.name)).toEqual(['Crossing 1 · eastbound', 'Crossing 1 · westbound']);
+    expect(session.liveQueues()).toHaveLength(2);
+  });
+
+  it('after a signal timing change and Restart, replays exactly the same arrivals, drivers and vehicles with a different outcome', () => {
+    const msGraph = buildLaneGraph(mainStreet.pieces);
+    const run = new RunController();
+    run.setDuration(60);
+    const play = (session: TrafficSession) => {
+      run.play();
+      while (run.state === 'running') session.advance(run.tick(0.5));
+      return { arrivals: session.simulation.arrivals.map((a) => ({ ...a })), results: session.results() };
+    };
+    const before = play(new TrafficSession(mainStreet, msGraph, run));
+    // As the editor will: change the middle junction's timing, then press Restart.
+    const retimed = { ...mainStreet, controls: mainStreet.controls.map((c, i) => (i >= 4 && i < 8 ? { ...c, timing: { green: 10, amber: 3, red: 47, offset: 0 } } : c)) };
+    run.restart();
+    const after = play(new TrafficSession(retimed, msGraph, run));
+    expect(after.arrivals).toEqual(before.arrivals);
+    expect(after.results.due).toBe(before.results.due);
+    const peaks = (r: typeof before.results) => r.peakQueues.map((q) => q.peak);
+    expect(peaks(after.results)).not.toEqual(peaks(before.results));
+  });
+});
+
+describe('traffic session: continuing after the end', () => {
+  it('measures the continued run on its own', () => {
+    const run = new RunController();
+    const session = new TrafficSession(signalTest, graph, run);
+    run.play();
+    session.advance(run.tick(30));
+    const first = session.results();
+    expect(first.due).toBeGreaterThan(0);
+    run.play(); // continue
+    session.advance(run.tick(1));
+    expect(session.results().due).toBeLessThan(first.due);
   });
 });
