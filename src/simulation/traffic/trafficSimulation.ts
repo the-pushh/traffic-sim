@@ -1,5 +1,5 @@
 import type { LaneGraph } from '../network/buildLaneGraph';
-import { type Conflict, findConflicts, type Turn, turnBetween, turnOf } from '../network/conflicts';
+import { type Conflict, findConflicts, splitClearance, type Turn, turnBetween, turnOf } from '../network/conflicts';
 import { junctionClusters } from '../network/junctions';
 import { type Driver, type ProfileId, sampleDriver } from './drivers';
 import { Random } from './random';
@@ -43,12 +43,16 @@ const COURTESY_RANGE = 70;
 const COURTESY_SPEED = 3;
 /** How far ahead drivers look for a lower speed limit (or a curve), metres. */
 const LIMIT_LOOKAHEAD = 120;
+/** Drivers pull out of a driveway at no more than this, m/s. */
+const DRIVEWAY_SPEED = 3;
 /** How far over the speed limit ahead a driver lets themselves drift before braking firmly, m/s. */
 const CAP_TOLERANCE = 0.1;
 /** A driver this close to the stop line (beyond the stop margin) is waiting at it, metres. */
 const AT_THE_LINE = 1.5;
-/** Where lanes split, a vehicle on the other branch blocks the split until its rear is this far along, metres. */
+/** Where lanes split, a vehicle on the other branch blocks the split until its rear is at least this far along, metres… */
 const DIVERGE_CLEARANCE = 3;
+/** …and until the branches are this far apart, centre to centre, tiles (2.2 m: a car's width and a little). */
+const SPLIT_SEPARATION = 0.25;
 /** Gateways closer than this (tiles) are one road: the two carriageways of a divided road are 1 tile apart. */
 const SAME_ROAD = 1.5;
 /** Usual extra time lost at a stop sign and at a yield, seconds (for route choice). */
@@ -260,6 +264,10 @@ export class TrafficSimulation {
   private readonly curveSpeed: number[];
   /** Each lane's speed limit, m/s. */
   private readonly speedLimit: number[];
+  /** For lanes that start a trip (no lane before them), the other such lanes starting at the same point, e.g. out of a driveway. */
+  private readonly sharedStarts: Map<number, number[]>;
+  /** Cache of `splitClear`, metres, by "lane>other". */
+  private readonly splitClearances = new Map<string, number>();
   /** For each lane, the other lanes that end at the same merge point. */
   private readonly mergesWith: Map<number, number[]>;
   /** Simulated seconds since the simulation started. */
@@ -309,6 +317,9 @@ export class TrafficSimulation {
     this.junctionOf = junctionClusters(graph, this.conflicts);
     this.curveSpeed = graph.lanes.map((lane) => Math.sqrt(CURVE_ACCELERATION * tightestRadius(lane.points) * METRES_PER_TILE));
     this.speedLimit = options.speedLimits ?? graph.lanes.map(() => DEFAULT_SPEED_LIMIT);
+    const starts = graph.lanes.filter((l) => l.previous.length === 0);
+    const samePoint = (a: number, b: number) => Math.hypot(...[0, 1, 2].map((k) => graph.lanes[a].points[0][k] - graph.lanes[b].points[0][k])) < 1e-6;
+    this.sharedStarts = new Map(starts.map((l) => [l.id, starts.filter((o) => o.id !== l.id && samePoint(o.id, l.id)).map((o) => o.id)]));
     this.router = new Router(graph, graph.lanes.map((lane) => this.freeFlowTime(lane.id)));
     this.queueDelay = graph.lanes.map(() => 0);
     this.exitLanes = new Set(graph.gateways.flatMap((g) => g.exitLanes));
@@ -466,7 +477,12 @@ export class TrafficSimulation {
   }
 
   private place(type: VehicleType, driver: Driver, destination: string, route: number[], position: number, speed: number) {
-    const id = this.nextId++;
+    return this.insert(this.build(type, driver, destination, route, position, speed));
+  }
+
+  /** A new vehicle, not yet on the board (it takes the next id once inserted). */
+  private build(type: VehicleType, driver: Driver, destination: string, route: number[], position: number, speed: number): VehicleState {
+    const id = this.nextId;
     const v: VehicleState = {
       id,
       type,
@@ -496,10 +512,15 @@ export class TrafficSimulation {
       blocked: false,
     };
     this.setPreferredSpeed(v);
+    return v;
+  }
+
+  private insert(v: VehicleState) {
+    this.nextId++;
     this.advanceAlongRoute(v);
-    this.vehicles.set(id, v);
+    this.vehicles.set(v.id, v);
     this.indexRear(v);
-    return id;
+    return v.id;
   }
 
   private finish(v: VehicleState) {
@@ -552,8 +573,19 @@ export class TrafficSimulation {
         if (ahead.gap < trip.driver.minGap + 0.5) continue; // entrance full: the trip keeps waiting
         speed = Math.min(speed, (ahead.gap - trip.driver.minGap) / trip.driver.headway, ahead.speed + 1);
       }
-      entry.waiting.shift();
-      const id = this.place(type, trip.driver, trip.to, route, type.length, Math.max(0, speed));
+      let id: number;
+      if (this.isJunctionLane(route[0])) {
+        // A driveway opens straight into a junction: pull out only when it's safe, like any driver at a line.
+        const v = this.build(type, trip.driver, trip.to, route, type.length, Math.min(Math.max(0, speed), DRIVEWAY_SPEED));
+        const junction = { index: 0, lane: route[0], distance: 0 };
+        if (this.conflictAreaOccupied(v, junction) || this.exitFull(v, 0) || !this.safeToEnter(v, junction) || !this.reserveCrossings(v, 0)) continue;
+        v.committedJunction = route[0];
+        entry.waiting.shift();
+        id = this.insert(v);
+      } else {
+        entry.waiting.shift();
+        id = this.place(type, trip.driver, trip.to, route, type.length, Math.max(0, speed));
+      }
       if (trip.counted) {
         this.enteredAt.set(id, this.time);
         this.entered++;
@@ -824,11 +856,11 @@ export class TrafficSimulation {
       // Where lanes split: someone who took the other branch is still in the way until
       // their rear is clear of the split.
       if (i > index || position <= 0) {
-        const split = i > 0 ? this.graph.lanes[route[i - 1]].next : [];
+        const split = i > 0 ? this.graph.lanes[route[i - 1]].next : (this.sharedStarts.get(route[i]) ?? []);
         for (const sibling of split) {
           if (sibling === route[i]) continue;
           for (const rear of this.rearsByLane.get(sibling) ?? []) {
-            if (rear.vehicle === self || rear.position >= DIVERGE_CLEARANCE) continue;
+            if (rear.vehicle === self || rear.position >= this.splitClear(sibling, route[i])) continue;
             const gap = travelled + Math.max(0, rear.position);
             if (!best || gap < best.gap) best = { gap, speed: rear.vehicle.speed, kind: 'car', vehicle: rear.vehicle };
           }
@@ -841,12 +873,13 @@ export class TrafficSimulation {
         for (const otherLane of this.mergesWith.get(route[i]) ?? []) {
           for (const other of this.vehicles.values()) {
             if (other === self) continue;
-            // Only drivers already in the junction (or committed to it) take their turn at the merge.
-            const inJunction = this.junctionOf[other.route[other.routeIndex]] === this.junctionOf[otherLane];
-            if (!inJunction && other.committedJunction === null) continue;
             const theirs = this.distanceToPoint(other, otherLane, this.laneLength[otherLane]);
             // Still counts until its rear has cleared the merge point (long vehicles curve in for a while).
             if (theirs === null || theirs + other.type.length < 0) continue;
+            // Only drivers already in the junction (or committed to it) take their turn at the merge;
+            // one straddling the merge point is in the way regardless.
+            const inJunction = this.junctionOf[other.route[other.routeIndex]] === this.junctionOf[otherLane];
+            if (!inJunction && other.committedJunction === null && theirs >= 0) continue;
             const ahead = theirs < toMerge || (theirs === toMerge && other.id < self.id);
             if (!ahead) continue;
             const gap = toMerge - theirs - other.type.length;
@@ -858,6 +891,20 @@ export class TrafficSimulation {
       travelled += this.laneLength[route[i]];
     }
     return null;
+  }
+
+  /** How far along `lane` (metres) a vehicle's rear must be before it's clear of `other`, which leaves the same point. */
+  private splitClear(lane: number, other: number) {
+    const key = `${lane}>${other}`;
+    let clear = this.splitClearances.get(key);
+    if (clear === undefined) {
+      // Measure how far the branches run side by side (a lay-by peeling away, turning lanes
+      // fanning out at a junction's entrance); exits off a roundabout's ring open up quickly.
+      const offRing = this.entryLaneOf(lane) === null;
+      clear = offRing ? DIVERGE_CLEARANCE : Math.max(DIVERGE_CLEARANCE, splitClearance(this.graph.lanes[lane], this.graph.lanes[other], SPLIT_SEPARATION) * METRES_PER_TILE);
+      this.splitClearances.set(key, clear);
+    }
+    return clear;
   }
 
   /** Highest speed now that still lets the driver slow comfortably to a lower speed limit ahead, as they keep limits. */
@@ -1078,8 +1125,8 @@ export class TrafficSimulation {
           if (relation === 'go' && other.committedJunction === null && this.junctionOf[other.route[other.routeIndex]] !== this.junctionOf[conflict.lane]) continue;
           // They're hanging back to let us out.
           if (other.decisions.get(`courtesy:${v.id}`) === true && other.committedJunction === null) continue;
-          // Queued right by the merge with priority: no space to pull in ahead of it.
-          if (other.speed < STOPPED && relation === 'yield' && conflict.kind === 'merge' && toConflict < 8 && toConflict > -other.type.length) return this.block(v, `queued at merge: ${other.id}`);
+          // Queued (or crawling in the queue) right by the merge with priority: no space to pull in ahead of it.
+          if (other.speed < HELD_UP && relation === 'yield' && conflict.kind === 'merge' && toConflict < 8 && toConflict > -other.type.length) return this.block(v, `queued at merge: ${other.id}`);
           if (other.speed < STOPPED) {
             // Not coming yet. Waiting at its own line with neither of us having priority:
             // whoever arrived first goes (ties by order).

@@ -246,7 +246,7 @@ await runPage.close();
 const presetChecks = {};
 if (isDevServer) {
   // Presets other than Main Street (src/scenes/presets.ts); add each new preset here as it lands.
-  for (const [id, name] of [['market-roundabout', 'Market Roundabout']]) {
+  for (const [id, name] of [['market-roundabout', 'Market Roundabout'], ['school-run', 'School Run']]) {
     const presetPage = await browser.newPage({ viewport: { width: 1440, height: 900 } });
     const presetUrl = new URL(url);
     presetUrl.searchParams.set('scene', id);

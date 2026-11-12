@@ -157,3 +157,23 @@ Owner agreed the spec and the T1–T13 ticket breakdown and authorised implement
 - **Demand:** west 0.6, north 0.45, east 0.25, south 0.2, about 15 trips a minute at Medium. A single-lane roundabout carries roughly 20; the first weights (summing to 2.5) jammed it at Medium.
 - **Crossing:** a 48 s cycle with a 15 s red. At Medium its queue fits in the two tiles before the circle; at Congested it spills back into the circle.
 - **Opening other presets before the carousel:** the dev server opens another preset with `?scene=<id>` (`src/scenes/presets.ts` lists them). Production always opens Main Street until T11.
+
+## School Run notes (T9) — 2026-11-12
+
+- **Layout:**
+  - A divided 60 km/h main road on rows 3–4. Its signalised two-tile junction at column 8 has a side street north.
+  - A 30 km/h shortcut on row 11 with an all-way stop at column 8, which has a street south.
+  - School frontage on the shortcut at 20 km/h: a zebra crossing (col 10), the school driveway (P1, col 11) and a drop-off lay-by (cols 12–13).
+  - Links at columns 1 and 14 join the shortcut to the eastbound main road, giving way at both ends.
+  - The shortcut's T at column 4 has an open south arm.
+- **Speed limits per piece** (`speedLimit`, km/h, 10–120; default 50):
+  - Drivers keep the limit of the lane they're on, adjusted by their speed factor.
+  - They slow before a lower limit at their comfortable braking rate, firmly once over it.
+  - Routing uses the limits.
+- **Driveways** are labelled P1, P2, … (west to east) and can start and end trips. A trip leaving a driveway pulls out (at most 3 m/s) only when the junction checks allow it, like a driver at a line.
+- **Timed peaks:** a scene's demand can add peaks, in run seconds, scaled by intensity. School Run sends parents to P1 from 10–60 s and back out from 20–70 s.
+- **Safety fixes found on School Run:**
+  - A driveway's way in and way out conflict at the mouth.
+  - Where lanes split (including lanes fanning out at a junction's entrance and a lay-by peeling away), a vehicle blocks the split until its rear is past the point where the branches are 2.2 m apart. Splits off a roundabout ring keep the fixed 3 m.
+  - A vehicle straddling a merge point always counts as the car ahead.
+  - At a merge, a crawling queue counts as queued.

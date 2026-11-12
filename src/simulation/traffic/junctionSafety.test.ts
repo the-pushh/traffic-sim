@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { mainStreet } from '../../scenes/mainStreet';
 import { marketRoundabout } from '../../scenes/marketRoundabout';
+import { schoolRun } from '../../scenes/schoolRun';
+import { laneSpeedLimits } from '../network/scene';
+import { sceneDemand } from './sceneDemand';
 import { testNetwork } from '../../scenes/testNetwork';
 import { buildLaneGraph } from '../network/buildLaneGraph';
 import { pointAlongLane } from '../network/laneGeometry';
@@ -82,6 +85,22 @@ describe('junction safety', () => {
       expect(touching).toEqual([]);
     }
   });
+
+  it('never lets vehicles overlap on School Run, through the drop-off peak, the all-way stop and the lay-by', () => {
+    const g = buildLaneGraph(schoolRun.pieces);
+    for (const [seed, tripsPerMinute] of [[51, 10], [52, 16]]) {
+      const s = new TrafficSimulation(g, { seed, controls: resolveControls(schoolRun.pieces, g, schoolRun.controls), speedLimits: laneSpeedLimits(schoolRun.pieces, g), demand: sceneDemand(schoolRun.demand, tripsPerMinute, 0) });
+      const touching: string[] = [];
+      for (let i = 0; i < 120 * 30; i++) {
+        s.step(STEP);
+        if (i % 3) continue;
+        const all = s.allVehicles();
+        const bodies = all.map((v) => body(s, g, v));
+        for (let a = 0; a < all.length; a++) for (let b = a + 1; b < all.length; b++) if (closest(bodies[a], bodies[b]) < 1.5 && touching.length < 5) touching.push(`t=${s.time.toFixed(1)} ${all[a].id}/${all[b].id}`);
+      }
+      expect(touching).toEqual([]);
+    }
+  }, 60_000);
 
   it('resolves four-way give-way-to-the-right and two yield signs facing each other without a crash or a standoff', () => {
     const pieces: PiecePlacement[] = [{ piece: 'crossroad', at: [8.5, 8.5], rotation: 0 }];
