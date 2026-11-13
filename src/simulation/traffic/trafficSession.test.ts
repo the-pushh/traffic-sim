@@ -140,4 +140,21 @@ describe('traffic session: edits in Ready', () => {
     expect(session.simulation.counts.due).toBe(0);
     expect(session.approaches).toEqual([]);
   });
+
+  it('scrubbing back on the timeline shows exactly the traffic that was there at that moment', () => {
+    const run = new RunController();
+    const session = new TrafficSession(signalTest, graph, run);
+    run.play();
+    session.advance(run.tick(5));
+    const atFive = state(session);
+    const countsAtFive = { ...session.simulation.counts };
+    session.advance(run.tick(7));
+    expect(state(session)).not.toEqual(atFive);
+
+    session.advance(run.seek(5).steps);
+    expect(run.clock).toBe(5);
+    expect(state(session)).toEqual(atFive);
+    expect(session.simulation.counts).toEqual(countsAtFive); // measured again from the start, the same way
+  });
 });
+

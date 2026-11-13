@@ -53,6 +53,10 @@ const timeline = createTimelineSlider({
     time.textContent = `${clock(s)} / ${clock(DURATION)}`;
     say(`Timeline: ${s.toFixed(1)} s`);
   },
+  onCommit: (s) => {
+    time.textContent = `${clock(s)} / ${clock(DURATION)}`;
+    say(`Timeline: ${s.toFixed(1)} s`);
+  },
 });
 time.textContent = `${clock(12)} / ${clock(DURATION)}`;
 const divider = document.createElement('span');

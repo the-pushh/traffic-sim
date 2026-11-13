@@ -1,3 +1,4 @@
+import { createFivePositionSwitch, createPushButton, createTimelineSlider } from '../hardware/controls';
 import {
   INTENSITIES,
   type Intensity,
@@ -15,9 +16,15 @@ export const INTENSITY_LABELS: Record<Intensity, string> = {
   congested: 'Congested',
 };
 
+/** Short marks printed under the traffic volume switch, lowest to highest. */
+const INTENSITY_MARKS = ['1', '2', '3', '4', '5'];
+const LOCKED = 'Restart the run to change';
+
 export interface DockCallbacks {
   /** Play was pressed; `kind` says whether the run starts, resumes, or continues. */
   onPlay?: (kind: PlayKind) => void;
+  /** The timeline was scrubbed to a moment: the simulation has to catch up (or replay) to it. */
+  onSeek?: (seconds: number) => void;
 }
 
 export function formatClock(seconds: number) {
@@ -26,114 +33,165 @@ export function formatClock(seconds: number) {
 }
 
 /**
- * The floating simulation dock: Play/Pause, Restart, clock and progress with the run
- * length beside them, then intensity. Other modules add sections with `addSection`. Call `sync()` each frame; it only touches the DOM on changes.
+ * The simulation dock, built from hardware parts on a machined panel: Play/Pause and Restart
+ * push buttons, a timeline fader that scrubs through the run, run-length buttons, and a
+ * five-position switch for traffic volume. Other modules add sections with `addSection`.
+ * Call `sync()` each frame; it only touches the DOM on changes.
  */
 export function createDock(container: HTMLElement, run: RunController, callbacks: DockCallbacks = {}) {
   const dock = document.createElement('div');
-  dock.className = 'dock';
+  dock.className = 'dock hw-panel';
   dock.setAttribute('role', 'toolbar');
   dock.setAttribute('aria-label', 'Simulation');
-  dock.innerHTML = `
-    <div class="dock-section dock-run">
-      <button type="button" class="icon-button primary" data-action="play-pause"></button>
-      <button type="button" class="icon-button" data-action="restart" aria-label="Restart run" title="Restart run">${icon('restart')}</button>
-      <div class="timeline">
-        <span class="clock" aria-live="off"></span>
-        <div class="progress" role="progressbar" aria-label="Run progress" aria-valuemin="0"><div class="progress-fill"></div></div>
-      </div>
-      <div class="duration" role="group" aria-label="Run length">
-        <span class="dock-icon">${icon('clock')}</span>
-        ${RUN_DURATIONS.map((d) => `<button type="button" class="segment" data-duration="${d}">${d} s</button>`).join('')}
-      </div>
-    </div>
-    <div class="dock-divider" aria-hidden="true"></div>
-    <div class="dock-section dock-traffic">
-      <span class="dock-icon">${icon('gauge')}</span>
-      <label class="intensity">
-        <span class="dock-label">Intensity <strong class="intensity-name"></strong><span class="lock-hint" id="dock-lock-hint" hidden> · locked during the run</span></span>
-        <input type="range" min="0" max="${INTENSITIES.length - 1}" step="1" list="intensity-ticks" />
-        <datalist id="intensity-ticks">${INTENSITIES.map((_, i) => `<option value="${i}"></option>`).join('')}</datalist>
-      </label>
-    </div>
-  `;
   container.append(dock);
+  const section = (...children: HTMLElement[]) => {
+    const s = document.createElement('div');
+    s.className = 'dock-section';
+    s.append(...children);
+    dock.append(s);
+    return s;
+  };
+  const divider = () => {
+    const d = document.createElement('div');
+    d.className = 'dock-divider';
+    d.setAttribute('aria-hidden', 'true');
+    dock.append(d);
+  };
 
-  const playPause = dock.querySelector<HTMLButtonElement>('[data-action="play-pause"]')!;
-  const restart = dock.querySelector<HTMLButtonElement>('[data-action="restart"]')!;
-  const clock = dock.querySelector<HTMLElement>('.clock')!;
-  const progress = dock.querySelector<HTMLElement>('.progress')!;
-  const fill = dock.querySelector<HTMLElement>('.progress-fill')!;
-  const intensityInput = dock.querySelector<HTMLInputElement>('.intensity input')!;
-  const intensityName = dock.querySelector<HTMLElement>('.intensity-name')!;
-  const durationButtons = [...dock.querySelectorAll<HTMLButtonElement>('[data-duration]')];
-
-  playPause.addEventListener('click', () => {
-    if (run.state === 'running') {
-      run.pause();
-    } else {
-      const kind = run.play();
-      if (kind) callbacks.onPlay?.(kind);
-    }
-    sync();
-  });
-  restart.addEventListener('click', () => {
-    run.restart();
-    sync();
-  });
-  intensityInput.addEventListener('input', () => {
-    const intensity = INTENSITIES[Number(intensityInput.value)];
-    if (intensity) run.setIntensity(intensity);
-    sync();
-  });
-  for (const button of durationButtons) {
-    button.addEventListener('click', () => {
-      const duration = RUN_DURATIONS.find((d) => String(d) === button.dataset.duration);
-      if (duration) run.setDuration(duration);
+  // ---- Play/Pause, Restart, the timeline and its clock ----
+  const playPause = createPushButton({
+    label: 'Play',
+    icon: icon('play'),
+    onPress: () => {
+      if (run.state === 'running') {
+        run.pause();
+      } else {
+        const kind = run.play();
+        if (kind) callbacks.onPlay?.(kind);
+      }
       sync();
+    },
+  });
+  playPause.element.dataset.action = 'play-pause';
+  playPause.element.classList.add('is-primary');
+  const restart = createPushButton({
+    label: 'Restart run',
+    icon: icon('restart'),
+    onPress: () => {
+      run.restart();
+      sync();
+    },
+  });
+  restart.element.dataset.action = 'restart';
+  const clock = document.createElement('span');
+  clock.className = 'clock hw-readout';
+  clock.setAttribute('aria-live', 'off');
+  const timeline = createTimelineSlider({
+    label: 'Run time',
+    duration: run.duration,
+    majorEvery: 10,
+    minorEvery: 2,
+    value: 0,
+    // While dragging, the clock follows the cap; the simulation catches up on release.
+    onScrub: (s) => (clock.textContent = `${formatClock(s)} / ${formatClock(run.duration)}`),
+    onCommit: (s) => {
+      callbacks.onSeek?.(s);
+      sync();
+    },
+  });
+  timeline.element.classList.add('timeline');
+  section(playPause.element, restart.element, timeline.element, clock);
+  divider();
+
+  // ---- Run length: three buttons, the chosen one lit ----
+  const durationButtons = RUN_DURATIONS.map((d) => {
+    const b = createPushButton({
+      label: `${d} s`,
+      icon: `<span>${d} s</span>`,
+      led: true,
+      wide: true,
+      onPress: () => {
+        run.setDuration(d);
+        sync();
+      },
     });
-  }
-  const lockHint = dock.querySelector<HTMLElement>('.lock-hint')!;
+    b.element.dataset.duration = String(d);
+    b.element.classList.add('segment');
+    return b;
+  });
+  const durationGroup = document.createElement('div');
+  durationGroup.className = 'duration';
+  durationGroup.setAttribute('role', 'group');
+  durationGroup.setAttribute('aria-label', 'Run length');
+  durationGroup.insertAdjacentHTML('afterbegin', `<span class="dock-icon" aria-hidden="true">${icon('clock')}</span>`);
+  durationGroup.append(...durationButtons.map((b) => b.element));
+  section(durationGroup);
+  divider();
+
+  // ---- Traffic volume: a five-position switch ----
+  const intensityName = document.createElement('strong');
+  intensityName.className = 'intensity-name';
+  const lockHint = document.createElement('span');
+  lockHint.className = 'lock-hint';
+  lockHint.id = 'dock-lock-hint';
+  lockHint.hidden = true;
+  lockHint.textContent = ' · locked during the run';
+  const volume = createFivePositionSwitch({
+    label: 'Traffic volume',
+    positions: INTENSITIES.map((i) => INTENSITY_LABELS[i]),
+    marks: INTENSITY_MARKS,
+    value: INTENSITIES.indexOf(run.intensity),
+    onChange: (index) => {
+      run.setIntensity(INTENSITIES[index]);
+      sync();
+    },
+  });
+  const intensity = document.createElement('div');
+  intensity.className = 'intensity';
+  const caption = document.createElement('span');
+  caption.className = 'dock-label';
+  caption.append('Traffic ', intensityName, lockHint);
+  intensity.append(caption, volume.element);
+  const gauge = document.createElement('span');
+  gauge.className = 'dock-icon';
+  gauge.setAttribute('aria-hidden', 'true');
+  gauge.innerHTML = icon('gauge');
+  section(gauge, intensity);
 
   let lastRendered = '';
   let shownRunning: boolean | null = null;
   function sync() {
-    const key = `${run.state}|${run.clock}|${run.duration}|${run.intensity}`;
+    // The fader follows the clock every frame (unless the player holds it).
+    timeline.show(run.clock);
+    const key = `${run.state}|${Math.floor(run.clock)}|${run.duration}|${run.intensity}`;
     if (key === lastRendered) return;
     lastRendered = key;
 
-    // Swap the icon only when Play/Pause flips: replacing it on every clock tick puts a new
-    // element under a press in progress, and the browser then drops the click.
+    // Swap the icon only when Play/Pause flips: replacing it under a press in progress drops the click.
     const running = run.state === 'running';
     if (running !== shownRunning) {
       shownRunning = running;
-      playPause.innerHTML = running ? icon('pause') : icon('play');
-      playPause.setAttribute('aria-label', running ? 'Pause' : 'Play');
-      playPause.title = running ? 'Pause' : 'Play';
+      playPause.setFace(icon(running ? 'pause' : 'play'), running ? 'Pause' : 'Play');
     }
     dock.dataset.state = run.state;
-
-    clock.textContent = `${formatClock(run.clock)} / ${formatClock(run.duration)}`;
-    progress.setAttribute('aria-valuemax', String(run.duration));
-    progress.setAttribute('aria-valuenow', String(Math.floor(run.clock)));
-    fill.style.transform = `scaleX(${run.clock / run.duration})`;
+    timeline.setDuration(run.duration);
+    if (!timeline.dragging) clock.textContent = `${formatClock(run.clock)} / ${formatClock(run.duration)}`;
 
     const locked = run.settingsLocked;
-    const lockedHint = locked ? 'Restart the run to change' : '';
     lockHint.hidden = !locked;
-    intensityInput.disabled = locked;
-    intensityInput.value = String(INTENSITIES.indexOf(run.intensity));
-    intensityInput.setAttribute('aria-valuetext', INTENSITY_LABELS[run.intensity]);
-    intensityInput.title = lockedHint;
-    if (locked) intensityInput.setAttribute('aria-describedby', 'dock-lock-hint');
-    else intensityInput.removeAttribute('aria-describedby');
+    volume.set(INTENSITIES.indexOf(run.intensity), false);
+    volume.setDisabled(locked);
+    volume.element.title = locked ? LOCKED : `Traffic volume: ${INTENSITY_LABELS[run.intensity]}`;
+    if (locked) volume.element.setAttribute('aria-describedby', 'dock-lock-hint');
+    else volume.element.removeAttribute('aria-describedby');
     intensityName.textContent = INTENSITY_LABELS[run.intensity];
-    for (const button of durationButtons) {
-      button.disabled = locked;
-      if (locked) button.setAttribute('aria-describedby', 'dock-lock-hint');
-      else button.removeAttribute('aria-describedby');
-      button.title = lockedHint;
-      button.setAttribute('aria-pressed', String(Number(button.dataset.duration) === run.duration));
+    for (const b of durationButtons) {
+      const chosen = Number(b.element.dataset.duration) === run.duration;
+      b.setDisabled(locked, LOCKED);
+      b.setLit(chosen);
+      b.element.setAttribute('aria-pressed', String(chosen));
+      if (locked) b.element.setAttribute('aria-describedby', 'dock-lock-hint');
+      else b.element.removeAttribute('aria-describedby');
     }
   }
 
@@ -141,12 +199,10 @@ export function createDock(container: HTMLElement, run: RunController, callbacks
   return {
     sync,
     element: dock,
-    /** Add a section at the end, after a divider (the editor's Parts button). */
-    addSection(section: HTMLElement) {
-      const divider = document.createElement('div');
-      divider.className = 'dock-divider';
-      divider.setAttribute('aria-hidden', 'true');
-      dock.append(divider, section);
+    /** Add a section at the end, after a divider (the editor's Parts button, the Controls button). */
+    addSection(...children: HTMLElement[]) {
+      divider();
+      section(...children);
     },
   };
 }

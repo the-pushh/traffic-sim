@@ -360,3 +360,20 @@ Owner agreed the spec and the T1–T13 ticket breakdown and authorised implement
   - **Trajectory:** the exit (or driveway) it's heading for, the distance left, and the next pieces.
 - **On the map:** the remaining route is drawn as a 4 px pink line from a ring at the vehicle to its exit.
 - **Updates:** the card refreshes every 200 ms. Only the values change, so the × is never rebuilt under a click. The route is redrawn only when it moves, so a paused run with the card open costs nothing. A vehicle that leaves the board is marked "left the board", and its route disappears.
+## Hardware-style controls (P12, #53) — 2026-11-13
+
+- **Brief:** controls that look and behave like hardware on a high-end VST instrument. No reference images were supplied, so the finish was chosen to suit the palette:
+  - dark anodised aluminium panels with fine brushing;
+  - machined aluminium caps, knob and joystick cap;
+  - molded black lever, fader body and boot;
+  - one light from the upper left, a dark gap where every part meets the panel, shadows falling down-right;
+  - glow limited to a 6 px status light.
+- **The owner approved the preview** (`preview/controls.html`, dev server) and asked for it in the app. Volume uses the five-position switch (option A). The knob (option B) stays in `src/hardware/controls.ts`.
+- **Parts** (`src/hardware/`):
+  - **Push button:** the cap sinks 2.5 px and its 4 px sidewall shortens to 1 px while held, then springs back. Pointer, Space and Enter.
+  - **Five-position switch:** a lever in a slot with five notches. Click, drag, the arrow keys, or Home/End.
+  - **Timeline fader:** the cap's centre travels exactly between the first and last marks. Dragging moves the clock readout, and the simulation catches up on release (keys move it straight away). `RunController.seek` runs forward, or starts the same traffic again and replays when going back. The run is left paused (Ready at 0:00, Ended at the end). A replay uses the network as it is now, so edits made mid-run apply from the start.
+  - **Joystick:** tilts in two axes from a visible pivot (the shaft leans, the cap foreshortens) and springs back to centre with a slight overshoot; the camera joystick's dead zone ignores it. Arrow keys while focused.
+  - **Controls:** a push button with a status light. Its pane (camera: joystick, zoom, Reset View; display: theme) slides out top-right, scrolls when short, and is inert while closed. The parts tray fits under it.
+- **Layout:** Play, Restart, the timeline and the clock come first in the dock, then run length (lit buttons), traffic volume, Parts and Controls. Below 1180 px wide the dock wraps into two rows.
+- **Not changed:** the results card, parts tray, inspector and tips keep the glass style. The old range input, segmented run length and DOM joystick are gone, and their CSS was removed from `main.css`.

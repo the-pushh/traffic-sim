@@ -183,16 +183,17 @@
 
 /* Status light in the cap: dim when off, a small lit lens when on (no big glow). */
 .hw-led {
-  width: 5px;
-  height: 5px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
   background: radial-gradient(circle at 35% 35%, #4a5570, var(--hw-led-off));
   box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.5);
 }
 
 .hw-led.is-on {
-  background: radial-gradient(circle at 35% 35%, #e2ecff, var(--hw-led-on) 60%);
-  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.3), 0 0 3px rgb(127 176 255 / 0.7);
+  /* A lit lens: bright core, saturated rim, a 3px halo at most. */
+  background: radial-gradient(circle at 40% 40%, #ffffff 0 18%, #9ec1ff 45%, #3d78ff 100%);
+  box-shadow: inset 0 0 0 1px rgb(20 40 90 / 0.5), 0 0 3px 0.5px rgb(90 145 255 / 0.85);
 }
 
 /* ---- Five-position switch: a lever riding in a gated slot ---- */
@@ -568,5 +569,219 @@
   .hw-timeline-cap,
   .hw-drawer {
     transition-duration: 0ms !important;
+  }
+}
+
+/* ---- Hidden parts stay hidden (the parts set their own display) ---- */
+.hw-button[hidden],
+.hw-drawer[hidden] {
+  display: none;
+}
+
+/* Disabled: a locked part reads as unavailable, not gone. */
+.hw-button:disabled {
+  cursor: not-allowed;
+}
+
+.hw-button:disabled .hw-cap-face,
+[aria-disabled='true'] > .hw-switch-plate,
+.hw-switch[aria-disabled='true'] .hw-switch-scale,
+.hw-knob[aria-disabled='true'],
+.hw-timeline[aria-disabled='true'],
+.hw-joystick[aria-disabled='true'] {
+  opacity: 0.5;
+}
+
+.hw-switch[aria-disabled='true'],
+.hw-knob[aria-disabled='true'],
+.hw-joystick[aria-disabled='true'] {
+  cursor: not-allowed;
+}
+
+/* The main action: a blue anodised cap with a white glyph. */
+.hw-button.is-primary .hw-cap-face {
+  background:
+    radial-gradient(120% 90% at 25% 15%, rgb(255 255 255 / 0.28), transparent 55%),
+    linear-gradient(160deg, #6f97ff, var(--hw-accent) 50%, #2551c4);
+  box-shadow: inset 1px 1px 0 rgb(255 255 255 / 0.45), inset -1px -1px 0 rgb(0 0 0 / 0.3);
+  color: #fff;
+}
+
+.hw-button.is-primary .hw-cap-side {
+  background: linear-gradient(180deg, #2a4fa8, #1c3577);
+}
+
+/* ================================================================
+ * In the app: the dock, the scene pill and the Controls pane.
+ * ================================================================ */
+
+/* The dock: one machined panel along the bottom. */
+.dock.hw-panel {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 14px;
+}
+
+.dock .dock-section {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* A groove machined between sections. */
+.dock .dock-divider {
+  align-self: stretch;
+  width: 1px;
+  margin: 2px 0;
+  background: rgb(0 0 0 / 0.55);
+  box-shadow: 1px 0 0 rgb(255 255 255 / 0.06);
+}
+
+.dock .dock-icon {
+  display: grid;
+  place-items: center;
+  color: var(--hw-legend-dim);
+}
+
+.dock .dock-icon .icon {
+  width: 16px;
+  height: 16px;
+}
+
+.dock .timeline {
+  width: 260px;
+}
+
+.dock .clock {
+  min-width: 82px;
+  white-space: nowrap;
+  text-align: right;
+}
+
+.dock .duration {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.dock .duration .dock-icon {
+  margin-right: 4px;
+}
+
+.dock .duration .hw-cap {
+  min-width: 46px;
+}
+
+.dock .intensity {
+  display: grid;
+  gap: 0;
+}
+
+.dock .dock-label {
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--hw-legend-dim);
+}
+
+.dock .dock-label strong {
+  color: var(--hw-legend);
+  font-weight: 600;
+}
+
+.dock .lock-hint {
+  text-transform: none;
+  letter-spacing: 0.02em;
+}
+
+.dock .hw-switch {
+  width: 150px;
+  padding-top: 4px;
+}
+
+.parts-toggle .parts-toggle-icons {
+  display: inline-flex;
+  gap: 1px;
+}
+
+.parts-toggle .parts-toggle-icons .icon {
+  width: 13px;
+  height: 13px;
+}
+
+/* The scene pill: a small machined panel. */
+.scene-pill.hw-panel {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+}
+
+.scene-pill .hw-button:not(.wide) {
+  --size: 30px;
+}
+
+.scene-pill .hw-button.wide {
+  height: 30px;
+}
+
+.scene-pill .scene-name {
+  min-width: 130px;
+  padding: 0 4px;
+  text-align: center;
+  font: 600 12px/1 var(--hw-font);
+  letter-spacing: 0.04em;
+  color: var(--hw-legend);
+  text-shadow: 0 1px 0 rgb(0 0 0 / 0.6);
+}
+
+/* The Controls pane: top-right over the map, sliding out from the edge. */
+.camera-controls.hw-drawer {
+  top: 16px;
+  right: 16px;
+  width: 272px;
+  max-height: calc(100% - 140px);
+  display: flex;
+  flex-direction: column;
+}
+
+.camera-controls .hw-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.camera-controls .hw-stack {
+  display: grid;
+  justify-items: start;
+  gap: 8px;
+}
+
+.camera-controls .hw-stack .hw-button:not(.wide) {
+  justify-self: start;
+}
+
+/* Narrower windows: the transport and timeline take the first row, the settings the second. */
+@media (max-width: 1180px) {
+  .dock.hw-panel {
+    flex-wrap: wrap;
+    justify-content: center;
+    row-gap: 10px;
+    width: min(980px, calc(100vw - 32px));
+  }
+
+  .dock > .dock-section:first-child {
+    flex-basis: 100%;
+  }
+
+  .dock > .dock-section:first-child .timeline {
+    flex: 1 1 auto;
+    width: auto;
+    min-width: 160px;
+  }
+
+  .dock > .dock-section:first-child + .dock-divider {
+    display: none;
   }
 }

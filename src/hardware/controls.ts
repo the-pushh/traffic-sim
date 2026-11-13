@@ -29,9 +29,9 @@ export function createPushButton(options: PushButtonOptions) {
   button.className = `hw-button hw-focusable${options.wide ? ' wide' : ''}`;
   button.setAttribute('aria-label', options.label);
   button.title = options.label;
-  const face = options.icon ?? `<span>${options.label}</span>`;
-  button.innerHTML = `<span class="hw-cap"><span class="hw-cap-side"></span><span class="hw-cap-face">${options.led ? '<span class="hw-led"></span>' : ''}${face}</span></span>`;
-  const led = button.querySelector<HTMLElement>('.hw-led');
+  const shown = options.icon ?? `<span>${options.label}</span>`;
+  button.innerHTML = `<span class="hw-cap"><span class="hw-cap-side"></span><span class="hw-cap-face">${options.led ? '<span class="hw-led"></span>' : ''}${shown}</span></span>`;
+  let led = button.querySelector<HTMLElement>('.hw-led');
 
   const down = () => button.classList.add('is-pressed');
   const up = () => button.classList.remove('is-pressed');
@@ -52,11 +52,25 @@ export function createPushButton(options: PushButtonOptions) {
   button.addEventListener('blur', up);
   button.addEventListener('click', () => options.onPress?.());
 
+  const face = button.querySelector<HTMLElement>('.hw-cap-face')!;
   return {
     element: button,
     /** Light or darken the cap's status light. */
     setLit(lit: boolean) {
       led?.classList.toggle('is-on', lit);
+    },
+    /** What the cap shows (an icon, or text), and its accessible name. */
+    setFace(html: string, label?: string) {
+      face.innerHTML = `${led ? led.outerHTML : ''}${html}`;
+      led = face.querySelector<HTMLElement>('.hw-led');
+      if (label) {
+        button.setAttribute('aria-label', label);
+        button.title = label;
+      }
+    },
+    setDisabled(disabled: boolean, why = '') {
+      button.disabled = disabled;
+      button.title = disabled && why ? why : (button.getAttribute('aria-label') ?? '');
     },
   };
 }
@@ -109,18 +123,20 @@ export function createFivePositionSwitch(options: DetentOptions) {
     root.setAttribute('aria-valuetext', options.positions[value]);
     root.title = `${options.label}: ${options.positions[value]}`;
   };
-  const set = (next: number) => {
+  let disabled = false;
+  const set = (next: number, notify = true) => {
     next = Math.min(count - 1, Math.max(0, next));
     if (next === value) return;
     value = next;
     show();
-    options.onChange?.(value);
+    if (notify) options.onChange?.(value);
   };
   const fromPointer = (clientX: number) => {
     const r = plate.getBoundingClientRect();
     return nearestDetent((clientX - r.left - SLOT_INSET) / (r.width - 2 * SLOT_INSET), count);
   };
   root.addEventListener('pointerdown', (e) => {
+    if (disabled) return;
     root.setPointerCapture(e.pointerId);
     root.classList.add('is-dragging');
     set(fromPointer(e.clientX));
@@ -130,6 +146,7 @@ export function createFivePositionSwitch(options: DetentOptions) {
   });
   root.addEventListener('lostpointercapture', () => root.classList.remove('is-dragging'));
   root.addEventListener('keydown', (e) => {
+    if (disabled) return;
     const step = { ArrowLeft: -1, ArrowDown: -1, ArrowRight: 1, ArrowUp: 1 }[e.key];
     if (step) set(value + step);
     else if (e.key === 'Home') set(0);
@@ -138,7 +155,18 @@ export function createFivePositionSwitch(options: DetentOptions) {
     e.preventDefault();
   });
   show();
-  return { element: root, get value() { return value; }, set };
+  return {
+    element: root,
+    get value() {
+      return value;
+    },
+    set,
+    /** Locked: shown greyed, ignores input, still focusable so its reason can be read. */
+    setDisabled(next: boolean) {
+      disabled = next;
+      root.setAttribute('aria-disabled', String(next));
+    },
+  };
 }
 
 // ---------------------------------------------------------------- detented knob
@@ -185,15 +213,17 @@ export function createDetentedKnob(options: DetentOptions) {
     root.setAttribute('aria-valuetext', options.positions[value]);
     root.title = `${options.label}: ${options.positions[value]}`;
   };
-  const set = (next: number) => {
+  let disabled = false;
+  const set = (next: number, notify = true) => {
     next = Math.min(count - 1, Math.max(0, next));
     if (next === value) return;
     value = next;
     show();
-    options.onChange?.(value);
+    if (notify) options.onChange?.(value);
   };
   let drag: { y: number; from: number } | null = null;
   root.addEventListener('pointerdown', (e) => {
+    if (disabled) return;
     root.setPointerCapture(e.pointerId);
     root.classList.add('is-dragging');
     drag = { y: e.clientY, from: value };
@@ -206,10 +236,12 @@ export function createDetentedKnob(options: DetentOptions) {
     root.classList.remove('is-dragging');
   });
   root.addEventListener('wheel', (e) => {
+    if (disabled) return;
     e.preventDefault();
     set(value + (e.deltaY < 0 ? 1 : -1));
   }, { passive: false });
   root.addEventListener('keydown', (e) => {
+    if (disabled) return;
     const step = { ArrowLeft: -1, ArrowDown: -1, ArrowRight: 1, ArrowUp: 1 }[e.key];
     if (step) set(value + step);
     else if (e.key === 'Home') set(0);
@@ -218,7 +250,17 @@ export function createDetentedKnob(options: DetentOptions) {
     e.preventDefault();
   });
   show();
-  return { element: root, get value() { return value; }, set };
+  return {
+    element: root,
+    get value() {
+      return value;
+    },
+    set,
+    setDisabled(next: boolean) {
+      disabled = next;
+      root.setAttribute('aria-disabled', String(next));
+    },
+  };
 }
 
 // ---------------------------------------------------------------- timeline slider
@@ -227,11 +269,14 @@ export interface TimelineOptions {
   label: string;
   /** Length of the run, seconds. */
   duration: number;
-  /** Seconds between labelled marks (minor marks every second step's fifth). */
+  /** Seconds between labelled marks, and between small marks. */
   majorEvery: number;
   minorEvery: number;
   value: number;
+  /** While the cap is dragged: where it is (show it, but don't do the work yet). */
   onScrub?: (seconds: number) => void;
+  /** The cap was let go, or moved with a key: go to this moment. */
+  onCommit?: (seconds: number) => void;
 }
 
 /** Padding from the slider's edges to its first and last marks: the cap's centre travels exactly between them. */
@@ -245,13 +290,16 @@ export function createTimelineSlider(options: TimelineOptions) {
   root.setAttribute('role', 'slider');
   root.setAttribute('aria-label', options.label);
   root.setAttribute('aria-valuemin', '0');
-  root.setAttribute('aria-valuemax', String(options.duration));
   root.innerHTML = `<div class="hw-timeline-scale"></div><div class="hw-timeline-track"><div class="hw-timeline-fill"></div></div><div class="hw-timeline-cap"></div>`;
   const scale = root.querySelector<HTMLElement>('.hw-timeline-scale')!;
   const track = root.querySelector<HTMLElement>('.hw-timeline-track')!;
   const fill = root.querySelector<HTMLElement>('.hw-timeline-fill')!;
   const cap = root.querySelector<HTMLElement>('.hw-timeline-cap')!;
   let value = options.value;
+  let duration = options.duration;
+  let dragging = false;
+  let disabled = false;
+  let shown = '';
 
   const travel = () => ({ start: TIMELINE_INSET, end: root.clientWidth - TIMELINE_INSET });
   const layout = () => {
@@ -259,48 +307,93 @@ export function createTimelineSlider(options: TimelineOptions) {
     // The track runs a little past the marks so the cap never sits on its rounded end.
     track.style.left = `${t.start - 4}px`;
     track.style.width = `${t.end - t.start + 8}px`;
+    root.setAttribute('aria-valuemax', String(duration));
     scale.innerHTML = '';
-    for (let s = 0; s <= options.duration + 1e-9; s += options.minorEvery) {
-      const x = travelPosition(s, options.duration, t);
-      const major = Math.abs(s / options.majorEvery - Math.round(s / options.majorEvery)) < 1e-9;
-      scale.insertAdjacentHTML('beforeend', `<span class="hw-timeline-tick${major ? ' is-major' : ''}" style="left:${x}px"></span>`);
-      if (major) scale.insertAdjacentHTML('beforeend', `<span class="hw-timeline-label" style="left:${x}px">${s}s</span>`);
+    const major = Math.max(options.majorEvery, Math.round(duration / 3 / options.majorEvery) * options.majorEvery);
+    const minor = major / 5;
+    for (let s = 0; s <= duration + 1e-9; s += minor) {
+      const x = travelPosition(s, duration, t);
+      const isMajor = Math.abs(s / major - Math.round(s / major)) < 1e-9;
+      scale.insertAdjacentHTML('beforeend', `<span class="hw-timeline-tick${isMajor ? ' is-major' : ''}" style="left:${x}px"></span>`);
+      if (isMajor) scale.insertAdjacentHTML('beforeend', `<span class="hw-timeline-label" style="left:${x}px">${s}s</span>`);
     }
+    shown = '';
     show();
   };
   const show = () => {
     const t = travel();
-    const x = travelPosition(value, options.duration, t);
+    const x = travelPosition(value, duration, t);
+    const key = `${x.toFixed(1)}|${t.end}`;
+    if (key === shown) return; // cheap to call every frame
+    shown = key;
     cap.style.left = `${x}px`;
     fill.style.width = `${x - t.start + 4}px`;
     root.setAttribute('aria-valuenow', String(Math.round(value)));
-    root.setAttribute('aria-valuetext', `${Math.round(value)} of ${options.duration} seconds`);
+    root.setAttribute('aria-valuetext', `${Math.round(value)} of ${duration} seconds`);
   };
-  const set = (next: number, notify = true) => {
-    value = Math.min(options.duration, Math.max(0, next));
-    show();
-    if (notify) options.onScrub?.(value);
-  };
-  const fromPointer = (clientX: number) => travelValue(clientX - root.getBoundingClientRect().left, options.duration, travel());
+  const clamp = (v: number) => Math.min(duration, Math.max(0, v));
+  const fromPointer = (clientX: number) => travelValue(clientX - root.getBoundingClientRect().left, duration, travel());
   root.addEventListener('pointerdown', (e) => {
+    if (disabled || e.button !== 0) return;
     root.setPointerCapture(e.pointerId);
     root.classList.add('is-dragging');
-    set(fromPointer(e.clientX));
+    dragging = true;
+    value = fromPointer(e.clientX);
+    show();
+    options.onScrub?.(value);
   });
   root.addEventListener('pointermove', (e) => {
-    if (root.hasPointerCapture(e.pointerId)) set(fromPointer(e.clientX));
+    if (!dragging) return;
+    value = fromPointer(e.clientX);
+    show();
+    options.onScrub?.(value);
   });
-  root.addEventListener('lostpointercapture', () => root.classList.remove('is-dragging'));
+  root.addEventListener('lostpointercapture', () => {
+    if (!dragging) return;
+    dragging = false;
+    root.classList.remove('is-dragging');
+    options.onCommit?.(value);
+  });
   root.addEventListener('keydown', (e) => {
+    if (disabled) return;
     const step = { ArrowLeft: -1, ArrowDown: -1, ArrowRight: 1, ArrowUp: 1, PageDown: -options.majorEvery, PageUp: options.majorEvery }[e.key];
-    if (step) set(Math.round(value) + step);
-    else if (e.key === 'Home') set(0);
-    else if (e.key === 'End') set(options.duration);
+    let next: number;
+    if (step) next = Math.round(value) + step;
+    else if (e.key === 'Home') next = 0;
+    else if (e.key === 'End') next = duration;
     else return;
     e.preventDefault();
+    value = clamp(next);
+    show();
+    options.onCommit?.(value);
   });
   new ResizeObserver(layout).observe(root);
-  return { element: root, get value() { return value; }, set };
+  return {
+    element: root,
+    get value() {
+      return value;
+    },
+    /** True while the player is dragging the cap (don't move it from outside then). */
+    get dragging() {
+      return dragging;
+    },
+    /** Show a moment without reporting it (the run's clock, every frame). */
+    show(seconds: number) {
+      if (dragging) return;
+      value = clamp(seconds);
+      show();
+    },
+    setDuration(seconds: number) {
+      if (seconds === duration) return;
+      duration = seconds;
+      value = clamp(value);
+      layout();
+    },
+    setDisabled(next: boolean) {
+      disabled = next;
+      root.setAttribute('aria-disabled', String(next));
+    },
+  };
 }
 
 // ---------------------------------------------------------------- joystick
@@ -436,7 +529,9 @@ export function createJoystick(options: { label: string; onTilt?: (x: number, y:
     target.y = t.y;
   };
   let grab: { x: number; y: number } | null = null;
+  let disabled = false;
   root.addEventListener('pointerdown', (e) => {
+    if (disabled || e.button !== 0) return;
     root.setPointerCapture(e.pointerId);
     holding = true;
     // Relative drag: the stick follows the hand from wherever it was grabbed.
@@ -466,7 +561,7 @@ export function createJoystick(options: { label: string; onTilt?: (x: number, y:
     run();
   };
   root.addEventListener('keydown', (e) => {
-    if (!e.key.startsWith('Arrow')) return;
+    if (disabled || !e.key.startsWith('Arrow')) return;
     e.preventDefault();
     keys.add(e.key);
     fromKeys();
@@ -480,7 +575,19 @@ export function createJoystick(options: { label: string; onTilt?: (x: number, y:
     release();
   });
   draw();
-  return { element: root, tilt: () => ({ ...tilt }) };
+  return {
+    element: root,
+    tilt: () => ({ ...tilt }),
+    setDisabled(next: boolean) {
+      disabled = next;
+      root.tabIndex = next ? -1 : 0;
+      root.setAttribute('aria-disabled', String(next));
+      if (next) {
+        keys.clear();
+        release();
+      }
+    },
+  };
 }
 
 // ---------------------------------------------------------------- controls drawer
