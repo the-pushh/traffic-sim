@@ -464,8 +464,8 @@ if (isDevServer) {
   // Clicking a piece selects it: the inspector shows it and can remove it.
   const stub = await page3.evaluate(() => window.__trafficDebug.screenOf(1.5, 8.5));
   await page3.mouse.click(stub.x, stub.y);
-  editorChecks.clickSelectsPiece = await page3.locator('.inspector').isVisible();
-  await page3.locator('.inspector').getByRole('button', { name: 'Remove' }).click();
+  editorChecks.clickSelectsPiece = await page3.locator('.inspector:not(.vehicle-card)').isVisible();
+  await page3.locator('.inspector:not(.vehicle-card)').getByRole('button', { name: 'Remove' }).click();
   await page3.waitForTimeout(400);
   editorChecks.removeFromInspector = (await pieces()) === startCount;
 
@@ -607,6 +607,43 @@ for (const [width, height] of [[1440, 900], [1280, 800]]) {
   trayChecks[`at${width}`] = pictured && Object.values(layout).every(Boolean);
   if (!trayChecks[`at${width}`]) trayChecks[`detail${width}`] = layout; // shown only on failure
   await page.screenshot({ path: `${outDir}/33-tray-${width}.png` });
+  await page.close();
+}
+
+// A clicked vehicle (dev server): its card opens where the road inspector goes, refreshes as it drives, and closes.
+const vehicleCardChecks = {};
+if (isDevServer) {
+  const fast = new URL(url);
+  const { page, errors } = await openPage(fast.toString());
+  const press = async (x, y) => {
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    await page.waitForTimeout(90);
+    await page.mouse.up();
+  };
+  const playPause = page.locator('.dock [data-action="play-pause"]');
+  await playPause.click();
+  await page.waitForTimeout(2500);
+  const car = await page.evaluate(() => window.__trafficDebug.vehicles().find((v) => v.x > 320 && v.x < 1100 && v.y > 150 && v.y < 650 && v.speed > 3));
+  let opened = false;
+  let moves = false;
+  if (car) {
+    await press(car.x, car.y);
+    const card = page.locator('.vehicle-card');
+    opened = await card.waitFor({ state: 'visible', timeout: 2000 }).then(() => true, () => false);
+    const text = (await card.textContent()) ?? '';
+    opened &&= ['Vehicle', 'Driver', 'Now', 'Trajectory', 'Following time', 'Heading for', 'Distance left'].every((t) => text.includes(t));
+    const position = () => page.locator('.vehicle-card dt', { hasText: 'Position' }).locator('xpath=following-sibling::dd[1]').textContent();
+    const before = await position();
+    await page.waitForTimeout(1200);
+    moves = (await position()) !== before || (await card.textContent())?.includes('left the board');
+    await page.screenshot({ path: `${outDir}/38-vehicle-card.png` });
+  }
+  vehicleCardChecks.clickOpensCard = opened;
+  vehicleCardChecks.cardFollowsTheVehicle = moves;
+  await page.getByRole('button', { name: 'Close vehicle details' }).click().catch(() => {});
+  vehicleCardChecks.closes = await page.locator('.vehicle-card').isHidden();
+  vehicleCardChecks.noPageErrors = errors.length === 0;
   await page.close();
 }
 
@@ -902,6 +939,7 @@ const result = {
   presetChecks,
   carouselChecks,
   editorChecks,
+  vehicleCardChecks,
   dockChecks,
   trayChecks,
   backgroundChecks,
@@ -935,6 +973,7 @@ const ok =
   resetDisabledDuringFailure &&
   retryRecovered &&
   Object.values(runChecks).every(Boolean) &&
+  passed(vehicleCardChecks) &&
   passed(dockChecks) &&
   passed(trayChecks) &&
   passed(backgroundChecks) &&

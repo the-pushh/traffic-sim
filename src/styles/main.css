@@ -1085,6 +1085,45 @@ body.placing canvas {
   padding: 0;
 }
 
+/* A clicked vehicle's card: the inspector's look, longer, scrolling inside. */
+.vehicle-card {
+  width: 280px;
+  max-height: calc(100% - 2 * var(--space-4) - 120px);
+  overflow-y: auto;
+}
+
+.vehicle-card .vehicle-id,
+.vehicle-card .vehicle-gone-note {
+  font-weight: normal;
+  font-size: var(--font-meta);
+  color: var(--color-text-muted);
+}
+
+.vehicle-card h3 {
+  margin: var(--space-2) 0 var(--space-1);
+  font-size: var(--font-meta);
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+.vehicle-card dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px var(--space-2);
+  margin: 0;
+  font-size: var(--font-meta);
+  font-variant-numeric: tabular-nums;
+}
+
+.vehicle-card dt {
+  color: var(--color-text-muted);
+}
+
+.vehicle-card dd {
+  margin: 0;
+  text-align: right;
+}
+
 .inspector-hint,
 .inspector-error {
   margin: var(--space-1) 0 var(--space-2);
