@@ -418,6 +418,16 @@ Owner agreed the spec and the T1–T13 ticket breakdown and authorised implement
 - **Owner:** remove the Reset View button from the dock. There is no on-screen Reset View now. Opening a scene still frames the view afresh, and the camera panel keeps zoom in, zoom out and the theme switch.
 - **Browser checks:** the focus and Space-pan checks use the Zoom in button instead, and a check confirms no Reset View button remains.
 
+## Ridged buttons (owner, 2026-11-14)
+
+- **Owner:**
+  - "all buttons need the border 1px ridge, with gradient to match the glass morphism style";
+  - earlier: "change the secondary button colour to more grey and add borders of same colour but hue light to dark gradient… giving it that crisp look".
+- **Every button** (dock, camera panel, scene pill, component tiles, inspector, results and dialogs) has a neutral grey fill (`--button-fill`) and a 1px border. The border runs from light at the top (`--button-ridge-top`) to dark at the bottom (`--button-ridge-bottom`), drawn as a transparent border over a vertical gradient. Light and dark mode each have their own values.
+- **Primary buttons** (Play, the chosen run length) stay accent-filled, with an accent ridge (`--primary-ridge-top`/`-bottom`).
+- **Run lengths:** the 30/60/90 s track carries the ridge, and the unchosen lengths inside it are flat.
+- **Buttons only set** `--fill` and the ridge colours, so specific buttons recolour without losing the ridge.
+
 ## Phones and tablets get a message (P18, #71) — 2026-11-14
 
 - **Owner:** "in the mobile and tab view don't show anything, just this text on the bg 'this app is meant to be experienced on the laptop…'".
