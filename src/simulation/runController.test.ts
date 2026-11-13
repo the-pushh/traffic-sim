@@ -1,18 +1,26 @@
 import { describe, expect, it } from 'vitest';
 import { RunController } from './runController';
 
+/** A run of 30 s: these tests were written for that length (the app's default is 60 s since P20). */
+function thirtySecondRun() {
+  const run = new RunController();
+  run.setDuration(30);
+  return run;
+}
+
 describe('run controller', () => {
-  it('starts ready at 0:00 with the 30 s duration and settings unlocked', () => {
+  it('starts ready at 0:00 with the 60 s duration (the owner’s default) and settings unlocked', () => {
     const run = new RunController();
 
     expect(run.state).toBe('ready');
     expect(run.clock).toBe(0);
-    expect(run.duration).toBe(30);
+    expect(run.duration).toBe(60);
     expect(run.settingsLocked).toBe(false);
   });
 
   it('advances in fixed 1/30 s steps and ends exactly at the chosen duration', () => {
-    const run = new RunController();
+    const run = thirtySecondRun();
+    run.setDuration(30);
     run.play();
     expect(run.state).toBe('running');
 
@@ -28,7 +36,7 @@ describe('run controller', () => {
   });
 
   it('carries fractions of a step between frames', () => {
-    const run = new RunController();
+    const run = thirtySecondRun();
     run.play();
     let steps = 0;
     for (let frame = 0; frame < 60; frame++) steps += run.tick(1 / 60);
@@ -37,7 +45,7 @@ describe('run controller', () => {
   });
 
   it('holds the clock while paused', () => {
-    const run = new RunController();
+    const run = thirtySecondRun();
     run.play();
     run.tick(4);
     run.pause();
@@ -52,7 +60,7 @@ describe('run controller', () => {
   });
 
   it('locks intensity and duration for the whole run, playing or paused, and unlocks when it ends', () => {
-    const run = new RunController();
+    const run = thirtySecondRun();
     expect(run.setDuration(60)).toBe(true);
     expect(run.setIntensity('high')).toBe(true);
 
@@ -73,7 +81,7 @@ describe('run controller', () => {
   });
 
   it('tells the simulation whether Play starts, resumes, or continues after the end', () => {
-    const run = new RunController();
+    const run = thirtySecondRun();
     expect(run.play()).toBe('start');
     run.pause();
     expect(run.play()).toBe('resume');
@@ -89,7 +97,7 @@ describe('run controller', () => {
 
   it('restarts back to ready at 0:00 from any state, unlocking the settings', () => {
     for (const reach of ['running', 'paused', 'ended'] as const) {
-      const run = new RunController();
+      const run = thirtySecondRun();
       run.play();
       run.tick(reach === 'ended' ? 30 : 3);
       if (reach === 'paused') run.pause();
@@ -106,7 +114,7 @@ describe('run controller', () => {
 
   it('goes back to ready when intensity or duration changes after a run ends, so the next Play starts fresh', () => {
     for (const change of [(r: RunController) => r.setIntensity('congested'), (r: RunController) => r.setDuration(60)]) {
-      const run = new RunController();
+      const run = thirtySecondRun();
       run.play();
       run.tick(30);
       expect(run.state).toBe('ended');
@@ -120,7 +128,7 @@ describe('run controller', () => {
   });
 
   it('keeps an ended run as it is when the chosen setting is unchanged', () => {
-    const run = new RunController();
+    const run = thirtySecondRun();
     run.play();
     run.tick(30);
     run.setDuration(30);
@@ -130,7 +138,7 @@ describe('run controller', () => {
   });
 
   it('ignores negative or non-finite frame times', () => {
-    const run = new RunController();
+    const run = thirtySecondRun();
     run.play();
     run.tick(2);
     for (const bad of [-5, Number.NaN, Number.POSITIVE_INFINITY]) expect(run.tick(bad)).toBe(0);
@@ -139,7 +147,7 @@ describe('run controller', () => {
   });
 
   it('counts fresh starts, so the simulation knows when to rebuild its starting traffic', () => {
-    const run = new RunController();
+    const run = thirtySecondRun();
     expect(run.freshStarts).toBe(0);
 
     run.setIntensity('high'); // in Ready: new starting traffic for the new intensity

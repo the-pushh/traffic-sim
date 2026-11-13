@@ -38,7 +38,11 @@ import { TrafficSession } from '../simulation/traffic/trafficSession';
  * opens on Main Street; the dev server can open another with `?scene=<id>` for browser checks.
  */
 const openingId = import.meta.env.DEV ? new URLSearchParams(location.search).get('scene') : null;
-const store = new SceneStore(PRESETS, browserStorage(), PRESETS.some((p) => p.id === openingId) ? openingId! : PRESETS[0].id);
+/** The scene the app opens on (the owner's choice); `?scene=` overrides it on the dev server. */
+const DEFAULT_SCENE = 'flyover-bottleneck';
+/** How much closer than the whole-board view the camera starts (the owner's default: twice as close). */
+const START_ZOOM = 2;
+const store = new SceneStore(PRESETS, browserStorage(), PRESETS.some((p) => p.id === openingId) ? openingId! : DEFAULT_SCENE);
 
 const ZOOM_STEP = 0.8;
 
@@ -383,7 +387,7 @@ async function show(mode: 'open' | 'edit'): Promise<boolean> {
       select: (target) => editor.select(target),
     });
     if (opening) {
-      observer = ObserverCamera.framing(camera, bounds, { coveredBottom });
+      observer = ObserverCamera.framing(camera, bounds, { coveredBottom, zoom: START_ZOOM });
       // A drag turns the view, unless it starts on the selected piece (the editor moves that).
       detachInput = attachViewportInput(renderer.domElement, observer, { onSelection: (e) => editor.pressStartsOnSelection(e), placing: () => editor.preview() !== null });
       editor.reset();

@@ -9,9 +9,16 @@ const graph = buildLaneGraph(signalTest.pieces);
 const state = (session: TrafficSession) =>
   session.simulation.allVehicles().map((v) => `${v.type.id}:${v.driver.profile}:${v.driver.headway.toFixed(9)}:${session.simulation.routeProgress(v.id).toFixed(9)}`);
 
+/** A run of 30 s: these tests were written for that length (the app's default is 60 s since P20). */
+function thirtySecondRun() {
+  const run = new RunController();
+  run.setDuration(30);
+  return run;
+}
+
 describe('traffic session', () => {
   it('opens with warmed-up traffic on the roads but counts nothing until the run starts', () => {
-    const session = new TrafficSession(signalTest, graph, new RunController());
+    const session = new TrafficSession(signalTest, graph, thirtySecondRun());
 
     expect(session.simulation.allVehicles().length).toBeGreaterThan(0);
     expect(session.simulation.counts).toEqual({ due: 0, entered: 0, finished: 0, waiting: 0, blocked: 0 });
@@ -19,7 +26,7 @@ describe('traffic session', () => {
   });
 
   it('replays exactly the same traffic after Restart', () => {
-    const run = new RunController();
+    const run = thirtySecondRun();
     const session = new TrafficSession(signalTest, graph, run);
     const opening = state(session);
     run.play();
@@ -32,7 +39,7 @@ describe('traffic session', () => {
   });
 
   it('keeps the same simulation when Play continues after a run ends', () => {
-    const run = new RunController();
+    const run = thirtySecondRun();
     const session = new TrafficSession(signalTest, graph, run);
     run.play();
     session.advance(run.tick(30));
@@ -45,7 +52,7 @@ describe('traffic session', () => {
 
 describe('traffic session measures', () => {
   it('reports the run’s measures with its scene, intensity and duration, and live queues per approach', () => {
-    const run = new RunController();
+    const run = thirtySecondRun();
     const session = new TrafficSession(signalTest, graph, run);
     run.play();
     session.advance(run.tick(30));
@@ -61,7 +68,7 @@ describe('traffic session measures', () => {
 
   it('after a signal timing change and Restart, replays exactly the same arrivals, drivers and vehicles with a different outcome', () => {
     const msGraph = buildLaneGraph(mainStreet.pieces);
-    const run = new RunController();
+    const run = thirtySecondRun();
     run.setDuration(60);
     const play = (session: TrafficSession) => {
       run.play();
@@ -82,7 +89,7 @@ describe('traffic session measures', () => {
 
 describe('traffic session: continuing after the end', () => {
   it('measures the continued run on its own', () => {
-    const run = new RunController();
+    const run = thirtySecondRun();
     const session = new TrafficSession(signalTest, graph, run);
     run.play();
     session.advance(run.tick(30));
@@ -99,7 +106,7 @@ describe('traffic session: edits', () => {
   const withoutLight = { ...signalTest, pieces: signalTest.pieces.map((p) => (p.piece === 'crossing' ? { ...p, piece: 'straight' } : p)), controls: [] };
 
   it('carries a paused run on over the edited network', () => {
-    const run = new RunController();
+    const run = thirtySecondRun();
     const session = new TrafficSession(signalTest, graph, run);
     run.play();
     session.advance(run.tick(10));
@@ -117,7 +124,7 @@ describe('traffic session: edits', () => {
   });
 
   it('starts afresh from Ready when edited before a run or after it ends', () => {
-    const run = new RunController();
+    const run = thirtySecondRun();
     const session = new TrafficSession(signalTest, graph, run);
     run.play();
     session.advance(run.tick(30));
@@ -131,7 +138,7 @@ describe('traffic session: edits', () => {
 
 describe('traffic session: edits in Ready', () => {
   it('warms the edited network up afresh, staying in Ready', () => {
-    const run = new RunController();
+    const run = thirtySecondRun();
     const session = new TrafficSession(signalTest, graph, run);
     const withoutLight = { ...signalTest, pieces: signalTest.pieces.map((p) => (p.piece === 'crossing' ? { ...p, piece: 'straight' } : p)), controls: [] };
     session.edit(withoutLight, buildLaneGraph(withoutLight.pieces));

@@ -58,6 +58,22 @@ describe('ObserverCamera framing fit', () => {
   });
 });
 
+describe('ObserverCamera starting zoom', () => {
+  it('starts zoomed in by the given factor from the whole-board fit, and can still zoom out to see it all', () => {
+    const fitted = new PerspectiveCamera(45, 16 / 9, 0.1, 500);
+    ObserverCamera.framing(fitted, squareBoardBounds);
+    const centre = squareBoardBounds.getCenter(new Vector3());
+    const fitDistance = fitted.position.distanceTo(centre);
+
+    const camera = new PerspectiveCamera(45, 16 / 9, 0.1, 500);
+    const observer = ObserverCamera.framing(camera, squareBoardBounds, { zoom: 2 });
+    expect(camera.position.distanceTo(centre)).toBeCloseTo(fitDistance / 2, 6);
+
+    observer.zoom(10000); // as far out as allowed
+    expect(camera.position.distanceTo(centre)).toBeGreaterThanOrEqual(fitDistance);
+  });
+});
+
 describe('ObserverCamera framing above floating panels', () => {
   it.each(fitCases)('keeps the $scene clear of a covered strip at the bottom of the screen (aspect $aspect)', ({ bounds, aspect }) => {
     const width = 1440;
