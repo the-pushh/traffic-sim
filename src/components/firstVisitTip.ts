@@ -28,7 +28,7 @@ export function createFirstVisitTip(container: HTMLElement, durationSeconds: () 
   tip.setAttribute('role', 'note');
   tip.innerHTML = `
     <p class="tip-main"></p>
-    <p class="tip-camera">Over the map: hold Space and drag to pan, scroll to zoom. The joystick orbits and tilts.</p>
+    <p class="tip-camera">Over the map: hold Space and drag to pan, scroll to zoom. <strong>Controls</strong> has the joystick to orbit and tilt.</p>
     <button type="button" class="tip-close" aria-label="Dismiss tip">×</button>
   `;
   const main = tip.querySelector<HTMLElement>('.tip-main')!;

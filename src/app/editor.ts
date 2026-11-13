@@ -10,6 +10,7 @@ import { placementKeyAction, type PlacingMode } from '../editor/placementKeys';
 import { CONTROL_MODELS } from '../three/scene/controlModels';
 import { signPose } from '../three/scene/createSceneView';
 import { icon } from '../components/icons';
+import { createPushButton } from '../hardware/controls';
 import { renderThumbnails } from '../three/thumbnails/partThumbnails';
 
 /** What the editor needs from the app around it. */
@@ -139,14 +140,21 @@ export function createEditor(host: EditorHost) {
   `;
   // The tray sits bottom-right over the map, clear of the dock, so the map stays in view.
   host.viewport.append(drawer);
-  const toggle = document.createElement('button');
-  toggle.type = 'button';
-  toggle.className = 'parts-toggle';
-  toggle.innerHTML = `<span class="parts-toggle-icons">${icon('wrench')}${icon('hammer')}</span><span>Parts</span>`;
+  // A push button like the dock's others; its light stays on while the tray is open.
+  const partsButton = createPushButton({
+    label: 'Parts',
+    icon: `<span class="parts-toggle-icons">${icon('wrench')}${icon('hammer')}</span><span>Parts</span>`,
+    led: true,
+    wide: true,
+  });
+  const toggle = partsButton.element;
+  toggle.classList.add('parts-toggle');
   toggle.setAttribute('aria-expanded', 'false');
+  toggle.setAttribute('aria-controls', drawer.id || (drawer.id = 'parts-tray'));
   toggle.addEventListener('click', () => {
     drawer.hidden = !drawer.hidden;
     toggle.setAttribute('aria-expanded', String(!drawer.hidden));
+    partsButton.setLit(!drawer.hidden);
     if (!drawer.hidden) {
       placeTray();
       showPictures();
@@ -165,11 +173,12 @@ export function createEditor(host: EditorHost) {
    */
   function placeTray() {
     const area = host.viewport.getBoundingClientRect();
-    const camera = host.cameraPanel.getBoundingClientRect();
     const dock = host.dock.getBoundingClientRect();
     const gap = parseFloat(getComputedStyle(drawer).right) || 0;
     const besideDock = area.right - gap - drawer.offsetWidth > dock.right + gap;
-    drawer.style.setProperty('--tray-top', `${camera.bottom - area.top + gap}px`);
+    // Under the Controls pane while it's open; otherwise the tray can reach up to the top.
+    const above = host.cameraPanel.dataset.open === 'false' ? area.top : host.cameraPanel.getBoundingClientRect().bottom;
+    drawer.style.setProperty('--tray-top', `${above - area.top + gap}px`);
     drawer.style.setProperty('--tray-bottom', besideDock ? `${gap}px` : `${area.bottom - dock.top + gap}px`);
   }
 
@@ -677,6 +686,12 @@ export function createEditor(host: EditorHost) {
     toggle,
     /** The parts tray (the app centres the view beside it while it's open). */
     tray: drawer,
+    /** A panel it keeps clear of opened or closed (the Controls pane): fit the tray again. */
+    layoutChanged() {
+      if (drawer.hidden) return;
+      placeTray();
+      host.trayToggled();
+    },
     /** Where the part being placed would land right now (for checks); null when not placing. */
     preview: () => drag?.latest ?? null,
     /** Select a piece or control as a click would (for checks). */

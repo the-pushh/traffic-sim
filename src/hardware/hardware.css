@@ -1,0 +1,787 @@
+/*
+ * Hardware controls: machined and molded parts seated in an anodised panel.
+ * One light, from the upper left: highlights on top/left edges, shadows fall down-right.
+ * No reference images were supplied with the brief, so finishes are chosen to sit with
+ * the app's palette (ink #141115, cream #f7f3e3, blue #3772ff, pink #f487b6).
+ */
+:root {
+  /* Panel: dark anodised aluminium, fine horizontal brushing. */
+  --hw-panel: #2b282e;
+  --hw-panel-hi: #34313a;
+  --hw-panel-lo: #221f25;
+  --hw-brush: repeating-linear-gradient(0deg, rgb(255 255 255 / 0.018) 0 1px, transparent 1px 3px);
+  /* The dark gap between a part and the panel or its bezel. */
+  --hw-gap: #0b0a0c;
+  /* Machined aluminium caps. */
+  --hw-metal-hi: #e4e2e6;
+  --hw-metal: #c6c3ca;
+  --hw-metal-lo: #8e8b93;
+  --hw-metal-side: #6f6c75;
+  /* Molded black parts (lever, stick boot, slider cap body). */
+  --hw-molded: #1a181c;
+  --hw-molded-hi: #3a373d;
+  /* Engraving and legends. */
+  --hw-legend: #d9d5dc;
+  --hw-legend-dim: #8a8590;
+  --hw-ink: #17151a;
+  /* Indicators. */
+  --hw-led-on: #7fb0ff;
+  --hw-led-off: #2c3446;
+  --hw-accent: #3772ff;
+  --hw-focus: #8fb2ff;
+  /* Shadow cast down-right onto the panel. */
+  --hw-cast: 1px 2px 2px rgb(0 0 0 / 0.55), 0 1px 0 rgb(0 0 0 / 0.4);
+  --hw-font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
+}
+
+/* ---- Panel ---- */
+.hw-panel {
+  position: relative;
+  background: var(--hw-brush), linear-gradient(180deg, var(--hw-panel-hi), var(--hw-panel) 18%, var(--hw-panel-lo));
+  border-radius: 10px;
+  /* Chamfered edge: lit top-left, dark bottom-right; then the shadow the panel casts. */
+  box-shadow:
+    inset 1px 1px 0 rgb(255 255 255 / 0.09),
+    inset -1px -1px 0 rgb(0 0 0 / 0.45),
+    0 0 0 1px rgb(0 0 0 / 0.55),
+    3px 6px 14px rgb(0 0 0 / 0.35);
+  color: var(--hw-legend);
+  font: 500 11px/1.2 var(--hw-font);
+  letter-spacing: 0.04em;
+}
+
+/* Small engraved legend under or beside a control. */
+.hw-legend {
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--hw-legend-dim);
+  text-shadow: 0 1px 0 rgb(0 0 0 / 0.6);
+}
+
+.hw-readout {
+  font: 600 11px/1 ui-monospace, 'SF Mono', Menlo, monospace;
+  color: var(--hw-legend);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Crisp focus ring for keyboard focus, offset from the part so it doesn't read as a glow. */
+.hw-focusable:focus {
+  outline: none;
+}
+
+.hw-focusable:focus-visible {
+  outline: 2px solid var(--hw-focus);
+  outline-offset: 3px;
+}
+
+/* The ring follows the control's outline. */
+.hw-switch,
+.hw-knob,
+.hw-timeline {
+  border-radius: 8px;
+}
+
+/* ---- Push button: a cap in a round-cornered well ---- */
+.hw-button {
+  --size: 38px;
+  --press: 0; /* 0 up … 1 fully down */
+  appearance: none;
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: var(--size);
+  height: var(--size);
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  background: var(--hw-gap); /* the well's floor: the gap around the cap */
+  /* The well's rim: dark on the lit side (it's cut into the panel), light on the far side. */
+  box-shadow:
+    inset 1px 1px 2px rgb(0 0 0 / 0.8),
+    0 1px 0 rgb(255 255 255 / 0.07),
+    1px 1px 0 rgb(255 255 255 / 0.04);
+  cursor: pointer;
+  color: var(--hw-ink);
+}
+
+.hw-button.wide {
+  --size: auto;
+  width: auto;
+  height: 38px;
+  padding: 0 3px;
+}
+
+/* The cap: a face over a sidewall. Pressing sinks the face and shortens the wall. */
+.hw-cap {
+  position: relative;
+  width: calc(100% - 6px);
+  height: calc(100% - 6px);
+  border-radius: 5px;
+  transform: translateY(calc(var(--press) * 2.5px));
+  transition: transform 150ms cubic-bezier(0.25, 1.7, 0.45, 1);
+}
+
+.hw-button.wide .hw-cap {
+  width: auto;
+  min-width: 64px;
+  margin: 0 3px;
+}
+
+.hw-button.wide .hw-cap-face {
+  padding: 0 12px;
+  white-space: nowrap;
+}
+
+/* Sidewall: visible below the face, 4px tall at rest, 1px when pressed. */
+.hw-cap-side {
+  position: absolute;
+  inset: auto 0 calc(-4px + var(--press) * 3px);
+  height: calc(4px - var(--press) * 3px);
+  border-radius: 0 0 5px 5px;
+  background: linear-gradient(180deg, var(--hw-metal-side), #4d4a52);
+  /* The cap's shadow on the well floor: shorter as it sinks. */
+  box-shadow: 1px calc(2px - var(--press) * 1.5px) 2px rgb(0 0 0 / 0.7);
+  transition: inherit;
+  transition-property: height, bottom, box-shadow;
+}
+
+.hw-cap-face {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 100%;
+  border-radius: 5px;
+  /* Machined face, lit from the upper left; a fine bevel round the edge. */
+  background:
+    radial-gradient(120% 90% at 25% 15%, rgb(255 255 255 / 0.35), transparent 55%),
+    linear-gradient(160deg, var(--hw-metal-hi), var(--hw-metal) 45%, var(--hw-metal-lo));
+  box-shadow:
+    inset 1px 1px 0 rgb(255 255 255 / 0.7),
+    inset -1px -1px 0 rgb(0 0 0 / 0.25);
+  color: var(--hw-ink);
+  font: 600 10px/1 var(--hw-font);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.hw-cap-face svg {
+  width: 15px;
+  height: 15px;
+}
+
+.hw-button.is-pressed {
+  --press: 1;
+}
+
+.hw-button.is-pressed .hw-cap {
+  transition-duration: 40ms;
+  transition-timing-function: linear;
+}
+
+/* Status light in the cap: dim when off, a small lit lens when on (no big glow). */
+.hw-led {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #4a5570, var(--hw-led-off));
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.5);
+}
+
+.hw-led.is-on {
+  /* A lit lens: bright core, saturated rim, a 3px halo at most. */
+  background: radial-gradient(circle at 40% 40%, #ffffff 0 18%, #9ec1ff 45%, #3d78ff 100%);
+  box-shadow: inset 0 0 0 1px rgb(20 40 90 / 0.5), 0 0 3px 0.5px rgb(90 145 255 / 0.85);
+}
+
+/* ---- Five-position switch: a lever riding in a gated slot ---- */
+.hw-switch {
+  --count: 5;
+  position: relative;
+  width: 168px;
+  padding: 6px 0 0;
+  cursor: pointer;
+  touch-action: none;
+}
+
+/* The gate plate: a machined insert seated in the panel. */
+.hw-switch-plate {
+  position: relative;
+  height: 30px;
+  margin: 0 8px;
+  border-radius: 6px;
+  background: linear-gradient(180deg, #3b3840, #2a272e);
+  box-shadow:
+    0 0 0 1px var(--hw-gap),
+    inset 1px 1px 0 rgb(255 255 255 / 0.1),
+    1px 2px 3px rgb(0 0 0 / 0.45);
+}
+
+/* The slot the lever runs in, with five notches (detents) cut below it. */
+.hw-switch-slot {
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  top: 11px;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--hw-gap);
+  box-shadow: inset 1px 1px 2px rgb(0 0 0 / 0.9), 0 1px 0 rgb(255 255 255 / 0.08);
+}
+
+.hw-switch-notch {
+  position: absolute;
+  top: 17px;
+  width: 6px;
+  height: 7px;
+  margin-left: -3px;
+  border-radius: 0 0 3px 3px;
+  background: var(--hw-gap);
+  box-shadow: inset 1px 0 1px rgb(0 0 0 / 0.8);
+}
+
+/* The lever: a molded bat handle on a short stem, seen from above and slightly in front. */
+.hw-switch-lever {
+  position: absolute;
+  top: -4px;
+  width: 14px;
+  height: 26px;
+  margin-left: -7px;
+  transition: left 120ms cubic-bezier(0.3, 1.5, 0.5, 1);
+}
+
+.hw-switch.is-dragging .hw-switch-lever {
+  transition: none;
+}
+
+.hw-switch-lever::before {
+  /* Shadow cast onto the plate, down-right. */
+  content: '';
+  position: absolute;
+  left: 3px;
+  top: 6px;
+  width: 12px;
+  height: 22px;
+  border-radius: 5px;
+  background: rgb(0 0 0 / 0.45);
+  filter: blur(1.5px);
+}
+
+.hw-switch-lever::after {
+  /* The handle: molded, with a lit top-left edge and a flat grip face. */
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 5px 5px 4px 4px;
+  background:
+    repeating-linear-gradient(0deg, transparent 0 3px, rgb(255 255 255 / 0.06) 3px 4px) center 4px / 8px 14px no-repeat,
+    linear-gradient(100deg, var(--hw-molded-hi), var(--hw-molded) 55%);
+  box-shadow: inset 1px 1px 0 rgb(255 255 255 / 0.18), inset -1px -1px 0 rgb(0 0 0 / 0.6), 0 0 0 1px rgb(0 0 0 / 0.7);
+}
+
+.hw-switch-scale {
+  position: relative;
+  height: 22px;
+  margin: 4px 8px 0;
+}
+
+.hw-switch-mark {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  font: 600 9px/1 var(--hw-font);
+  color: var(--hw-legend-dim);
+}
+
+.hw-switch-mark::before {
+  content: '';
+  width: 1px;
+  height: 4px;
+  background: var(--hw-legend-dim);
+}
+
+.hw-switch-mark.is-current {
+  color: var(--hw-legend);
+}
+
+/* ---- Detented knob: knurled aluminium, engraved pointer, printed scale ---- */
+.hw-knob {
+  --angle: 0deg;
+  position: relative;
+  width: 92px;
+  height: 84px;
+  cursor: ns-resize;
+  touch-action: none;
+}
+
+.hw-knob-scale {
+  position: absolute;
+  inset: 0;
+}
+
+.hw-knob-scale line {
+  stroke: var(--hw-legend-dim);
+  stroke-width: 1.2;
+}
+
+.hw-knob-scale line.is-current {
+  stroke: var(--hw-legend);
+  stroke-width: 1.6;
+}
+
+.hw-knob-scale text {
+  fill: var(--hw-legend-dim);
+  font: 600 8.5px var(--hw-font);
+  text-anchor: middle;
+}
+
+.hw-knob-scale text.is-current {
+  fill: var(--hw-legend);
+}
+
+/* The skirt: the knob's seat in the panel (a shallow counterbore with a gap). */
+.hw-knob-seat {
+  position: absolute;
+  left: 50%;
+  top: 44px;
+  width: 50px;
+  height: 50px;
+  margin: -25px 0 0 -25px;
+  border-radius: 50%;
+  background: var(--hw-gap);
+  box-shadow: inset 1px 1px 2px rgb(0 0 0 / 0.9), 0 1px 0 rgb(255 255 255 / 0.07);
+}
+
+.hw-knob-body {
+  position: absolute;
+  inset: 3px;
+  border-radius: 50%;
+  /* Knurled side (fine teeth), its shadow cast down-right. */
+  background:
+    repeating-conic-gradient(from 0deg, #5c5962 0 4deg, #9b98a0 4deg 6deg, #6c6972 6deg 8deg),
+    var(--hw-metal-lo);
+  box-shadow: 1px 2px 3px rgb(0 0 0 / 0.6), inset 0 0 0 1px rgb(0 0 0 / 0.4);
+  transform: rotate(var(--angle));
+  transition: transform 110ms cubic-bezier(0.3, 1.6, 0.5, 1);
+}
+
+.hw-knob.is-dragging .hw-knob-body {
+  transition: transform 60ms ease-out;
+}
+
+/* The top face: spun (concentric machining) aluminium; the light stays put as it turns. */
+.hw-knob-face {
+  position: absolute;
+  inset: 5px;
+  border-radius: 50%;
+  background:
+    repeating-radial-gradient(circle at 50% 50%, rgb(255 255 255 / 0.05) 0 1px, transparent 1px 2px),
+    conic-gradient(from 200deg, var(--hw-metal-lo), var(--hw-metal-hi) 60deg, var(--hw-metal) 140deg, var(--hw-metal-lo) 220deg, var(--hw-metal) 300deg, var(--hw-metal-lo));
+  box-shadow: inset 1px 1px 0 rgb(255 255 255 / 0.55), inset -1px -1px 0 rgb(0 0 0 / 0.35), 0 0 0 1px rgb(0 0 0 / 0.35);
+}
+
+/* Engraved pointer line, filled dark. */
+.hw-knob-face::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 3px;
+  width: 2px;
+  height: 12px;
+  margin-left: -1px;
+  border-radius: 1px;
+  background: var(--hw-ink);
+  box-shadow: 1px 0 0 rgb(255 255 255 / 0.5);
+}
+
+/* ---- Timeline slider: a fader cap in a recessed track over a printed scale ---- */
+.hw-timeline {
+  position: relative;
+  width: 300px;
+  height: 46px;
+  cursor: pointer;
+  touch-action: none;
+}
+
+.hw-timeline-scale {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 16px;
+}
+
+.hw-timeline-tick {
+  position: absolute;
+  bottom: 0;
+  width: 1px;
+  height: 4px;
+  margin-left: -0.5px;
+  background: var(--hw-legend-dim);
+}
+
+.hw-timeline-tick.is-major {
+  height: 7px;
+  background: var(--hw-legend);
+}
+
+.hw-timeline-label {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  font: 600 8.5px/1 var(--hw-font);
+  color: var(--hw-legend-dim);
+}
+
+/* The track: a slot cut into the panel, with the played part lit inside it. */
+.hw-timeline-track {
+  position: absolute;
+  top: 26px;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--hw-gap);
+  box-shadow: inset 1px 1px 2px rgb(0 0 0 / 0.9), 0 1px 0 rgb(255 255 255 / 0.08);
+}
+
+.hw-timeline-fill {
+  position: absolute;
+  left: 0;
+  top: 2px;
+  height: 2px;
+  border-radius: 1px;
+  background: color-mix(in srgb, var(--hw-accent) 75%, white);
+  opacity: 0.85;
+}
+
+/* The fader cap: a molded body with a machined top and an indicator line across it. */
+.hw-timeline-cap {
+  position: absolute;
+  top: 17px;
+  width: 16px;
+  height: 24px;
+  margin-left: -8px;
+  border-radius: 3px;
+  background: linear-gradient(90deg, var(--hw-molded-hi), var(--hw-molded) 40%, #0f0e10);
+  box-shadow: 1px 2px 2px rgb(0 0 0 / 0.65), 0 0 0 1px rgb(0 0 0 / 0.75), inset 1px 1px 0 rgb(255 255 255 / 0.12);
+  transition: left 60ms linear;
+}
+
+.hw-timeline.is-dragging .hw-timeline-cap {
+  transition: none;
+}
+
+.hw-timeline-cap::before {
+  /* Machined top with fine grip grooves. */
+  content: '';
+  position: absolute;
+  inset: 3px 2px;
+  border-radius: 2px;
+  background:
+    repeating-linear-gradient(0deg, transparent 0 2px, rgb(0 0 0 / 0.18) 2px 3px),
+    linear-gradient(160deg, var(--hw-metal-hi), var(--hw-metal) 50%, var(--hw-metal-lo));
+  box-shadow: inset 1px 1px 0 rgb(255 255 255 / 0.6);
+}
+
+.hw-timeline-cap::after {
+  /* The indicator: a dark line exactly at the cap's centre, lined up with the scale. */
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 1px;
+  bottom: 1px;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--hw-ink);
+}
+
+/* ---- Joystick: a stick on a pivot in a rubber boot, in a round well ---- */
+.hw-joystick {
+  position: relative;
+  width: 104px;
+  height: 104px;
+  border-radius: 50%;
+  cursor: grab;
+  touch-action: none;
+}
+
+.hw-joystick:active {
+  cursor: grabbing;
+}
+
+.hw-joystick svg {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+}
+
+/* ---- Controls drawer ---- */
+.hw-drawer {
+  position: absolute;
+  overflow: hidden;
+  transition: transform 240ms cubic-bezier(0.2, 0.8, 0.2, 1), opacity 240ms;
+}
+
+.hw-drawer[data-open='false'] {
+  transform: translateX(calc(100% + 24px));
+  opacity: 0;
+  visibility: hidden;
+  transition: transform 220ms cubic-bezier(0.4, 0, 0.8, 0.2), opacity 220ms, visibility 0s 220ms;
+}
+
+.hw-drawer-scroll {
+  height: 100%;
+  overflow-y: auto;
+  padding: 12px 14px 14px;
+  scrollbar-width: thin;
+  scrollbar-color: #4a4650 transparent;
+}
+
+.hw-group {
+  padding: 10px 10px 12px;
+  border-radius: 7px;
+  /* A group sits on a slightly sunken plate, its edge cut into the panel. */
+  background: rgb(0 0 0 / 0.12);
+  box-shadow: inset 1px 1px 0 rgb(0 0 0 / 0.45), inset -1px -1px 0 rgb(255 255 255 / 0.05);
+}
+
+.hw-group + .hw-group {
+  margin-top: 10px;
+}
+
+.hw-group h3 {
+  margin: 0 0 10px;
+  font: 600 10px/1 var(--hw-font);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--hw-legend-dim);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hw-cap,
+  .hw-cap-side,
+  .hw-switch-lever,
+  .hw-knob-body,
+  .hw-timeline-cap,
+  .hw-drawer {
+    transition-duration: 0ms !important;
+  }
+}
+
+/* ---- Hidden parts stay hidden (the parts set their own display) ---- */
+.hw-button[hidden],
+.hw-drawer[hidden] {
+  display: none;
+}
+
+/* Disabled: a locked part reads as unavailable, not gone. */
+.hw-button:disabled {
+  cursor: not-allowed;
+}
+
+.hw-button:disabled .hw-cap-face,
+[aria-disabled='true'] > .hw-switch-plate,
+.hw-switch[aria-disabled='true'] .hw-switch-scale,
+.hw-knob[aria-disabled='true'],
+.hw-timeline[aria-disabled='true'],
+.hw-joystick[aria-disabled='true'] {
+  opacity: 0.5;
+}
+
+.hw-switch[aria-disabled='true'],
+.hw-knob[aria-disabled='true'],
+.hw-joystick[aria-disabled='true'] {
+  cursor: not-allowed;
+}
+
+/* The main action: a blue anodised cap with a white glyph. */
+.hw-button.is-primary .hw-cap-face {
+  background:
+    radial-gradient(120% 90% at 25% 15%, rgb(255 255 255 / 0.28), transparent 55%),
+    linear-gradient(160deg, #6f97ff, var(--hw-accent) 50%, #2551c4);
+  box-shadow: inset 1px 1px 0 rgb(255 255 255 / 0.45), inset -1px -1px 0 rgb(0 0 0 / 0.3);
+  color: #fff;
+}
+
+.hw-button.is-primary .hw-cap-side {
+  background: linear-gradient(180deg, #2a4fa8, #1c3577);
+}
+
+/* ================================================================
+ * In the app: the dock, the scene pill and the Controls pane.
+ * ================================================================ */
+
+/* The dock: one machined panel along the bottom. */
+.dock.hw-panel {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 14px;
+}
+
+.dock .dock-section {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* A groove machined between sections. */
+.dock .dock-divider {
+  align-self: stretch;
+  width: 1px;
+  margin: 2px 0;
+  background: rgb(0 0 0 / 0.55);
+  box-shadow: 1px 0 0 rgb(255 255 255 / 0.06);
+}
+
+.dock .dock-icon {
+  display: grid;
+  place-items: center;
+  color: var(--hw-legend-dim);
+}
+
+.dock .dock-icon .icon {
+  width: 16px;
+  height: 16px;
+}
+
+.dock .timeline {
+  width: 260px;
+}
+
+.dock .clock {
+  min-width: 82px;
+  white-space: nowrap;
+  text-align: right;
+}
+
+.dock .duration {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.dock .duration .dock-icon {
+  margin-right: 4px;
+}
+
+.dock .duration .hw-cap {
+  min-width: 46px;
+}
+
+.dock .intensity {
+  display: grid;
+  gap: 0;
+}
+
+.dock .dock-label {
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--hw-legend-dim);
+}
+
+.dock .dock-label strong {
+  color: var(--hw-legend);
+  font-weight: 600;
+}
+
+.dock .lock-hint {
+  text-transform: none;
+  letter-spacing: 0.02em;
+}
+
+.dock .hw-switch {
+  width: 150px;
+  padding-top: 4px;
+}
+
+.parts-toggle .parts-toggle-icons {
+  display: inline-flex;
+  gap: 1px;
+}
+
+.parts-toggle .parts-toggle-icons .icon {
+  width: 13px;
+  height: 13px;
+}
+
+/* The scene pill: a small machined panel. */
+.scene-pill.hw-panel {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+}
+
+.scene-pill .hw-button:not(.wide) {
+  --size: 30px;
+}
+
+.scene-pill .hw-button.wide {
+  height: 30px;
+}
+
+.scene-pill .scene-name {
+  min-width: 130px;
+  padding: 0 4px;
+  text-align: center;
+  font: 600 12px/1 var(--hw-font);
+  letter-spacing: 0.04em;
+  color: var(--hw-legend);
+  text-shadow: 0 1px 0 rgb(0 0 0 / 0.6);
+}
+
+/* The Controls pane: top-right over the map, sliding out from the edge. */
+.camera-controls.hw-drawer {
+  top: 16px;
+  right: 16px;
+  width: 272px;
+  max-height: calc(100% - 140px);
+  display: flex;
+  flex-direction: column;
+}
+
+.camera-controls .hw-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.camera-controls .hw-stack {
+  display: grid;
+  justify-items: start;
+  gap: 8px;
+}
+
+.camera-controls .hw-stack .hw-button:not(.wide) {
+  justify-self: start;
+}
+
+/* Narrower windows: the transport and timeline take the first row, the settings the second. */
+@media (max-width: 1180px) {
+  .dock.hw-panel {
+    flex-wrap: wrap;
+    justify-content: center;
+    row-gap: 10px;
+    width: min(980px, calc(100vw - 32px));
+  }
+
+  .dock > .dock-section:first-child {
+    flex-basis: 100%;
+  }
+
+  .dock > .dock-section:first-child .timeline {
+    flex: 1 1 auto;
+    width: auto;
+    min-width: 160px;
+  }
+
+  .dock > .dock-section:first-child + .dock-divider {
+    display: none;
+  }
+}
