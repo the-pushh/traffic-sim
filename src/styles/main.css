@@ -1165,3 +1165,26 @@ body.placing canvas {
   width: 100%;
   margin-top: var(--space-1);
 }
+
+/* Phones and tablets: only a message on the background (the app is made for a laptop). */
+#app.laptop-only {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-content: center;
+  gap: var(--space-2);
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding: var(--space-5) var(--space-4);
+  text-align: center;
+  color: var(--color-text);
+}
+
+#app.laptop-only h1 {
+  max-width: 32ch;
+  margin: 0 auto;
+  font-size: 1.25rem;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
