@@ -3,6 +3,9 @@ import type { LabelledResults } from '../simulation/traffic/trafficSession';
 import { INTENSITY_LABELS } from './dock';
 import { comparable, resultsHeadlines, type Headline } from './resultsHeadlines';
 
+/** How long the card takes to grow open or shrink closed, ms (matches the CSS). */
+const CLOSE_MS = 180;
+
 const escapeHtml = (text: string) => text.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 
 function label(r: LabelledResults) {
@@ -51,9 +54,45 @@ export function createResultsCard(container: HTMLElement, results: () => Labelle
   announcer.setAttribute('aria-live', 'polite');
   container.prepend(card, reopen, announcer);
 
-  const show = (visible: boolean) => {
-    card.hidden = !visible;
-    reopen.hidden = visible || !latest || state() !== 'ended';
+  /** Grow open from the top centre, or shrink closed (instant with reduced motion); a reopen cancels a close. */
+  let closing: (() => void) | null = null;
+  const show = (visible: boolean, { focusReopen = false } = {}) => {
+    // Show results appears once the card has finished closing, so it doesn't jump.
+    if (visible) reopen.hidden = true;
+    if (visible) {
+      closing = null;
+      card.classList.remove('results-closing');
+      if (card.hidden) {
+        card.classList.add('results-opening');
+        card.hidden = false;
+        void card.offsetWidth; // start from the small, clear state
+        card.classList.remove('results-opening');
+      }
+      return;
+    }
+    if (card.hidden) {
+      reopen.hidden = !latest || state() !== 'ended';
+      return;
+    }
+    // Only the card's own shrink counts: buttons inside it have transitions of their own.
+    const ended = (event: TransitionEvent) => {
+      if (event.target === card && event.propertyName === 'transform') done();
+    };
+    const done = () => {
+      if (closing !== done) return;
+      closing = null;
+      card.removeEventListener('transitionend', ended);
+      card.hidden = true;
+      card.classList.remove('results-closing');
+      reopen.hidden = !latest || state() !== 'ended';
+      // Closed with ×: keyboard focus goes to Show results, now that it's there.
+      if (focusReopen && !reopen.hidden) reopen.focus();
+    };
+    closing = done;
+    card.classList.add('results-closing');
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) return done();
+    card.addEventListener('transitionend', ended);
+    setTimeout(done, CLOSE_MS + 50); // in case no transition runs
   };
   reopen.addEventListener('click', () => {
     show(true);
@@ -103,8 +142,7 @@ export function createResultsCard(container: HTMLElement, results: () => Labelle
       card.querySelector<HTMLElement>('#results-details')!.hidden = !detailsOpen;
     });
     card.querySelector('.results-close')!.addEventListener('click', () => {
-      show(false);
-      reopen.focus();
+      show(false, { focusReopen: true });
     });
   };
 

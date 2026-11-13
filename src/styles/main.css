@@ -1206,3 +1206,55 @@ body.placing canvas {
   margin: var(--space-1) 0 0;
   background: center / contain no-repeat;
 }
+
+/* Results at the top centre of the screen: the Show results button and the card. */
+.top-stack {
+  position: absolute;
+  top: var(--space-4);
+  left: 50%;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  /* Room for the inspector or vehicle card (top-left) and the parts tray (right) either side. */
+  width: min(600px, max(360px, calc(100% - 2 * 312px)));
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.top-stack > * {
+  pointer-events: auto;
+}
+
+/* The card grows open from the top centre and shrinks closed. */
+.results-card {
+  container-type: inline-size;
+  transform-origin: top center;
+  transition:
+    transform 180ms ease-out,
+    opacity 180ms ease-out;
+}
+
+.results-card.results-opening,
+.results-card.results-closing {
+  transform: scale(0.8);
+  opacity: 0;
+}
+
+.results-card.results-closing {
+  transition-timing-function: ease-in;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .results-card {
+    transition: none;
+  }
+}
+
+/* A narrow results card (between the side panels) puts its four numbers in two columns. */
+@container (max-width: 520px) {
+  .results-headlines {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

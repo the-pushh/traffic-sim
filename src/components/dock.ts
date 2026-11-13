@@ -51,7 +51,7 @@ export function createDock(container: HTMLElement, run: RunController, callbacks
     <div class="dock-section dock-traffic">
       <span class="dock-icon">${icon('gauge')}</span>
       <label class="intensity">
-        <span class="dock-label">Intensity <strong class="intensity-name"></strong><span class="lock-hint" id="dock-lock-hint" hidden> · locked during the run</span></span>
+        <span class="dock-label">Intensity <strong class="intensity-name"></strong><span class="lock-hint visually-hidden" id="dock-lock-hint" hidden> · locked during the run</span></span>
         <input type="range" min="0" max="${INTENSITIES.length - 1}" step="1" list="intensity-ticks" />
         <datalist id="intensity-ticks">${INTENSITIES.map((_, i) => `<option value="${i}"></option>`).join('')}</datalist>
       </label>

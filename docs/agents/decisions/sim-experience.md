@@ -142,7 +142,7 @@ Owner agreed the spec and the T1–T13 ticket breakdown and authorised implement
   - Average travel time covers finished trips, shown with their count.
   - Approaches are named "Junction n · eastbound", grouped as the simulation drives them (lane-connected junction pieces) and numbered west to east.
   - Play after a run ends measures the continued run afresh.
-- **Results card:** opens above the scene pill when a run ends. Since P3 (#33), it leads with the run's label (scene · intensity · duration) and four headline numbers; this run beside the previous one is the full table behind **Show details**. See the P3 notes below.
+- **Results card:** opens above the scene pill when a run ends (*since P22: at the top centre of the screen*). Since P3 (#33), it leads with the run's label (scene · intensity · duration) and four headline numbers; this run beside the previous one is the full table behind **Show details**. See the P3 notes below.
   - Every measure shows its sample: travel time with its trip count, blocked trips "of N due", and peak queue "· N approaches".
   - Screen readers hear "Run ended" without focus moving.
   - It hides on the next start. Closing it leaves a "Show results" button that reopens it. Live queue counts float as amber badges over each approach and are hidden at zero.
@@ -438,3 +438,10 @@ Owner agreed the spec and the T1–T13 ticket breakdown and authorised implement
 
 - **Hover:** over a car, the cursor is a pointer (`canvas[data-over-vehicle]`), and the hover tag adds "Click for details" under "Type · Driver · Doing".
 - **Picture:** the card shows a picture of the vehicle's own model, the one the map draws. `modelFor` in `vehicleTypes.ts` (unit-tested) is shared by the map and the card. Each model's picture is drawn once from the already-loaded model with `renderThumbnails` (120 px, short-lived WebGL context) and reused, so an idle map still costs nothing.
+
+## Results at the top centre; no "locked" text (P22, #76) — 2026-11-14
+
+- **Owner:** "don't show the text locked during the run, move the show results button on the top center… the modal for results is also positioned there, also add an animation of the modal growing and shrinking".
+- **Lock text:** "· locked during the run" is now screen-reader only (`visually-hidden`); the dock's controls are still disabled and greyed during a run.
+- **Results:** the card and "Show results" live in a new `.top-stack` at the top centre, clear of the dock and the map's bottom.
+- **Animation:** the card grows open from its top centre (scale 0.8 → 1 and fades in, 180 ms) and shrinks closed the same way. It's hidden once the shrink ends (only the card's own transform counts), and reopening mid-close cancels the close. Show results appears, and takes focus after ×, once the card has closed, so it doesn't jump. On narrower windows the card fits between the side panels and its numbers go into two columns. With reduced motion it appears and disappears at once.

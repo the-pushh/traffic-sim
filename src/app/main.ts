@@ -65,6 +65,7 @@ app.innerHTML = `
       <button type="button" data-action="zoom-out" disabled aria-label="Zoom out" title="Zoom out">${icon('minus')}</button>
       <button type="button" data-action="theme" class="theme-toggle"></button>
     </div>
+    <div class="top-stack"></div>
     <div class="bottom-stack"></div>
     <div class="status" role="status" aria-live="polite"><p>Loading roads and vehicles…</p></div>
   </main>
@@ -109,7 +110,9 @@ async function resetScene() {
 }
 const dock = createDock(bottomStack, run, { onPlay: () => tip.dismiss() });
 let session: TrafficSession | null = null;
-const results = createResultsCard(bottomStack, () => session!.results(), () => run.state);
+// Results open at the top centre (owner's choice), clear of the dock.
+const topStack = app.querySelector<HTMLElement>('.top-stack')!;
+const results = createResultsCard(topStack, () => session!.results(), () => run.state);
 bottomStack.inert = true;
 
 
