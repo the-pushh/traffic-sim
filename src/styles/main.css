@@ -119,11 +119,8 @@ body {
   touch-action: none;
 }
 
+/* Any drag on the map moves the view: a plain drag turns it, Space+drag pans it. */
 .viewport canvas {
-  cursor: default;
-}
-
-.viewport canvas[data-space-held] {
   cursor: grab;
 }
 
@@ -131,73 +128,10 @@ body {
   cursor: grabbing;
 }
 
-.camera-controls .joystick {
-  --joystick-size: 88px;
-  --knob-size: 32px;
-  position: relative;
-  align-self: center;
-  width: var(--joystick-size);
-  height: var(--joystick-size);
-  border: 1px solid var(--color-border);
-  border-radius: 50%;
-  background:
-    radial-gradient(circle, transparent 38%, color-mix(in srgb, var(--color-border) 50%, transparent) 39% 40%, transparent 41%),
-    var(--color-background);
-  touch-action: none;
-  cursor: grab;
-}
-
-.joystick::before,
-.joystick::after {
-  /* Direction ticks: orbit on the horizontal axis, tilt on the vertical. */
-  content: '';
-  position: absolute;
-  inset: 50% var(--space-2) auto;
-  height: 1px;
-  background: var(--color-border);
-}
-
-.joystick::after {
-  inset: var(--space-2) auto var(--space-2) 50%;
-  width: 1px;
-  height: auto;
-}
-
-.joystick-knob {
-  position: absolute;
-  z-index: 1;
-  top: calc(50% - var(--knob-size) / 2);
-  left: calc(50% - var(--knob-size) / 2);
-  width: var(--knob-size);
-  height: var(--knob-size);
-  border-radius: 50%;
-  background: var(--color-accent);
-  pointer-events: none;
-  transition: transform 120ms ease-out;
-}
-
-.joystick[data-active] .joystick-knob {
-  transition: none;
-}
-
-.joystick[data-active] {
-  cursor: grabbing;
-}
-
-.joystick:focus-visible {
+/* The map takes keyboard focus (arrow keys turn the view): show where focus is. */
+.viewport canvas:focus-visible {
   outline: 2px solid var(--color-accent);
-  outline-offset: 2px;
-}
-
-.joystick[aria-disabled='true'] {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .joystick-knob {
-    transition: none;
-  }
+  outline-offset: -2px;
 }
 
 .visually-hidden {
@@ -810,21 +744,9 @@ button.primary:hover:not(:disabled),
   background: var(--color-border);
 }
 
-/* Pink for things in motion: the run's progress and the joystick knob. */
-.progress-fill,
-.joystick-knob {
+/* Pink for things in motion: the run's progress. */
+.progress-fill {
   background: linear-gradient(90deg, var(--color-accent-2), color-mix(in srgb, var(--color-accent-2) 70%, var(--color-accent)));
-}
-
-.joystick-knob {
-  box-shadow: 0 2px 8px color-mix(in srgb, var(--color-accent-2) 45%, transparent);
-}
-
-.camera-controls .joystick {
-  border-color: var(--glass-border);
-  background:
-    radial-gradient(circle, transparent 38%, color-mix(in srgb, var(--color-border) 60%, transparent) 39% 40%, transparent 41%),
-    var(--color-surface);
 }
 
 .intensity input {

@@ -12,13 +12,11 @@ import { icon } from '../components/icons';
 import { createDock } from '../components/dock';
 import { createFirstVisitTip } from '../components/firstVisitTip';
 import { createResultsCard } from '../components/resultsCard';
-import { attachJoystickControl, setJoystickEnabled } from '../components/joystickControl';
 import { createLeaveDialog } from '../components/leaveDialog';
 import { createScenePill } from '../components/scenePill';
 import { createVehicleTooltip } from '../components/vehicleTooltip';
 import { RunController } from '../simulation/runController';
 import '../styles/main.css';
-import { CameraJoystick } from '../three/controls/cameraJoystick';
 import { fitCameraToViewport } from '../three/controls/cameraViewport';
 import { ObserverCamera } from '../three/controls/observerCamera';
 import { attachViewportInput } from '../three/controls/viewportInput';
@@ -57,11 +55,7 @@ app.innerHTML = `
   <h1 class="visually-hidden">Traffic Simulator</h1>
   <main class="viewport" aria-label="3D traffic scene">
     <div class="camera-controls" role="group" aria-label="Camera">
-      <div class="joystick" tabindex="0" role="application" aria-roledescription="joystick"
-        aria-label="Orbit and tilt camera" aria-describedby="joystick-help" title="Drag or use arrow keys: left/right orbits, up/down tilts">
-        <div class="joystick-knob"></div>
-      </div>
-      <span id="joystick-help" class="visually-hidden">Drag the knob or hold arrow keys. Left and right orbit around the view; up tilts toward overhead, down toward an angled view.</span>
+      <span id="map-help" class="visually-hidden">Drag to turn the view: left and right orbit, up and down tilt. Hold Space and drag to pan, scroll to zoom. With the map focused, the arrow keys turn the view.</span>
       <button type="button" data-action="zoom-in" disabled aria-label="Zoom in" title="Zoom in">${icon('plus')}</button>
       <button type="button" data-action="zoom-out" disabled aria-label="Zoom out" title="Zoom out">${icon('minus')}</button>
       <button type="button" data-action="reset-view" disabled class="primary">Reset View</button>
@@ -139,6 +133,10 @@ function useResolution() {
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = PCFSoftShadowMap;
 viewport.prepend(renderer.domElement);
+// The map takes keyboard focus: the arrow keys turn the view.
+renderer.domElement.tabIndex = 0;
+renderer.domElement.setAttribute('aria-label', 'Map view');
+renderer.domElement.setAttribute('aria-describedby', 'map-help');
 
 const camera = new PerspectiveCamera(45, 1, 0.1, 500);
 
@@ -252,7 +250,6 @@ resize();
 const cameraControls = app.querySelector<HTMLElement>('.camera-controls')!;
 let observer: ObserverCamera | null = null;
 let detachInput: (() => void) | null = null;
-const joystickElement = app.querySelector<HTMLElement>('.joystick')!;
 const timer = new Timer();
 
 // Light or dark: follows the system until the player picks one, remembered in this browser.
@@ -299,7 +296,6 @@ cameraControls.addEventListener('click', (e) => {
 
 function setCameraControlsEnabled(enabled: boolean) {
   for (const button of cameraControls.querySelectorAll('button:not(.theme-toggle)')) (button as HTMLButtonElement).disabled = !enabled;
-  setJoystickEnabled(joystickElement, enabled);
 }
 
 let tooltip: ReturnType<typeof createVehicleTooltip> | null = null;
@@ -307,7 +303,6 @@ let tooltip: ReturnType<typeof createVehicleTooltip> | null = null;
 let currentView: Awaited<ReturnType<typeof createSceneView>> | null = null;
 let currentLayers: Object3D[] = [];
 let vehicleModels: Group[] | null = null;
-let joystick: CameraJoystick | null = null;
 /** Opening scenes and applying edits one at a time, in order. */
 let loading: Promise<boolean> = Promise.resolve(true);
 
@@ -380,13 +375,8 @@ async function show(mode: 'open' | 'edit'): Promise<boolean> {
     });
     if (opening) {
       observer = ObserverCamera.framing(camera, bounds, { coveredBottom });
-      joystick = new CameraJoystick(observer);
-      const detachViewport = attachViewportInput(renderer.domElement, observer);
-      const detachJoystick = attachJoystickControl(joystickElement, joystick);
-      detachInput = () => {
-        detachViewport();
-        detachJoystick();
-      };
+      // A drag turns the view, unless it starts on the selected piece (the editor moves that).
+      detachInput = attachViewportInput(renderer.domElement, observer, { onSelection: (e) => editor.pressStartsOnSelection(e) });
       editor.reset();
       timer.reset();
       resolution.reset();
@@ -396,7 +386,6 @@ async function show(mode: 'open' | 'edit'): Promise<boolean> {
     renderer.setAnimationLoop((time) => {
       timer.update(time);
       const delta = Math.min(timer.getDelta(), 0.1);
-      joystick!.update(delta);
       const current = session!;
       current.advance(run.tick(delta * TIME_SCALE));
       traffic.sync(current.simulation);

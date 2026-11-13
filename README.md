@@ -23,9 +23,10 @@ Then open <http://localhost:5173/> in a desktop browser.
 
 | Input | Action |
 | --- | --- |
-| With the pointer over the map, hold **Space** and drag | Pan across the map. Works with a trackpad click-drag. A plain drag is reserved for editing road pieces later. Elsewhere on the page Space keeps its normal meaning |
-| On-screen **joystick** (drag the knob, or focus it and hold the arrow keys) | Left/right orbits; up tilts toward overhead, down toward an angled view |
-| Right-drag on the scene (optional shortcut) | Orbit and tilt |
+| Drag on the map | Turn the view: left/right orbits, up/down tilts. A drag that starts on the selected road piece moves the piece instead |
+| With the pointer over the map, hold **Space** and drag | Pan across the map. Works with a trackpad click-drag. Elsewhere on the page Space keeps its normal meaning |
+| Focus the map (Tab) and press the arrow keys | Left/right orbits, up/down tilts |
+| Right-drag on the scene | Orbit and tilt |
 | Scroll wheel or two-finger trackpad scroll over the scene | Zoom |
 | **+** / **−** buttons | Zoom in / out |
 | **Reset View** | Return to the starting overhead view |
@@ -42,7 +43,7 @@ The dock at the bottom holds **Play/Pause**, **Restart run**, the clock, the tra
 | `npm test` | Unit tests (Vitest) |
 | `npm run build` | Type-check and build to `dist/` |
 | `npm run preview` | Serve the production build at <http://localhost:4173/> |
-| `npm run verify:browser` | With the dev server running: open the app in installed Google Chrome (headless), check console errors and asset requests, check a plain drag leaves the view alone, exercise Space + drag pan, the joystick (pointer and arrow keys), right-drag, zoom and Reset View, check the asset-failure/Retry state, and save screenshots to `artifacts/3d/previews/`. Another URL: `node scripts/verify-browser.mjs <url>`. |
+| `npm run verify:browser` | With the dev server running: open the app in installed Google Chrome (headless), check console errors and asset requests, check a plain drag turns the view (and a drag on the selected piece moves it), exercise Space + drag pan, arrow keys on the focused map, right-drag, zoom and Reset View, check the asset-failure/Retry state, and save screenshots to `artifacts/3d/previews/`. Another URL: `node scripts/verify-browser.mjs <url>`. |
 | `npm run verify:browser:headed` | Same check in a visible Chrome window. |
 | `node scripts/verify-browser.mjs https://traffic-sim-one.vercel.app/` | Same check against the deployed app (runs in real time, about 2 minutes). |
 

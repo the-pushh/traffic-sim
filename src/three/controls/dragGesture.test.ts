@@ -7,19 +7,24 @@ const RIGHT = 2;
 
 describe('viewport drag gestures', () => {
   it('pans when Space is held while dragging with the primary button or trackpad', () => {
-    expect(dragGesture({ button: LEFT, spaceHeld: true })).toBe('pan');
+    expect(dragGesture({ button: LEFT, spaceHeld: true, onSelection: false })).toBe('pan');
   });
 
-  it('leaves a plain primary drag free for editing road pieces', () => {
-    expect(dragGesture({ button: LEFT, spaceHeld: false })).toBeNull();
+  it('turns the view (orbit and tilt) on a plain drag, in place of the joystick', () => {
+    expect(dragGesture({ button: LEFT, spaceHeld: false, onSelection: false })).toBe('orbit');
   });
 
-  it('keeps right-drag as an optional orbit and tilt shortcut', () => {
-    expect(dragGesture({ button: RIGHT, spaceHeld: false })).toBe('orbit');
+  it('leaves a drag that starts on the selected road piece to the editor, which moves the piece', () => {
+    expect(dragGesture({ button: LEFT, spaceHeld: false, onSelection: true })).toBeNull();
+    expect(dragGesture({ button: LEFT, spaceHeld: true, onSelection: true })).toBe('pan'); // Space still pans
+  });
+
+  it('keeps right-drag as an orbit and tilt shortcut', () => {
+    expect(dragGesture({ button: RIGHT, spaceHeld: false, onSelection: false })).toBe('orbit');
   });
 
   it('starts no camera gesture from other buttons', () => {
-    expect(dragGesture({ button: MIDDLE, spaceHeld: false })).toBeNull();
+    expect(dragGesture({ button: MIDDLE, spaceHeld: false, onSelection: false })).toBeNull();
   });
 });
 

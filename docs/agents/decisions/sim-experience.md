@@ -369,3 +369,14 @@ Owner agreed the spec and the T1–T13 ticket breakdown and authorised implement
   - It's depth-tested without writing depth and drawn after the cars, so vehicles, signs and trees in front hide it. A polygon offset keeps it from flickering into the road.
   - The ring at the vehicle sits under it in the same way.
 - **Background:** the coloured vertical columns (P4) are removed. The page is the plain background colour, with the topographic contours (P9) as the only pattern.
+
+## Drag to turn the camera; no joystick (P14, #59) — 2026-11-13
+
+- **Owner:** "Do not need the joystick… We can just hold and drag to move the camera angle." The joystick is removed; the camera panel keeps zoom, Reset View and the theme toggle.
+- **Gestures** (`dragGesture`, unit-tested):
+  - a plain drag on the map turns the view (orbit and tilt);
+  - Space+drag pans, and the scroll wheel zooms;
+  - right-drag also turns the view;
+  - a drag that starts on the selected piece or sign is the editor's (`pressStartsOnSelection`), and moves it;
+  - a press that moved doesn't count as a click, so turning the view keeps the selection.
+- **Keyboard:** the map canvas is focusable (`aria-label` "Map view", with a description), and the arrow keys orbit and tilt. It shows a focus ring. This replaces the joystick's arrow keys.

@@ -1,11 +1,12 @@
 export type DragGesture = 'pan' | 'orbit';
 
 /**
- * Which camera gesture a pointer drag starts over the viewport. A plain primary
- * drag returns null: it is reserved for moving road pieces in the editor.
+ * Which camera gesture a pointer drag starts over the viewport. A plain primary drag turns
+ * the view (orbit and tilt), unless it starts on the selected road piece: that drag is the
+ * editor's, and moves the piece. Space+drag pans; right-drag also turns the view.
  */
-export function dragGesture({ button, spaceHeld }: { button: number; spaceHeld: boolean }): DragGesture | null {
-  if (button === 0) return spaceHeld ? 'pan' : null;
+export function dragGesture({ button, spaceHeld, onSelection }: { button: number; spaceHeld: boolean; onSelection: boolean }): DragGesture | null {
+  if (button === 0) return spaceHeld ? 'pan' : onSelection ? null : 'orbit';
   if (button === 2) return 'orbit';
   return null;
 }

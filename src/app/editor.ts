@@ -514,10 +514,19 @@ export function createEditor(host: EditorHost) {
   });
   host.canvas.addEventListener('pointerup', (event) => {
     if (!pressed || drag) return;
+    // A press that moved turned the camera: it isn't a click, so the selection stays.
+    const moved = Math.hypot(event.clientX - pressed.x, event.clientY - pressed.y) > DRAG_THRESHOLD;
     // A vehicle under the click takes the card (the road inspector closes); otherwise select as usual.
-    select(host.inspectVehicleAt?.(event) ? null : pressed.hit);
+    if (!moved) select(host.inspectVehicleAt?.(event) ? null : pressed.hit);
     pressed = null;
   });
+
+  /** Whether a press lands on the selected piece or control (its drag moves it; any other drag turns the camera). */
+  function pressStartsOnSelection(event: PointerEvent): boolean {
+    if (!selected || !host.canEdit() || drag) return false;
+    const hit = pick(event);
+    return !!hit && hit.kind === selected.kind && hit.index === selected.index;
+  }
 
   function pick(event: PointerEvent): Target | null {
     const view = host.view();
@@ -675,6 +684,7 @@ export function createEditor(host: EditorHost) {
   let lockedShown: boolean | null = null;
   return {
     toggle,
+    pressStartsOnSelection,
     /** The parts tray (the app centres the view beside it while it's open). */
     tray: drawer,
     /** Where the part being placed would land right now (for checks); null when not placing. */

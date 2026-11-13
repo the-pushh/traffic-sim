@@ -9,12 +9,17 @@ function isTextField(target: EventTarget | null) {
   return target instanceof HTMLElement && target.closest('input, textarea, select, [contenteditable]') !== null;
 }
 
+/** Arrow keys on the focused map turn the view by this much per press, radians. */
+const KEY_ORBIT = 0.08;
+const KEY_TILT = 0.06;
+
 /**
- * Viewport camera input. Hold Space and drag on the map to pan;
- * right-drag is an optional orbit/tilt shortcut; the scroll wheel or trackpad scroll
- * zooms. A plain drag is left for editing road pieces. Returns a detach function.
+ * Viewport camera input. Drag on the map to turn the view (left/right orbits, up/down
+ * tilts), unless the drag starts on the selected road piece (`onSelection`: the editor moves
+ * it); hold Space and drag to pan; scroll to zoom; with the map focused, the arrow keys turn
+ * the view. Returns a detach function.
  */
-export function attachViewportInput(element: HTMLElement, observer: ObserverCamera) {
+export function attachViewportInput(element: HTMLElement, observer: ObserverCamera, { onSelection = () => false }: { onSelection?: (e: PointerEvent) => boolean } = {}) {
   const listeners = new AbortController();
   const { signal } = listeners;
   let pointerOverViewport = false;
@@ -60,7 +65,7 @@ export function attachViewportInput(element: HTMLElement, observer: ObserverCame
   element.addEventListener(
     'pointerdown',
     (e) => {
-      const gesture = dragGesture({ button: e.button, spaceHeld });
+      const gesture = dragGesture({ button: e.button, spaceHeld, onSelection: e.button === 0 && !spaceHeld && onSelection(e) });
       if (!gesture) return;
       e.preventDefault();
       drag = { gesture, pointerId: e.pointerId, x: e.clientX, y: e.clientY };
@@ -108,6 +113,20 @@ export function attachViewportInput(element: HTMLElement, observer: ObserverCame
     { passive: false, signal },
   );
   element.addEventListener('contextmenu', (e) => e.preventDefault(), { signal });
+
+  // Keyboard: focus the map (Tab) and use the arrow keys to turn the view.
+  element.addEventListener(
+    'keydown',
+    (e) => {
+      const turns: Record<string, [number, number]> = { ArrowLeft: [KEY_ORBIT, 0], ArrowRight: [-KEY_ORBIT, 0], ArrowUp: [0, KEY_TILT], ArrowDown: [0, -KEY_TILT] };
+      const turn = turns[e.key];
+      if (!turn) return;
+      e.preventDefault();
+      if (turn[0]) observer.orbit(turn[0]);
+      if (turn[1]) observer.tilt(turn[1]);
+    },
+    { signal },
+  );
 
   return () => {
     listeners.abort();
