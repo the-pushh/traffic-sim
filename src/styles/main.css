@@ -1142,15 +1142,6 @@ body.placing canvas {
 }
 
 #app.laptop-only h1 {
-  margin: 0;
-  font-size: var(--font-meta);
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--color-text-muted);
-}
-
-#app.laptop-only p {
   max-width: 32ch;
   margin: 0 auto;
   font-size: 1.25rem;
@@ -1158,8 +1149,3 @@ body.placing canvas {
   line-height: 1.35;
 }
 
-#app.laptop-only .laptop-only-detail {
-  font-size: var(--font-body);
-  font-weight: normal;
-  color: var(--color-text-muted);
-}

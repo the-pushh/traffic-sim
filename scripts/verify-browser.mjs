@@ -749,8 +749,10 @@ if (isDevServer) {
 // Phones and tablets (P18): only the "meant for a laptop" message; the 3D app isn't loaded.
 const handheldChecks = {};
 for (const [name, viewport, touch] of [['phone', { width: 390, height: 844 }, true], ['tablet', { width: 1024, height: 1366 }, true], ['narrow desktop', { width: 800, height: 900 }, false]]) {
-  const context = await browser.newContext({ viewport, hasTouch: touch, isMobile: touch, deviceScaleFactor: touch ? 2 : 1 });
+  const context = await browser.newContext({ viewport, hasTouch: touch, isMobile: touch, deviceScaleFactor: touch ? 2 : 1, colorScheme: name === 'tablet' ? 'dark' : 'light' });
   const p = await context.newPage();
+  const errors = [];
+  p.on('pageerror', (e) => errors.push(String(e)));
   const models = [];
   p.on('request', (r) => r.url().endsWith('.glb') && models.push(r.url()));
   await p.goto(url);
@@ -759,7 +761,7 @@ for (const [name, viewport, touch] of [['phone', { width: 390, height: 844 }, tr
     message: document.querySelector('#app.laptop-only')?.textContent?.includes('meant to be experienced on a laptop') ?? false,
     canvas: !!document.querySelector('canvas'),
   }));
-  handheldChecks[name] = touch ? shown.message && !shown.canvas && models.length === 0 : !shown.message && shown.canvas;
+  handheldChecks[name] = (touch ? shown.message && !shown.canvas && models.length === 0 : !shown.message && shown.canvas) && errors.length === 0;
   if (touch) await p.screenshot({ path: `${outDir}/40-handheld-${name}.png` });
   await context.close();
 }
