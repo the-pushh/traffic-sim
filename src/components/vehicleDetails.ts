@@ -7,7 +7,7 @@ import { METRES_PER_TILE, type VehicleState } from '../simulation/traffic/traffi
 /** A vehicle's card: a title, labelled rows in sections, and the rest of its route to draw on the map. */
 export interface VehicleDetails {
   title: string;
-  /** What the card shows first: how the driver drives, the speed, what it's doing, where it's going. */
+  /** What the card shows first: the driver and their habits, the speed, what it's doing, where it's going. */
   highlights: [string, string][];
   sections: { heading: string; rows: [string, string][] }[];
   /** Board points (tiles; x, height, z) from the vehicle to the end of its route. */
@@ -65,7 +65,8 @@ export function describeVehicle(v: VehicleState, graph: LaneGraph, scene: SceneD
   return {
     title: `${v.type.label} · ${d.label} driver`,
     highlights: [
-      ['Driver', `${d.label} · ${fixed(d.headway, 's')} behind · obeys ${percent(d.compliance)}`],
+      ['Driver', d.label],
+      ['Habits', `${fixed(d.headway, 's')} gap · obeys ${percent(d.compliance)}`],
       ['Speed', `${kmh(v.speed)} (wants ${Math.round(v.preferredSpeed * 3.6)})`],
       ['Doing', v.reason],
       ['Heading for', `${headingFor} · ${distanceLeft}`],

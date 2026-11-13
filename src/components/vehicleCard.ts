@@ -43,6 +43,8 @@ export function createVehicleCard(container: HTMLElement, onClose: () => void) {
     show(id: number, details: VehicleDetails) {
       const rows = [...details.highlights, ...details.sections.flatMap((s) => s.rows)];
       if (shownFor !== id || values.length !== rows.length) {
+        // A rebuild (another vehicle, or a row appearing) mustn't drop keyboard focus from the card's buttons.
+        const focused = (document.activeElement as HTMLElement | null)?.closest('.vehicle-card') ? (document.activeElement as HTMLElement).className : null;
         shownFor = id;
         card.innerHTML = `
           <header>
@@ -58,6 +60,7 @@ export function createVehicleCard(container: HTMLElement, onClose: () => void) {
           </div>`;
         values = [...card.querySelectorAll<HTMLElement>('dd')];
         showDetails(detailsOpen);
+        if (focused) card.querySelector<HTMLElement>(`.${focused.split(' ')[0]}`)?.focus();
       }
       card.querySelector('h2')!.firstChild!.textContent = `${details.title} `;
       rows.forEach(([, value], i) => {

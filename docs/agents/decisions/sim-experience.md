@@ -385,7 +385,8 @@ Owner agreed the spec and the T1–T13 ticket breakdown and authorised implement
 
 - **Owner:** "there are too many details. There should be a highlight… the driver behavior, the car speed, and some more bits… and then a Show More Detail button."
 - **Highlights** (`describeVehicle().highlights`, unit-tested):
-  - **Driver:** profile · following time · how often it obeys signs;
+  - **Driver:** its profile;
+  - **Habits:** following gap · how often it obeys signs;
   - **Speed:** current (wants N);
   - **Doing:** what it's doing now;
   - **Heading for:** exit or driveway · distance left.

@@ -659,11 +659,17 @@ if (isDevServer) {
     const highlights = await page.locator('.vehicle-highlights dt').allTextContents();
     const toggle = page.locator('.vehicle-details-toggle');
     const body = page.locator('.vehicle-card-body');
-    const collapsed = JSON.stringify(highlights) === JSON.stringify(['Driver', 'Speed', 'Doing', 'Heading for']) && (await body.isHidden()) && (await toggle.getAttribute('aria-expanded')) === 'false';
+    const collapsed = JSON.stringify(highlights) === JSON.stringify(['Driver', 'Habits', 'Speed', 'Doing', 'Heading for']) && (await body.isHidden()) && (await toggle.getAttribute('aria-expanded')) === 'false';
     await page.screenshot({ path: `${outDir}/38-vehicle-card-highlights.png` });
     await toggle.click();
     const expanded = (await body.isVisible()) && (await toggle.getAttribute('aria-expanded')) === 'true' && (await toggle.textContent()) === 'Hide details';
-    vehicleCardChecks.highlightsFirstThenDetails = collapsed && expanded;
+    // From the keyboard: Enter hides them again, and opens them once more.
+    await toggle.focus();
+    await page.keyboard.press('Enter');
+    const hidesAgain = (await body.isHidden()) && (await toggle.getAttribute('aria-expanded')) === 'false';
+    await page.keyboard.press('Enter');
+    const keyboardOpens = await body.isVisible();
+    vehicleCardChecks.highlightsFirstThenDetails = collapsed && expanded && hidesAgain && keyboardOpens;
     // Its route (P13): a flat ribbon on the road that vehicles in front hide (depth-tested, not drawn over everything).
     await page.waitForTimeout(300); // the card's first refresh draws the route
     const route = await page.evaluate(() => window.__trafficDebug.route());
@@ -678,6 +684,14 @@ if (isDevServer) {
   vehicleCardChecks.cardFollowsTheVehicle = moves;
   await page.getByRole('button', { name: 'Close vehicle details' }).click().catch(() => {});
   vehicleCardChecks.closes = await page.locator('.vehicle-card').isHidden();
+  // The details stay open for the next vehicle clicked, as the player left them.
+  const next = await page.evaluate(() => window.__trafficDebug.vehicles().find((v) => v.x > 320 && v.x < 1100 && v.y > 150 && v.y < 650));
+  if (next) {
+    await press(next.x, next.y);
+    await page.locator('.vehicle-card').waitFor({ state: 'visible', timeout: 2000 }).catch(() => {});
+    vehicleCardChecks.detailsStayOpenForNextVehicle = await page.locator('.vehicle-card-body').isVisible();
+    await page.getByRole('button', { name: 'Close vehicle details' }).click().catch(() => {});
+  }
   vehicleCardChecks.noPageErrors = errors.length === 0;
   await page.close();
 }
