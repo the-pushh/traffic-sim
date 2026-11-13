@@ -146,7 +146,8 @@ body {
   cursor: grab;
 }
 
-.viewport canvas[data-over-vehicle] {
+/* A pointer over a car (it can be clicked), unless a drag, a part being placed, or Space-to-pan says otherwise. */
+body:not(.placing) .viewport canvas[data-over-vehicle]:not([data-space-held]):not([data-dragging]) {
   cursor: pointer;
 }
 
@@ -1191,7 +1192,6 @@ body.placing canvas {
   font-weight: 600;
   line-height: 1.35;
 }
-
 
 /* The hover tag's second line: a car can be clicked. */
 .vehicle-tooltip-hint {

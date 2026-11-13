@@ -17,9 +17,19 @@ export function createVehicleCard(container: HTMLElement, onClose: () => void) {
   container.append(card);
 
   let shownFor: number | null = null;
+  /** The shown vehicle's model picture, kept so a rebuilt card (a row appearing) still shows it. */
+  let pictureUrl: string | null = null;
   let values: HTMLElement[] = [];
   /** Whether the full details are open; stays as the player left it from one vehicle to the next. */
   let detailsOpen = false;
+
+  /** The picture slot stays hidden until there's a picture (if drawing it fails, the card just has none). */
+  const showPicture = (dataUrl: string) => {
+    const slot = card.querySelector<HTMLElement>('.vehicle-picture');
+    if (!slot) return;
+    slot.style.backgroundImage = `url("${dataUrl}")`;
+    slot.hidden = false;
+  };
 
   const showDetails = (open: boolean) => {
     detailsOpen = open;
@@ -42,6 +52,7 @@ export function createVehicleCard(container: HTMLElement, onClose: () => void) {
     /** Show (or refresh) the card for vehicle `id`. */
     show(id: number, details: VehicleDetails) {
       const rows = [...details.highlights, ...details.sections.flatMap((s) => s.rows)];
+      if (shownFor !== id) pictureUrl = null; // another vehicle: its own picture comes later
       if (shownFor !== id || values.length !== rows.length) {
         // A rebuild (another vehicle, or a row appearing) mustn't drop keyboard focus from the card's buttons.
         const focused = (document.activeElement as HTMLElement | null)?.closest('.vehicle-card') ? (document.activeElement as HTMLElement).className : null;
@@ -51,7 +62,7 @@ export function createVehicleCard(container: HTMLElement, onClose: () => void) {
             <h2>${escapeHtml(details.title)} <span class="vehicle-id">#${id}</span></h2>
             <button type="button" class="vehicle-card-close" aria-label="Close vehicle details">×</button>
           </header>
-          <div class="vehicle-picture" aria-hidden="true"></div>
+          <div class="vehicle-picture" aria-hidden="true" hidden></div>
           <dl class="vehicle-highlights">${details.highlights.map(([label]) => `<dt>${escapeHtml(label)}</dt><dd></dd>`).join('')}</dl>
           <button type="button" class="vehicle-details-toggle" aria-controls="vehicle-card-details"></button>
           <div class="vehicle-card-body" id="vehicle-card-details">
@@ -61,6 +72,7 @@ export function createVehicleCard(container: HTMLElement, onClose: () => void) {
           </div>`;
         values = [...card.querySelectorAll<HTMLElement>('dd')];
         showDetails(detailsOpen);
+        if (pictureUrl) showPicture(pictureUrl);
         if (focused) card.querySelector<HTMLElement>(`.${focused.split(' ')[0]}`)?.focus();
       }
       card.querySelector('h2')!.firstChild!.textContent = `${details.title} `;
@@ -72,8 +84,8 @@ export function createVehicleCard(container: HTMLElement, onClose: () => void) {
     /** Show a picture of the vehicle's model (once it's drawn) for vehicle `id`, if its card is still open. */
     picture(id: number, dataUrl: string) {
       if (shownFor !== id) return;
-      const slot = card.querySelector<HTMLElement>('.vehicle-picture');
-      if (slot) slot.style.backgroundImage = `url("${dataUrl}")`;
+      pictureUrl = dataUrl;
+      showPicture(dataUrl);
     },
     /** The vehicle has left the board: say so, and keep its last details. */
     gone() {
@@ -85,6 +97,7 @@ export function createVehicleCard(container: HTMLElement, onClose: () => void) {
     },
     hide() {
       card.hidden = true;
+      pictureUrl = null;
       card.classList.remove('vehicle-gone');
       shownFor = null;
     },

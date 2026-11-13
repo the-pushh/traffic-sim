@@ -187,8 +187,12 @@ function vehiclePicture(model: string): Promise<string | null> {
   if (!picture) {
     const loaded = vehicleModels?.[VEHICLE_MODEL_NAMES.indexOf(model)];
     if (!loaded) return Promise.resolve(null);
+    // Resolves with the picture, or null if it couldn't be drawn (the card then simply has none).
     picture = new Promise<string | null>((resolve) => {
-      void renderThumbnails([model], async () => loaded, (_, url) => resolve(url), VEHICLE_PICTURE_SIZE).then(() => resolve(null));
+      renderThumbnails([model], async () => loaded, (_, url) => resolve(url), VEHICLE_PICTURE_SIZE).then(
+        () => resolve(null),
+        () => resolve(null),
+      );
     });
     vehiclePictures.set(model, picture);
   }

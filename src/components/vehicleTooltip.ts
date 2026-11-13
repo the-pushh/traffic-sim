@@ -14,6 +14,11 @@ export function createVehicleTooltip(container: HTMLElement, canvas: HTMLCanvasE
   tip.className = 'vehicle-tooltip';
   tip.setAttribute('role', 'tooltip');
   tip.hidden = true;
+  const summaryLine = document.createElement('span');
+  const hint = document.createElement('span');
+  hint.className = 'vehicle-tooltip-hint';
+  hint.textContent = 'Click for details';
+  tip.append(summaryLine, hint);
   container.append(tip);
 
   let pointer: { ndc: { x: number; y: number }; x: number; y: number } | null = null;
@@ -50,8 +55,7 @@ export function createVehicleTooltip(container: HTMLElement, canvas: HTMLCanvasE
     const v = simulation.vehicle(picked);
     canvas.dataset.overVehicle = ''; // a pointer: the car can be clicked
     const summary = `${v.type.label} · ${v.driver.label} · ${v.reason}`;
-    if (tip.firstChild?.textContent !== summary) tip.innerHTML = `<span></span><span class="vehicle-tooltip-hint">Click for details</span>`;
-    tip.firstElementChild!.textContent = summary;
+    if (summaryLine.textContent !== summary) summaryLine.textContent = summary;
     tip.style.transform = `translate(${pointer.x + 14}px, ${pointer.y + 14}px)`;
     tip.hidden = false;
   }
