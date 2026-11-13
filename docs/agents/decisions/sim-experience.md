@@ -360,3 +360,12 @@ Owner agreed the spec and the T1–T13 ticket breakdown and authorised implement
   - **Trajectory:** the exit (or driveway) it's heading for, the distance left, and the next pieces.
 - **On the map:** the remaining route is drawn as a 4 px pink line from a ring at the vehicle to its exit.
 - **Updates:** the card refreshes every 200 ms. Only the values change, so the × is never rebuilt under a click. The route is redrawn only when it moves, so a paused run with the card open costs nothing. A vehicle that leaves the board is marked "left the board", and its route disappears.
+
+## Owner feedback: earlier interface, route on the road, plain background (P13, #57) — 2026-11-13
+
+- **Interface:** the hardware-style controls (P12, #56) are reverted, because the owner preferred the earlier interface. The glass dock with Phosphor icons, the scene pill, and the camera panel with its joystick are back. The hardware work stays on its branch.
+- **Route line:** the inspected vehicle's route is painted on the road, not drawn over everything.
+  - It's a band in world units (0.45, about a third of a lane), 0.025 tiles up, just on the road surface where vehicles stand.
+  - It's depth-tested without writing depth and drawn after the cars, so vehicles, signs and trees in front hide it. A polygon offset keeps it from flickering into the road.
+  - The ring at the vehicle sits under it in the same way.
+- **Background:** the coloured vertical columns (P4) are removed. The page is the plain background colour, with the topographic contours (P9) as the only pattern.

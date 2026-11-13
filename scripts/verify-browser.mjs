@@ -647,12 +647,13 @@ if (isDevServer) {
   await page.close();
 }
 
-// Background (P4): faint vertical colour columns, no radial glows.
+// Background: plain colour (P13), with the topographic contours (P9) as their own layer.
 const backgroundChecks = {};
 {
   const { page } = await openPage(url);
   const image = await page.evaluate(() => getComputedStyle(document.body).backgroundImage);
-  backgroundChecks.columnsNotGlows = !image.includes('radial-gradient') && image.includes('linear-gradient(90deg');
+  // Plain background (P13: the owner removed the coloured columns); the contours are their own layer below.
+  backgroundChecks.plainBackground = image === 'none';
   // Topographic contours (P9): a fixed layer masked by the generated SVG, behind the app, in the theme's colour.
   const contours = () =>
     page.evaluate(() => {

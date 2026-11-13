@@ -152,24 +152,29 @@ let lastFrameTime = 0;
 // ---- A clicked vehicle: its card (where the road inspector goes) and the rest of its route on the map ----
 /** How often the open card's values refresh, ms (it changes as the vehicle drives). */
 const CARD_REFRESH_MS = 200;
-const ROUTE_LIFT = 0.03; // tiles above the road, so the line isn't hidden in it
+/** Lane points are at a piece's base; the road surface is 0.02 tiles up (where vehicles stand). The line sits just on it. */
+const ROUTE_LIFT = 0.025;
 let inspected: number | null = null;
 let vehicleAt: ((ndc: { x: number; y: number }) => number | undefined) | null = null;
 let inspectedGraph: LaneGraph | null = null;
 let cardRefreshedAt = -Infinity;
-/** The rest of the inspected vehicle's route: a 4 px line (plain WebGL lines are 1 px), drawn over the roads. */
+/**
+ * The rest of the inspected vehicle's route, painted on the road: a band in world units (so it
+ * scales with the road), depth-tested so vehicles on it hide it, and drawn after them (transparent)
+ * without writing depth. A small depth offset keeps it on top of the road surface itself.
+ */
 const ROUTE_COLOUR = '#f487b6';
-const routeMaterial = new LineMaterial({ color: ROUTE_COLOUR, linewidth: 4, depthTest: false, transparent: true });
+const ROUTE_WIDTH = 0.45; // world units: about a third of a lane
+const onRoad = { depthTest: true, depthWrite: false, transparent: true, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 };
+const routeMaterial = new LineMaterial({ color: ROUTE_COLOUR, linewidth: ROUTE_WIDTH, worldUnits: true, ...onRoad });
 const routeLine = new Group();
 routeLine.name = 'inspected-route';
-routeLine.renderOrder = 10;
 routeLine.visible = false;
 let routePath: Line2 | null = null;
 let drawnRoute = '';
 /** A ring at the vehicle, where its route starts. */
-const routeStart = new Mesh(new RingGeometry(0.9, 1.3, 32), new MeshBasicMaterial({ color: ROUTE_COLOUR, depthTest: false, transparent: true, side: DoubleSide }));
+const routeStart = new Mesh(new RingGeometry(0.9, 1.3, 32), new MeshBasicMaterial({ color: ROUTE_COLOUR, side: DoubleSide, ...onRoad }));
 routeStart.rotation.x = -Math.PI / 2;
-routeStart.renderOrder = 10;
 routeLine.add(routeStart);
 const vehicleCard = createVehicleCard(viewport, () => inspectVehicle(null));
 /** Open the card for a vehicle, or close it (null). The road inspector closes while a vehicle's card is open. */
@@ -206,11 +211,10 @@ function syncVehicleCard(simulation: TrafficSimulation, now: number) {
     routePath.geometry.dispose();
   }
   routePath = new Line2(new LineGeometry().setPositions(points.flat()), routeMaterial);
-  routePath.renderOrder = 10;
   routePath.computeLineDistances();
   routeLine.add(routePath);
   routeStart.position.set(...points[0]);
-  routeMaterial.resolution.set(renderer.domElement.clientWidth, renderer.domElement.clientHeight); // CSS pixels: linewidth is in these
+  routeMaterial.resolution.set(renderer.domElement.clientWidth, renderer.domElement.clientHeight); // still needed by the line shader
   routeLine.visible = true;
   requestRender();
 }
