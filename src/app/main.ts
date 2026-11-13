@@ -246,7 +246,8 @@ function syncVehicleCard(simulation: TrafficSimulation, now: number) {
   geometry.setIndex(ribbon.indices);
   routePath = new Mesh(geometry, routeMaterial);
   routeLine.add(routePath);
-  routeStart.position.set(...points[0]);
+  // The ring sits round the vehicle's centre (where the map draws it), not its front bumper.
+  routeStart.position.set(...boardToWorld([details.centre[0], details.centre[1] + ROUTE_LIFT, details.centre[2]]));
   routeLine.visible = true;
   requestRender();
 }

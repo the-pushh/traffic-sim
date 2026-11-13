@@ -101,4 +101,14 @@ describe('a vehicle’s details card', () => {
     const drawn = new Set(Array.from({ length: 12 }, (_, id) => modelFor({ id, type: sedan })));
     expect(drawn).toEqual(new Set(sedan.models));
   });
+
+  it('places the vehicle’s centre (where the map draws it and the route ring sits) half its length behind its front', () => {
+    const { simulation, graph } = scenario();
+    // A vehicle well into a straight lane, so front and centre are on the same line.
+    const v = simulation.allVehicles().map((x) => simulation.vehicle(x.id)).find((x) => x.position > x.type.length * 2)!;
+    const details = describeVehicle(v, graph, mainStreet);
+    const [front, centre] = [details.path[0], details.centre];
+    const gap = Math.hypot(front[0] - centre[0], front[2] - centre[2]);
+    expect(gap).toBeCloseTo(v.type.length / 2 / METRES_PER_TILE, 3);
+  });
 });
