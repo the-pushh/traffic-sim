@@ -496,14 +496,17 @@ export function createEditor(host: EditorHost) {
   });
 
   // ---- Selecting on the map, and dragging the selection to move it ----
-  let pressed: { x: number; y: number; hit: Target | null } | null = null;
+  /** A press on the map; `moved` once it went past the drag threshold at any point (then it's not a click). */
+  let pressed: { x: number; y: number; hit: Target | null; moved: boolean } | null = null;
   host.canvas.addEventListener('pointerdown', (event) => {
     if (drag || event.button !== 0 || 'spaceHeld' in host.canvas.dataset) return;
-    pressed = { x: event.clientX, y: event.clientY, hit: pick(event) };
+    pressed = { x: event.clientX, y: event.clientY, hit: pick(event), moved: false };
   });
   host.canvas.addEventListener('pointermove', (event) => {
-    if (!pressed || drag || !host.canEdit()) return;
+    if (!pressed || drag) return;
     const far = Math.hypot(event.clientX - pressed.x, event.clientY - pressed.y) > DRAG_THRESHOLD;
+    if (far) pressed.moved = true;
+    if (!host.canEdit()) return;
     const hit = pressed.hit;
     if (!far || !hit || !selected || hit.kind !== selected.kind || hit.index !== selected.index) return;
     const scene = host.scene();
@@ -514,10 +517,19 @@ export function createEditor(host: EditorHost) {
   });
   host.canvas.addEventListener('pointerup', (event) => {
     if (!pressed || drag) return;
+    // A press that moved (at any point) turned the camera: it isn't a click, so the selection stays.
+    const moved = pressed.moved || Math.hypot(event.clientX - pressed.x, event.clientY - pressed.y) > DRAG_THRESHOLD;
     // A vehicle under the click takes the card (the road inspector closes); otherwise select as usual.
-    select(host.inspectVehicleAt?.(event) ? null : pressed.hit);
+    if (!moved) select(host.inspectVehicleAt?.(event) ? null : pressed.hit);
     pressed = null;
   });
+
+  /** Whether a press lands on the selected piece or control (its drag moves it; any other drag turns the camera). */
+  function pressStartsOnSelection(event: PointerEvent): boolean {
+    if (!selected || !host.canEdit() || drag) return false;
+    const hit = pick(event);
+    return !!hit && hit.kind === selected.kind && hit.index === selected.index;
+  }
 
   function pick(event: PointerEvent): Target | null {
     const view = host.view();
@@ -675,6 +687,7 @@ export function createEditor(host: EditorHost) {
   let lockedShown: boolean | null = null;
   return {
     toggle,
+    pressStartsOnSelection,
     /** The parts tray (the app centres the view beside it while it's open). */
     tray: drawer,
     /** Where the part being placed would land right now (for checks); null when not placing. */

@@ -58,9 +58,9 @@ const drag = async (from, to, button = 'left') => {
   await page.mouse.up({ button });
 };
 
-// A plain drag is reserved for editing road pieces: the camera must not move.
+// A plain drag on the map turns the view (P14: no joystick).
 await drag([cx, cy], [cx + 200, cy + 80]);
-const plainDrag = await shot('02-after-plain-drag');
+const plainDrag = await shot('02-after-plain-drag-turns-view');
 
 // Hold Space and drag to pan.
 await page.keyboard.down('Space');
@@ -68,28 +68,18 @@ await drag([cx, cy], [cx + 200, cy + 80]);
 await page.keyboard.up('Space');
 const panned = await shot('03-after-space-drag-pan');
 
-// On-screen joystick: drag the knob toward the upper right and hold, then release.
-const stick = await page.locator('.joystick').boundingBox();
-const sx = stick.x + stick.width / 2;
-const sy = stick.y + stick.height / 2;
-await page.mouse.move(sx, sy);
-await page.mouse.down();
-await page.mouse.move(sx + stick.width / 2, sy + stick.height / 2, { steps: 5 });
-await page.waitForTimeout(500);
-await page.mouse.up();
-await page.waitForTimeout(400); // knob springs back over 120 ms; let in-flight frames land
-const joystickDragged = await shot('04-after-joystick-orbit-tilt-angled');
-await page.waitForTimeout(500);
-const afterRelease = await shot('05-joystick-released');
+// Keyboard: focus the map and press the arrow keys to turn the view.
+await page.locator('.viewport canvas').focus();
+for (let i = 0; i < 4; i++) await page.keyboard.press('ArrowLeft');
+await page.keyboard.press('ArrowUp');
+const keyboardTurned = await shot('04-after-arrow-keys-on-map');
+const noJoystick = (await page.locator('.joystick').count()) === 0;
+const mapFocusRing = await page.evaluate(() => {
+  const canvas = document.querySelector('.viewport canvas');
+  return document.activeElement === canvas && getComputedStyle(canvas).outlineStyle !== 'none';
+});
 
-// Keyboard on the focused joystick: hold the left arrow to orbit.
-await page.locator('.joystick').focus();
-await page.keyboard.down('ArrowLeft');
-await page.waitForTimeout(400);
-await page.keyboard.up('ArrowLeft');
-const keyboardJoystick = await shot('06-after-joystick-arrow-keys');
-
-// Space + drag still pans while the joystick has focus (pointer over the map).
+// Space + drag still pans while the map has focus.
 const spacePan = async () => {
   await page.mouse.move(cx, cy);
   await page.keyboard.down('Space');
@@ -97,8 +87,7 @@ const spacePan = async () => {
   await page.keyboard.up('Space');
 };
 await spacePan();
-const panAfterJoystick = await shot('06b-space-pan-with-joystick-focused');
-const joystickFocusedDuringPan = await page.evaluate(() => document.activeElement?.classList.contains('joystick'));
+const panWithMapFocused = await shot('05-space-pan-with-map-focused');
 
 // Optional right-drag shortcut still orbits and tilts.
 await drag([cx, cy], [cx - 120, cy - 60], 'right');
@@ -465,6 +454,39 @@ if (isDevServer) {
   const stub = await page3.evaluate(() => window.__trafficDebug.screenOf(1.5, 8.5));
   await page3.mouse.click(stub.x, stub.y);
   editorChecks.clickSelectsPiece = await page3.locator('.inspector:not(.vehicle-card)').isVisible();
+  // P14: a drag that starts on the selected piece moves it (not the camera); a drag elsewhere turns the view and keeps the selection.
+  {
+    const placedAt = () => page3.evaluate(() => window.__trafficDebug.scene().pieces.at(-1).at.join(','));
+    const before = await placedAt();
+    const to = await page3.evaluate(() => window.__trafficDebug.screenOf(1.5, 10.5));
+    await page3.mouse.move(stub.x, stub.y);
+    await page3.mouse.down();
+    await page3.mouse.move(to.x, to.y, { steps: 10 });
+    await page3.waitForTimeout(200);
+    // The drag became the editor's move (its preview is up) and the camera isn't being dragged.
+    const movedPiece = await page3.evaluate(() => window.__trafficDebug.preview() !== null && !('dragging' in document.querySelector('canvas').dataset));
+    await page3.keyboard.press('Escape'); // cancel the move
+    await page3.mouse.up();
+    await page3.waitForTimeout(400);
+    await page3.mouse.click(stub.x, stub.y); // select it again
+    const elsewhere = await page3.evaluate(() => window.__trafficDebug.screenOf(12.5, 3.5));
+    // A board corner: the view turns about the board's middle, which stays put.
+    const view = () => page3.evaluate(() => window.__trafficDebug.screenOf(0, 0));
+    const viewBefore = await view();
+    await page3.mouse.move(elsewhere.x, elsewhere.y);
+    await page3.mouse.down();
+    await page3.mouse.move(elsewhere.x + 120, elsewhere.y + 40, { steps: 8 });
+    await page3.mouse.up();
+    await page3.waitForTimeout(300);
+    const viewAfter = await view();
+    const turned = Math.hypot(viewAfter.x - viewBefore.x, viewAfter.y - viewBefore.y) > 5;
+    const kept = (await placedAt()) === before;
+    const stillSelected = await page3.locator('.inspector:not(.vehicle-card)').isVisible();
+    editorChecks.dragOnSelectionMovesItElsewhereTurnsView = movedPiece && turned && kept && stillSelected;
+    // Reselect the stub for the checks below (the view moved, so find it again).
+    const again = await page3.evaluate(() => window.__trafficDebug.screenOf(1.5, 8.5));
+    await page3.mouse.click(again.x, again.y);
+  }
   await page3.locator('.inspector:not(.vehicle-card)').getByRole('button', { name: 'Remove' }).click();
   await page3.waitForTimeout(400);
   editorChecks.removeFromInspector = (await pieces()) === startCount;
@@ -921,13 +943,12 @@ const result = {
   url,
   consoleErrors,
   assetRequests,
-  plainDragLeftViewUnchanged: !differs(initial, plainDrag),
+  plainDragTurnsView: differs(initial, plainDrag),
   spaceDragPanChangedView: differs(plainDrag, panned),
-  joystickDragChangedView: differs(panned, joystickDragged),
-  joystickStopsOnRelease: !differs(joystickDragged, afterRelease),
-  joystickArrowKeysChangedView: differs(afterRelease, keyboardJoystick),
-  spacePanWorksWithJoystickFocused: joystickFocusedDuringPan && differs(keyboardJoystick, panAfterJoystick),
-  rightDragChangedView: differs(panAfterJoystick, rightDragged),
+  arrowKeysOnFocusedMapTurnView: differs(panned, keyboardTurned) && mapFocusRing,
+  spacePanWorksWithMapFocused: differs(keyboardTurned, panWithMapFocused),
+  noJoystick,
+  rightDragChangedView: differs(panWithMapFocused, rightDragged),
   zoomChangedView: differs(rightDragged, zoomed),
   zoomButtonChangedView: differs(zoomed, zoomButton),
   resetMatchesInitial: !differs(initial, reset),
@@ -961,12 +982,11 @@ const passed = (checks) => Object.entries(checks).every(([name, value]) => name 
 const ok =
   consoleErrors.length === 0 &&
   !assetRequests.some((r) => !r.startsWith('200') && !r.startsWith('304')) &&
-  result.plainDragLeftViewUnchanged &&
+  result.plainDragTurnsView &&
   result.spaceDragPanChangedView &&
-  result.joystickDragChangedView &&
-  result.joystickStopsOnRelease &&
-  result.joystickArrowKeysChangedView &&
-  result.spacePanWorksWithJoystickFocused &&
+  result.arrowKeysOnFocusedMapTurnView &&
+  result.spacePanWorksWithMapFocused &&
+  result.noJoystick &&
   result.rightDragChangedView &&
   result.zoomButtonChangedView &&
   result.spacePanWorksWithButtonFocused &&

@@ -22,7 +22,7 @@ Use the Matt Pocock skills and delivery formats specified in `docs/agents/WORKFL
 - Offer starter scenes such as Traffic Lights, Turnaround, Flyover, and On-Ramp. Each opens with a starting layout, traffic settings, and visible vehicle entry points.
 - Offer **30, 60, or 90 seconds of simulation time** per run. Stop at the chosen duration and show the results. Suggested initial measures are vehicles reaching their destinations, average wait, and longest queue.
 - **Reset** restores the selected scene’s starting layout and traffic settings and clears the current run. **Save as new scene** keeps the edited setup as a separate, reusable scene.
-- Give players a joystick-style camera control to orbit and tilt, scroll-wheel zoom, drag to pan, and a separate **Reset View**. Camera changes preserve the simulation and scene edits.
+- Give players a joystick-style camera control to orbit and tilt, scroll-wheel zoom, drag to pan, and a separate **Reset View**. Camera changes preserve the simulation and scene edits. *(Superseded by the owner on 2026-11-13, P14: no joystick; a drag on the map orbits and tilts, Space+drag pans.)*
 
 ## Assets already in the repo
 
