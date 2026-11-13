@@ -30,3 +30,8 @@ export const VEHICLE_TYPES = {
 } satisfies Record<string, VehicleType>;
 
 export type VehicleTypeId = keyof typeof VEHICLE_TYPES;
+
+/** The Car Kit model drawn for a vehicle: its type's models taken in turn by id, so the map and its card agree. */
+export function modelFor(v: { id: number; type: { models: readonly string[] } }): string {
+  return v.type.models[v.id % v.type.models.length];
+}

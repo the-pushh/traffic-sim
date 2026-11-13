@@ -433,3 +433,8 @@ Owner agreed the spec and the T1–T13 ticket breakdown and authorised implement
 - **Owner:** "in the mobile and tab view don't show anything, just this text on the bg 'this app is meant to be experienced on the laptop…'".
 - **How:** the page's entry is now `src/app/boot.ts`. If `isHandheld` (unit-tested) says this is a phone or tablet, the page shows only the message on the background and never loads the 3D app or its models. That means touch-first with no hover (`(pointer: coarse)` without `(any-hover: hover)`), or a screen narrower than 768 px. Otherwise it loads the app (`import('./main')`, a separate chunk).
 - A touchscreen laptop that hovers with its trackpad gets the app, and so does a desktop window from 768 px up.
+
+## Cars: hover hint and the model's picture (P21, #74) — 2026-11-14
+
+- **Hover:** over a car, the cursor is a pointer (`canvas[data-over-vehicle]`), and the hover tag adds "Click for details" under "Type · Driver · Doing".
+- **Picture:** the card shows a picture of the vehicle's own model, the one the map draws. `modelFor` in `vehicleTypes.ts` (unit-tested) is shared by the map and the card. Each model's picture is drawn once from the already-loaded model with `renderThumbnails` (120 px, short-lived WebGL context) and reused, so an idle map still costs nothing.

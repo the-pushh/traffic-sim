@@ -700,6 +700,11 @@ if (isDevServer) {
   let opened = false;
   let moves = false;
   if (car) {
+    // P21: hovering a car shows a pointer and "Click for details".
+    await page.mouse.move(car.x, car.y);
+    vehicleCardChecks.hoverPointerAndHint = await page
+      .waitForFunction(() => 'overVehicle' in document.querySelector('canvas').dataset && (document.querySelector('.vehicle-tooltip')?.textContent ?? '').includes('Click for details'), null, { timeout: 2000 })
+      .then(() => page.evaluate(() => getComputedStyle(document.querySelector('canvas')).cursor === 'pointer'), () => false);
     await press(car.x, car.y);
     const card = page.locator('.vehicle-card');
     opened = await card.waitFor({ state: 'visible', timeout: 2000 }).then(() => true, () => false);
@@ -720,6 +725,10 @@ if (isDevServer) {
     await page.keyboard.press('Enter');
     const keyboardOpens = await body.isVisible();
     vehicleCardChecks.highlightsFirstThenDetails = collapsed && expanded && hidesAgain && keyboardOpens;
+    // P21: the card shows a picture of the vehicle's own model.
+    vehicleCardChecks.modelPicture = await page
+      .waitForFunction(() => (document.querySelector('.vehicle-picture')?.style.backgroundImage ?? '').startsWith('url("data:image/png'), null, { timeout: 4000 })
+      .then(() => true, () => false);
     // Its route (P13): a flat ribbon on the road that vehicles in front hide (depth-tested, not drawn over everything).
     await page.waitForTimeout(300); // the card's first refresh draws the route
     const route = await page.evaluate(() => window.__trafficDebug.route());

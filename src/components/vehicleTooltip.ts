@@ -5,14 +5,20 @@ const RECHECK_MS = 100;
 
 /**
  * Hover tag over a vehicle: "Type · Profile · Reason", e.g. "Heavy truck · Assertive ·
- * Braking for the car ahead". `pick` finds the vehicle under a screen point; it runs
- * when the pointer moves and every 100 ms while it rests.
+ * Braking for the car ahead", and "Click for details" under it; the cursor becomes a
+ * pointer over a car. `pick` finds the vehicle under a screen point; it runs when the
+ * pointer moves and every 100 ms while it rests.
  */
 export function createVehicleTooltip(container: HTMLElement, canvas: HTMLCanvasElement) {
   const tip = document.createElement('div');
   tip.className = 'vehicle-tooltip';
   tip.setAttribute('role', 'tooltip');
   tip.hidden = true;
+  const summaryLine = document.createElement('span');
+  const hint = document.createElement('span');
+  hint.className = 'vehicle-tooltip-hint';
+  hint.textContent = 'Click for details';
+  tip.append(summaryLine, hint);
   container.append(tip);
 
   let pointer: { ndc: { x: number; y: number }; x: number; y: number } | null = null;
@@ -31,6 +37,7 @@ export function createVehicleTooltip(container: HTMLElement, canvas: HTMLCanvasE
   canvas.addEventListener('pointerleave', () => {
     pointer = null;
     tip.hidden = true;
+    delete canvas.dataset.overVehicle;
   });
 
   function update(pick: (ndc: { x: number; y: number }) => number | undefined, simulation: TrafficSimulation, now: number) {
@@ -42,10 +49,13 @@ export function createVehicleTooltip(container: HTMLElement, canvas: HTMLCanvasE
     }
     if (picked === undefined || !simulation.has(picked)) {
       tip.hidden = true;
+      delete canvas.dataset.overVehicle; // back to the map's grab cursor
       return;
     }
     const v = simulation.vehicle(picked);
-    tip.textContent = `${v.type.label} · ${v.driver.label} · ${v.reason}`;
+    canvas.dataset.overVehicle = ''; // a pointer: the car can be clicked
+    const summary = `${v.type.label} · ${v.driver.label} · ${v.reason}`;
+    if (summaryLine.textContent !== summary) summaryLine.textContent = summary;
     tip.style.transform = `translate(${pointer.x + 14}px, ${pointer.y + 14}px)`;
     tip.hidden = false;
   }

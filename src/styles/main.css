@@ -146,6 +146,11 @@ body {
   cursor: grab;
 }
 
+/* A pointer over a car (it can be clicked), unless a drag, a part being placed, or Space-to-pan says otherwise. */
+body:not(.placing) .viewport canvas[data-over-vehicle]:not([data-space-held]):not([data-dragging]) {
+  cursor: pointer;
+}
+
 .viewport canvas[data-dragging] {
   cursor: grabbing;
 }
@@ -1188,3 +1193,16 @@ body.placing canvas {
   line-height: 1.35;
 }
 
+/* The hover tag's second line: a car can be clicked. */
+.vehicle-tooltip-hint {
+  display: block;
+  font-size: var(--font-meta);
+  color: var(--color-text-muted);
+}
+
+/* A picture of the clicked vehicle's model, at the top of its card. */
+.vehicle-card .vehicle-picture {
+  height: 104px;
+  margin: var(--space-1) 0 0;
+  background: center / contain no-repeat;
+}

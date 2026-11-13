@@ -3,7 +3,7 @@ import { boardToWorld, TILE_SIZE } from '../../scenes/board';
 import type { LaneGraph } from '../../simulation/network/buildLaneGraph';
 import { pointAlongLane } from '../../simulation/network/laneGeometry';
 import { METRES_PER_TILE, type TrafficSimulation, type VehicleState } from '../../simulation/traffic/trafficSimulation';
-import { VEHICLE_TYPES } from '../../simulation/traffic/vehicleTypes';
+import { VEHICLE_TYPES, modelFor } from '../../simulation/traffic/vehicleTypes';
 
 /** Road surface height above a piece's base, in tiles (matches the scene view). */
 const ROAD_SURFACE = 0.02;
@@ -25,7 +25,7 @@ export function createTrafficLayer(graph: LaneGraph, models: Map<string, Object3
   const modelSize = new Map([...models].map(([name, model]) => [name, new Box3().setFromObject(model).getSize(new Vector3())]));
 
   function create(v: VehicleState) {
-    const name = v.type.models[v.id % v.type.models.length];
+    const name = modelFor(v);
     const object = models.get(name)!.clone();
     // Real length; width (and height with it) capped so wide models stay inside their lane.
     const size = modelSize.get(name)!;

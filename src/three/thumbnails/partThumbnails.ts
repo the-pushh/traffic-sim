@@ -12,11 +12,17 @@ const VIEW_DIRECTION = new Vector3(1, 1, 1).normalize();
  * WebGL context draws them all and is freed. Each picture is handed over as soon as it's
  * drawn; a model that won't load is skipped (its tile keeps just its name).
  */
-export async function renderThumbnails<Id>(ids: readonly Id[], load: (id: Id) => Promise<Object3D>, onPicture: (id: Id, dataUrl: string) => void): Promise<void> {
+export async function renderThumbnails<Id>(
+  ids: readonly Id[],
+  load: (id: Id) => Promise<Object3D>,
+  onPicture: (id: Id, dataUrl: string) => void,
+  /** Edge of the (square) picture in CSS pixels; drawn at twice that. */
+  size = SIZE,
+): Promise<void> {
   const canvas = document.createElement('canvas');
   const renderer = new WebGLRenderer({ canvas, alpha: true, antialias: true, preserveDrawingBuffer: true });
   renderer.setPixelRatio(PIXEL_RATIO);
-  renderer.setSize(SIZE, SIZE, false);
+  renderer.setSize(size, size, false);
   renderer.setClearColor(0x000000, 0);
 
   // The scene's own lights (createSceneView): sky and ground fill plus the sun.

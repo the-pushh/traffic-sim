@@ -4,6 +4,7 @@ import { simulateScene, STEP } from '../scenes/sceneTesting';
 import { buildLaneGraph } from '../simulation/network/buildLaneGraph';
 import { pointAlongLane } from '../simulation/network/laneGeometry';
 import { METRES_PER_TILE } from '../simulation/traffic/trafficSimulation';
+import { modelFor, VEHICLE_TYPES } from '../simulation/traffic/vehicleTypes';
 import { describeVehicle } from './vehicleDetails';
 
 /** Main Street after 20 s of Medium traffic, and one vehicle on it. */
@@ -85,5 +86,19 @@ describe('a vehicle’s details card', () => {
     // The same destination and distance as the full trajectory section.
     const trip = rowsOf(details, 'Trajectory');
     expect(highlights['Heading for']).toBe(`${trip['Heading for']} · ${trip['Distance left']}`);
+  });
+
+  it('names the model the map draws for the vehicle, so the card can show its picture', () => {
+    const { simulation, graph, vehicle } = scenario();
+    const v = simulation.vehicle(vehicle.id);
+    const details = describeVehicle(v, graph, mainStreet);
+    expect(v.type.models).toContain(details.model);
+    expect(details.model).toBe(modelFor(v));
+  });
+
+  it('spreads a type’s vehicles across all of its models', () => {
+    const sedan = VEHICLE_TYPES.sedan;
+    const drawn = new Set(Array.from({ length: 12 }, (_, id) => modelFor({ id, type: sedan })));
+    expect(drawn).toEqual(new Set(sedan.models));
   });
 });
