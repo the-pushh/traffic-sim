@@ -49,6 +49,7 @@ export function createScenePill(container: HTMLElement, actions: PillActions) {
       if (key === shown) return;
       shown = key;
       name.textContent = state.name;
+      name.title = state.name; // the full name, if a long one is cut short
       for (const arrow of [button('previous'), button('next')]) {
         arrow.disabled = !state.canSwitch;
         arrow.title = state.canSwitch ? arrow.getAttribute('aria-label')! : 'Scenes can’t change during a run';

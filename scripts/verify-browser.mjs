@@ -326,13 +326,23 @@ if (isDevServer) {
     page2.waitForFunction(() => window.__trafficDebug.vehicles().length > 0, null, { timeout: 2000 }).then(() => true, () => false);
   const names = [await sceneName()];
   const warmedUp = [await hasTraffic()];
+  // Width of the pill, and whether the name fits uncut (negative when it's cut short).
+  const pillWidth = () =>
+    page2.evaluate(() => {
+      const name = document.querySelector('.scene-name');
+      return name.scrollWidth <= name.clientWidth ? Math.round(document.querySelector('.scene-pill').getBoundingClientRect().width) : -1;
+    });
+  const widths = [await pillWidth()];
   for (let i = 0; i < 5; i++) {
     await page2.getByRole('button', { name: 'Next scene' }).click();
     await ready();
     names.push(await sceneName());
+    widths.push(await pillWidth());
     warmedUp.push(await hasTraffic());
   }
   // Every preset opens with warm-up traffic; the blank board (5th) has none until joined up.
+  // P23: the scene pill keeps one width whatever the scene's name.
+  carouselChecks.pillWidthFixed = new Set(widths).size === 1 && widths[0] > 0; // one width, every name uncut
   carouselChecks.presetsOpenWithWarmUpTraffic = JSON.stringify(warmedUp) === JSON.stringify([true, true, true, true, false, true]);
   carouselChecks.focusStaysOnArrow = await page2.evaluate(() => document.activeElement?.getAttribute('aria-label') === 'Next scene');
   carouselChecks.cyclesAllFiveScenes = JSON.stringify(names) === JSON.stringify(['Main Street', 'Market Roundabout', 'School Run', 'Flyover Bottleneck', 'Blank board', 'Main Street']);

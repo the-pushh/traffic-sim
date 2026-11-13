@@ -432,8 +432,14 @@ button.primary {
 }
 
 .scene-name {
+  /* A fixed width (fits the longest preset name), so the pill keeps its size whatever the scene. */
+  width: 11.5em;
   padding: 0 var(--space-2);
+  overflow: hidden;
   font-weight: 600;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .pill-arrow {
