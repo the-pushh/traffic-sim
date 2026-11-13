@@ -417,3 +417,9 @@ Owner agreed the spec and the T1–T13 ticket breakdown and authorised implement
 
 - **Owner:** remove the Reset View button from the dock. There is no on-screen Reset View now. Opening a scene still frames the view afresh, and the camera panel keeps zoom in, zoom out and the theme switch.
 - **Browser checks:** the focus and Space-pan checks use the Zoom in button instead, and a check confirms no Reset View button remains.
+
+## Phones and tablets get a message (P18, #71) — 2026-11-14
+
+- **Owner:** "in the mobile and tab view don't show anything, just this text on the bg 'this app is meant to be experienced on the laptop…'".
+- **How:** the page's entry is now `src/app/boot.ts`. If `isHandheld` (unit-tested) says this is a phone or tablet, the page shows only the message on the background and never loads the 3D app or its models. That means touch-first with no hover (`(pointer: coarse)` without `(any-hover: hover)`), or a screen narrower than 768 px. Otherwise it loads the app (`import('./main')`, a separate chunk).
+- A touchscreen laptop that hovers with its trackpad gets the app, and so does a desktop window from 768 px up.
