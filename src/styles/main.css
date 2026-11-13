@@ -1017,6 +1017,22 @@ body.placing canvas {
   text-align: right;
 }
 
+/* The highlights lead: a little larger, values in the text colour. */
+.vehicle-card .vehicle-highlights {
+  gap: var(--space-1) var(--space-2);
+  margin: var(--space-2) 0;
+  font-size: var(--font-body);
+}
+
+.vehicle-card .vehicle-highlights dd {
+  font-weight: 600;
+}
+
+.vehicle-details-toggle {
+  width: 100%;
+  font-size: var(--font-meta);
+}
+
 .inspector-hint,
 .inspector-error {
   margin: var(--space-1) 0 var(--space-2);

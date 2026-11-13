@@ -7,6 +7,8 @@ import { METRES_PER_TILE, type VehicleState } from '../simulation/traffic/traffi
 /** A vehicle's card: a title, labelled rows in sections, and the rest of its route to draw on the map. */
 export interface VehicleDetails {
   title: string;
+  /** What the card shows first: the driver and their habits, the speed, what it's doing, where it's going. */
+  highlights: [string, string][];
   sections: { heading: string; rows: [string, string][] }[];
   /** Board points (tiles; x, height, z) from the vehicle to the end of its route. */
   path: Point3[];
@@ -58,8 +60,17 @@ export function describeVehicle(v: VehicleState, graph: LaneGraph, scene: SceneD
   for (const id of ahead.slice(1)) path.push(...graph.lanes[id].points.slice(1));
 
   const d = v.driver;
+  const headingFor = graph.accessPoints.some((a) => a.label === v.destination) ? `driveway ${v.destination}` : `exit ${v.destination}`;
+  const distanceLeft = `${Math.round(remaining)} m`;
   return {
     title: `${v.type.label} · ${d.label} driver`,
+    highlights: [
+      ['Driver', d.label],
+      ['Habits', `${fixed(d.headway, 's')} gap · obeys ${percent(d.compliance)}`],
+      ['Speed', `${kmh(v.speed)} (wants ${Math.round(v.preferredSpeed * 3.6)})`],
+      ['Doing', v.reason],
+      ['Heading for', `${headingFor} · ${distanceLeft}`],
+    ],
     sections: [
       {
         heading: 'Vehicle',
@@ -102,8 +113,8 @@ export function describeVehicle(v: VehicleState, graph: LaneGraph, scene: SceneD
       {
         heading: 'Trajectory',
         rows: [
-          ['Heading for', graph.accessPoints.some((a) => a.label === v.destination) ? `driveway ${v.destination}` : `exit ${v.destination}`],
-          ['Distance left', `${Math.round(remaining)} m`],
+          ['Heading for', headingFor],
+          ['Distance left', distanceLeft],
           ['Next', upcoming.length ? upcoming.join(' → ') : 'Leaving the board'],
           ...(v.blocked ? ([['Note', 'No way through to its exit']] as [string, string][]) : []),
         ],

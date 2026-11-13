@@ -70,4 +70,20 @@ describe('a vehicle’s details card', () => {
     const end = details.path.at(-1)!;
     expect(Math.hypot(end[0] - exit.at[0], end[2] - exit.at[1])).toBeLessThan(0.6);
   });
+
+  it('leads with a few highlights: how the driver drives, the speed, what it’s doing and where it’s going', () => {
+    const { simulation, graph, vehicle } = scenario();
+    const v = simulation.vehicle(vehicle.id);
+    const details = describeVehicle(v, graph, mainStreet);
+    expect(details.highlights.map(([label]) => label)).toEqual(['Driver', 'Habits', 'Speed', 'Doing', 'Heading for']);
+    const highlights = Object.fromEntries(details.highlights);
+    // The driver's profile, and the habits that show most on the road: following gap and obeying signs.
+    expect(highlights.Driver).toBe(v.driver.label);
+    expect(highlights.Habits).toMatch(/^\d+\.\d s gap · obeys \d{1,3}%$/);
+    expect(highlights.Speed).toMatch(/^\d+ km\/h \(wants \d+\)$/);
+    expect(highlights.Doing).toBe(rowsOf(details, 'Now').Doing);
+    // The same destination and distance as the full trajectory section.
+    const trip = rowsOf(details, 'Trajectory');
+    expect(highlights['Heading for']).toBe(`${trip['Heading for']} · ${trip['Distance left']}`);
+  });
 });

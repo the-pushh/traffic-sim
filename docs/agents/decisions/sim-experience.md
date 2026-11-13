@@ -380,3 +380,14 @@ Owner agreed the spec and the T1–T13 ticket breakdown and authorised implement
   - a drag that starts on the selected piece or sign is the editor's (`pressStartsOnSelection`), and moves it;
   - a press that moved doesn't count as a click, so turning the view keeps the selection.
 - **Keyboard:** the map canvas is focusable (`aria-label` "Map view", with a description), and the arrow keys orbit and tilt. It shows a focus ring. This replaces the joystick's arrow keys.
+
+## Vehicle card: highlights first (P15, #61) — 2026-11-13
+
+- **Owner:** "there are too many details. There should be a highlight… the driver behavior, the car speed, and some more bits… and then a Show More Detail button."
+- **Highlights** (`describeVehicle().highlights`, unit-tested):
+  - **Driver:** its profile;
+  - **Habits:** following gap · how often it obeys signs;
+  - **Speed:** current (wants N);
+  - **Doing:** what it's doing now;
+  - **Heading for:** exit or driveway · distance left.
+- **Show more details** opens the full sections (vehicle, driver, now, trajectory), and "Hide details" closes them. The button has `aria-expanded`, and its state carries over to the next vehicle. The highlights refresh with the rest of the card; the route on the map is unchanged.
