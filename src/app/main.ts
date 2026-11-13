@@ -376,7 +376,7 @@ async function show(mode: 'open' | 'edit'): Promise<boolean> {
     if (opening) {
       observer = ObserverCamera.framing(camera, bounds, { coveredBottom });
       // A drag turns the view, unless it starts on the selected piece (the editor moves that).
-      detachInput = attachViewportInput(renderer.domElement, observer, { onSelection: (e) => editor.pressStartsOnSelection(e) });
+      detachInput = attachViewportInput(renderer.domElement, observer, { onSelection: (e) => editor.pressStartsOnSelection(e), placing: () => editor.preview() !== null });
       editor.reset();
       timer.reset();
       resolution.reset();

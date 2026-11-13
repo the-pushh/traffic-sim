@@ -11,9 +11,11 @@ A player opens the app on **Main Street** with traffic already on the roads, pic
 Full-window 3D view (cube-diagonal start, 64 × 64 board), no header bar.
 
 ```text
+*Since P14 (2026-11-13) there is no joystick: a drag on the map turns the view (owner's decision).*
+
 ┌──────────────────────────────────────────────────────────┐
 │                                            ┌──────────┐  │
-│     hover a vehicle:                       │ joystick │  │
+│     hover a vehicle:                       │ joystick*│  │
 │     "Truck · Assertive · Braking for the   │  +  −    │  │
 │      car ahead"                            │ Reset    │  │
 │                                            │ View     │  │

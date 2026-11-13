@@ -386,6 +386,17 @@
         ],
         "result": "pass: every nature model HTTP 200; each preset shows instanced scenery (under 40 instanced meshes); no scenery on or touching roads (unit tests); light and dark overview and a close-up with traffic inspected; trees about twice a car's height. Running GPU time +10–25% (only trees cast shadows); idle still 0.",
         "previews": "artifacts/3d/previews/ (git-ignored)"
+      },
+      {
+        "date": "2026-11-13",
+        "check": "cameraControls after P14 (#59): no joystick",
+        "command": "npm test, npm run dev then node scripts/verify-browser.mjs",
+        "browser": "Google Chrome 157 on macOS, headless, 1440x900",
+        "assets": [
+          "all scene assets"
+        ],
+        "result": "pass: a plain drag turns the view (orbit/tilt) after a 6 px threshold; Space+drag pans, also with the map focused; arrow keys on the focused map turn the view (focus ring shown) and yield to keyboard placement; a drag starting on the selected piece moves it while a drag elsewhere turns the view and keeps the selection; right-drag, wheel and button zoom, Reset View unchanged; no joystick in the panel. Earlier entries describing the joystick are historical.",
+        "previews": "artifacts/3d/previews/ (git-ignored)"
       }
     ]
   },
