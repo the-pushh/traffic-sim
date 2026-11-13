@@ -14,6 +14,8 @@ import { renderThumbnails } from '../three/thumbnails/partThumbnails';
 
 /** What the editor needs from the app around it. */
 export interface EditorHost {
+  /** A click on the map: open the card of a vehicle under it, if any (true), before looking for a road piece. */
+  inspectVehicleAt?(event: PointerEvent): boolean;
   /** The Parts tray (bottom-right) and the inspector (top-left) sit over the view. */
   viewport: HTMLElement;
   /** Panels the tray keeps clear of: the camera panel above it, the dock beside or below. */
@@ -510,9 +512,10 @@ export function createEditor(host: EditorHost) {
     pressed = null;
     void beginDrag(part, hit, { pointer: boardPoint(event.clientX, event.clientY), screen: { x: event.clientX, y: event.clientY }, overMap: true });
   });
-  host.canvas.addEventListener('pointerup', () => {
+  host.canvas.addEventListener('pointerup', (event) => {
     if (!pressed || drag) return;
-    select(pressed.hit);
+    // A vehicle under the click takes the card (the road inspector closes); otherwise select as usual.
+    select(host.inspectVehicleAt?.(event) ? null : pressed.hit);
     pressed = null;
   });
 

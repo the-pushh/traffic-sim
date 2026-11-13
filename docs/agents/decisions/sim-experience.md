@@ -350,3 +350,13 @@ Owner agreed the spec and the T1–T13 ticket breakdown and authorised implement
 - **Only new pieces join.** Moving, turning or swapping a piece that's already placed never grows junctions, so signs stay on their approaches and turning a piece doesn't change its neighbours.
 - **Heights:** only ground-level road ends join a road's side. A ramp's foot can; a bridge deck or a ramp's top can't. No snap ever puts a piece below the ground.
 - **Preview:** it shows each piece that will become a junction as a translucent copy of its new shape (and the new piece as its junction shape, when it grows), labelled "✓ Makes a T-junction" or "✓ Makes a crossroads". Undo restores the original pieces.
+## Vehicle card (P11, #52) — 2026-11-13
+
+- **Opening it:** clicking a vehicle opens its card in the road inspector's place and style (top-left), whether the run is going or paused. Clicking a road piece switches back to the road inspector, and × closes the card.
+- **Contents:** built by `describeVehicle` (unit-tested):
+  - **Vehicle:** the type's length, top speed, strongest acceleration and hardest braking.
+  - **Driver:** every preference drawn for this driver, namely profile, speed against the limit, following time, smallest gap, acceleration used, comfortable braking, gap accepted at junctions, how often they obey signs and signals, patience, how often they let others out, and how much they watch for queues.
+  - **Now:** position (tile), the piece it's on, heading, speed, wanted speed, acceleration, what it's doing, and time held up.
+  - **Trajectory:** the exit (or driveway) it's heading for, the distance left, and the next pieces.
+- **On the map:** the remaining route is drawn as a 4 px pink line from a ring at the vehicle to its exit.
+- **Updates:** the card refreshes every 200 ms. Only the values change, so the × is never rebuilt under a click. The route is redrawn only when it moves, so a paused run with the card open costs nothing. A vehicle that leaves the board is marked "left the board", and its route disappears.

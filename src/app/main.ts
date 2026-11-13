@@ -1,4 +1,12 @@
-import { type Group, type Object3D, PCFSoftShadowMap, PerspectiveCamera, Timer, WebGLRenderer } from 'three';
+import { DoubleSide, Group, Mesh, MeshBasicMaterial, type Object3D, PCFSoftShadowMap, PerspectiveCamera, RingGeometry, Timer, WebGLRenderer } from 'three';
+import { Line2 } from 'three/examples/jsm/lines/Line2.js';
+import { LineGeometry } from 'three/examples/jsm/lines/LineGeometry.js';
+import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
+import type { LaneGraph } from '../simulation/network/buildLaneGraph';
+import type { TrafficSimulation } from '../simulation/traffic/trafficSimulation';
+import { boardToWorld } from '../scenes/board';
+import { createVehicleCard } from '../components/vehicleCard';
+import { describeVehicle } from '../components/vehicleDetails';
 import type { SceneDefinition } from '../simulation/network/scene';
 import { createEditor } from './editor';
 import { demandFollowsEntries } from '../editor/edits';
@@ -141,6 +149,72 @@ const MAX_FRAME_GAP_MS = 100;
 let drewLast = false;
 let lastFrameTime = 0;
 
+// ---- A clicked vehicle: its card (where the road inspector goes) and the rest of its route on the map ----
+/** How often the open card's values refresh, ms (it changes as the vehicle drives). */
+const CARD_REFRESH_MS = 200;
+const ROUTE_LIFT = 0.03; // tiles above the road, so the line isn't hidden in it
+let inspected: number | null = null;
+let vehicleAt: ((ndc: { x: number; y: number }) => number | undefined) | null = null;
+let inspectedGraph: LaneGraph | null = null;
+let cardRefreshedAt = -Infinity;
+/** The rest of the inspected vehicle's route: a 4 px line (plain WebGL lines are 1 px), drawn over the roads. */
+const ROUTE_COLOUR = '#f487b6';
+const routeMaterial = new LineMaterial({ color: ROUTE_COLOUR, linewidth: 4, depthTest: false, transparent: true });
+const routeLine = new Group();
+routeLine.name = 'inspected-route';
+routeLine.renderOrder = 10;
+routeLine.visible = false;
+let routePath: Line2 | null = null;
+let drawnRoute = '';
+/** A ring at the vehicle, where its route starts. */
+const routeStart = new Mesh(new RingGeometry(0.9, 1.3, 32), new MeshBasicMaterial({ color: ROUTE_COLOUR, depthTest: false, transparent: true, side: DoubleSide }));
+routeStart.rotation.x = -Math.PI / 2;
+routeStart.renderOrder = 10;
+routeLine.add(routeStart);
+const vehicleCard = createVehicleCard(viewport, () => inspectVehicle(null));
+/** Open the card for a vehicle, or close it (null). The road inspector closes while a vehicle's card is open. */
+function inspectVehicle(id: number | null) {
+  inspected = id;
+  cardRefreshedAt = -Infinity;
+  drawnRoute = '';
+  if (id === null) {
+    vehicleCard.hide();
+    routeLine.visible = false;
+  }
+  requestRender();
+}
+function syncVehicleCard(simulation: TrafficSimulation, now: number) {
+  if (inspected === null || !inspectedGraph || now - cardRefreshedAt < CARD_REFRESH_MS) return;
+  cardRefreshedAt = now;
+  if (!simulation.has(inspected)) {
+    vehicleCard.gone();
+    if (routeLine.visible) {
+      routeLine.visible = false;
+      requestRender();
+    }
+    return;
+  }
+  const details = describeVehicle(simulation.vehicle(inspected), inspectedGraph, store.current());
+  vehicleCard.show(inspected, details);
+  // Redraw only when the route moved (a paused run's open card costs nothing).
+  const key = `${details.path.length}:${details.path[0].join(',')}`;
+  if (key === drawnRoute && routeLine.visible) return;
+  drawnRoute = key;
+  const points = details.path.map(([x, y, z]) => boardToWorld([x, y + ROUTE_LIFT, z]));
+  if (routePath) {
+    routeLine.remove(routePath);
+    routePath.geometry.dispose();
+  }
+  routePath = new Line2(new LineGeometry().setPositions(points.flat()), routeMaterial);
+  routePath.renderOrder = 10;
+  routePath.computeLineDistances();
+  routeLine.add(routePath);
+  routeStart.position.set(...points[0]);
+  routeMaterial.resolution.set(renderer.domElement.clientWidth, renderer.domElement.clientHeight); // CSS pixels: linewidth is in these
+  routeLine.visible = true;
+  requestRender();
+}
+
 // ---- Drawing on demand: an idle map isn't drawn at all ----
 const draws = new DrawOnDemand();
 const requestRender = () => draws.request();
@@ -278,8 +352,13 @@ async function show(mode: 'open' | 'edit'): Promise<boolean> {
     scene.add(queueLabels.group);
     tooltip ??= createVehicleTooltip(viewport, renderer.domElement);
     const pickVehicle = createVehiclePicker(traffic.group);
+    vehicleAt = (ndc) => pickVehicle(camera, ndc);
+    inspectedGraph = graph;
+    scene.add(routeLine);
+    if (opening) inspectVehicle(null);
     currentView = view;
-    currentLayers = [traffic.group, queueLabels.group];
+    // Shared layers come out of the old scene before it's disposed (the route line keeps its material).
+    currentLayers = [traffic.group, queueLabels.group, routeLine];
     exposeTrafficDebug({
       canvas: renderer.domElement,
       camera,
@@ -320,6 +399,7 @@ async function show(mode: 'open' | 'edit'): Promise<boolean> {
       updateBlocked(current.simulation.blockedAtEntries());
       queueLabels.update(current.liveQueues());
       tooltip!.update((ndc) => pickVehicle(camera, ndc), current.simulation, time);
+      syncVehicleCard(current.simulation, time);
       syncRunUi();
       const editorChanged = editor.sync();
       // Draw only when something on the map changed: an idle map costs nothing.
@@ -377,6 +457,13 @@ const editorModels = new Map<string, Promise<Group>>();
 const editorLoader = createAssetLoader(import.meta.env.BASE_URL);
 const editor = createEditor({
   viewport,
+  inspectVehicleAt: (event) => {
+    if (!vehicleAt) return false;
+    const rect = renderer.domElement.getBoundingClientRect();
+    const id = vehicleAt({ x: ((event.clientX - rect.left) / rect.width) * 2 - 1, y: -((event.clientY - rect.top) / rect.height) * 2 + 1 });
+    inspectVehicle(id ?? null);
+    return id !== undefined;
+  },
   cameraPanel: cameraControls,
   dock: dock.element,
   trayToggled: resize,
