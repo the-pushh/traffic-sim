@@ -391,3 +391,11 @@ Owner agreed the spec and the T1–T13 ticket breakdown and authorised implement
   - **Doing:** what it's doing now;
   - **Heading for:** exit or driveway · distance left.
 - **Show more details** opens the full sections (vehicle, driver, now, trajectory), and "Hide details" closes them. The button has `aria-expanded`, and its state carries over to the next vehicle. The highlights refresh with the rest of the card; the route on the map is unchanged.
+
+## Reset View in the dock; slim camera panel; Customise (P16, #63) — 2026-11-13
+
+- **Reset View** is one icon button in the dock (Phosphor "frame corners", labelled "Reset view"), and it's gone from the camera panel. It does the same as before and is enabled once a scene has loaded.
+- **Camera panel:** a slim pill of three round icon buttons (zoom in, zoom out, light or dark).
+- **Customise:** the Parts button is now "Customise", with one icon: Phosphor's regular wrench and a mirrored hammer crossed into one (`src/components/icons-custom/tools-crossed.svg`).
+- **Tray header** (the owner's own edit): it reads "Components — Drag a component onto the map", and the Rotate, Undo and Redo buttons are gone. Turning is on R or Space, undo on Ctrl/⌘ Z, and redo on Shift+Ctrl/⌘ Z. The editor no longer assumes those buttons exist.
+- **Browser checks** compare the scene above the bottom panels, so a control's hover or focus in the dock isn't taken for a view change.

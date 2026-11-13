@@ -149,8 +149,8 @@ body {
   right: var(--space-4);
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
-  padding: var(--space-2);
+  gap: var(--space-1);
+  padding: var(--space-1);
   background: color-mix(in srgb, var(--color-surface) 92%, transparent);
   border-radius: var(--radius);
 }
@@ -285,16 +285,17 @@ button.primary {
   gap: var(--space-2);
 }
 
+.parts-toggle .icon-toolsCrossed {
+  width: 22px;
+  height: 22px;
+}
+
 .parts-toggle {
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
 }
 
-.parts-toggle-icons {
-  display: inline-flex;
-  gap: 1px;
-}
 
 .camera-controls button[data-action^='zoom'] .icon,
 .theme-toggle .icon {
@@ -679,9 +680,18 @@ body {
   backdrop-filter: var(--glass-blur);
 }
 
+/* A slim strip of icon buttons: zoom in, zoom out, light or dark. */
 .camera-controls {
-  border-radius: var(--radius-lg);
-  padding: var(--space-3);
+  border-radius: var(--radius-pill);
+  padding: var(--space-1);
+}
+
+.camera-controls button {
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  padding: 0;
+  border-radius: 50%;
 }
 
 .vehicle-tooltip,
