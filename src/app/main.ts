@@ -30,6 +30,7 @@ import { createTrafficLayer, VEHICLE_MODEL_NAMES } from '../three/scene/trafficL
 import { createVehiclePicker } from '../three/scene/vehiclePicker';
 import { exposeTrafficDebug } from './devHooks';
 import { DrawOnDemand } from '../three/render/drawOnDemand';
+import { renderThumbnails } from '../three/thumbnails/partThumbnails';
 import { ResolutionGovernor } from '../three/render/resolutionGovernor';
 import { TrafficSession } from '../simulation/traffic/trafficSession';
 
@@ -177,9 +178,26 @@ const routeStart = new Mesh(new RingGeometry(0.9, 1.3, 32), new MeshBasicMateria
 routeStart.rotation.x = -Math.PI / 2;
 routeLine.add(routeStart);
 const vehicleCard = createVehicleCard(viewport, () => inspectVehicle(null));
+/** Pictures of the vehicle models for the card, drawn once each from the loaded models. */
+const VEHICLE_PICTURE_SIZE = 120;
+const vehiclePictures = new Map<string, Promise<string | null>>();
+let picturedVehicle: number | null = null;
+function vehiclePicture(model: string): Promise<string | null> {
+  let picture = vehiclePictures.get(model);
+  if (!picture) {
+    const loaded = vehicleModels?.[VEHICLE_MODEL_NAMES.indexOf(model)];
+    if (!loaded) return Promise.resolve(null);
+    picture = new Promise<string | null>((resolve) => {
+      void renderThumbnails([model], async () => loaded, (_, url) => resolve(url), VEHICLE_PICTURE_SIZE).then(() => resolve(null));
+    });
+    vehiclePictures.set(model, picture);
+  }
+  return picture;
+}
 /** Open the card for a vehicle, or close it (null). The road inspector closes while a vehicle's card is open. */
 function inspectVehicle(id: number | null) {
   inspected = id;
+  picturedVehicle = null;
   cardRefreshedAt = -Infinity;
   drawnRoute = '';
   if (id === null) {
@@ -201,6 +219,11 @@ function syncVehicleCard(simulation: TrafficSimulation, now: number) {
   }
   const details = describeVehicle(simulation.vehicle(inspected), inspectedGraph, store.current());
   vehicleCard.show(inspected, details);
+  if (picturedVehicle !== inspected) {
+    picturedVehicle = inspected;
+    const id = inspected;
+    void vehiclePicture(details.model).then((url) => url && vehicleCard.picture(id, url));
+  }
   // Redraw only when the route moved (a paused run's open card costs nothing).
   const key = `${details.path.length}:${details.path[0].join(',')}`;
   if (key === drawnRoute && routeLine.visible) return;

@@ -1,3 +1,4 @@
+import { modelFor } from '../../simulation/traffic/vehicleTypes';
 import { Box3, Group, type Mesh, type Object3D, Vector3 } from 'three';
 import { boardToWorld, TILE_SIZE } from '../../scenes/board';
 import type { LaneGraph } from '../../simulation/network/buildLaneGraph';
@@ -25,7 +26,7 @@ export function createTrafficLayer(graph: LaneGraph, models: Map<string, Object3
   const modelSize = new Map([...models].map(([name, model]) => [name, new Box3().setFromObject(model).getSize(new Vector3())]));
 
   function create(v: VehicleState) {
-    const name = v.type.models[v.id % v.type.models.length];
+    const name = modelFor(v);
     const object = models.get(name)!.clone();
     // Real length; width (and height with it) capped so wide models stay inside their lane.
     const size = modelSize.get(name)!;

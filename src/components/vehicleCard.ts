@@ -51,6 +51,7 @@ export function createVehicleCard(container: HTMLElement, onClose: () => void) {
             <h2>${escapeHtml(details.title)} <span class="vehicle-id">#${id}</span></h2>
             <button type="button" class="vehicle-card-close" aria-label="Close vehicle details">×</button>
           </header>
+          <div class="vehicle-picture" aria-hidden="true"></div>
           <dl class="vehicle-highlights">${details.highlights.map(([label]) => `<dt>${escapeHtml(label)}</dt><dd></dd>`).join('')}</dl>
           <button type="button" class="vehicle-details-toggle" aria-controls="vehicle-card-details"></button>
           <div class="vehicle-card-body" id="vehicle-card-details">
@@ -67,6 +68,12 @@ export function createVehicleCard(container: HTMLElement, onClose: () => void) {
         if (values[i].textContent !== value) values[i].textContent = value;
       });
       card.hidden = false;
+    },
+    /** Show a picture of the vehicle's model (once it's drawn) for vehicle `id`, if its card is still open. */
+    picture(id: number, dataUrl: string) {
+      if (shownFor !== id) return;
+      const slot = card.querySelector<HTMLElement>('.vehicle-picture');
+      if (slot) slot.style.backgroundImage = `url("${dataUrl}")`;
     },
     /** The vehicle has left the board: say so, and keep its last details. */
     gone() {
