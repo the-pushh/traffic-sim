@@ -1,7 +1,7 @@
 import { Box3, Group, type Mesh, type Object3D, Vector3 } from 'three';
 import { boardToWorld, TILE_SIZE } from '../../scenes/board';
 import type { LaneGraph } from '../../simulation/network/buildLaneGraph';
-import { pointAlongLane } from '../../simulation/network/laneGeometry';
+import { vehicleCentre } from '../../simulation/traffic/vehicleCentre';
 import { METRES_PER_TILE, type TrafficSimulation, type VehicleState } from '../../simulation/traffic/trafficSimulation';
 import { VEHICLE_TYPES, modelFor } from '../../simulation/traffic/vehicleTypes';
 
@@ -45,16 +45,7 @@ export function createTrafficLayer(graph: LaneGraph, models: Map<string, Object3
     return object;
   }
 
-  /** The vehicle's centre: half its length behind the front bumper, on the previous lane if need be. */
-  function centre(v: VehicleState) {
-    let laneIndex = v.routeIndex;
-    let distance = (v.position - v.type.length / 2) / METRES_PER_TILE;
-    while (distance < 0 && laneIndex > 0) {
-      laneIndex--;
-      distance += graph.lanes[v.route[laneIndex]].length;
-    }
-    return pointAlongLane(graph.lanes[v.route[laneIndex]], distance);
-  }
+  const centre = (v: VehicleState) => vehicleCentre(v, graph);
 
   let shown: TrafficSimulation | null = null;
 

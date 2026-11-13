@@ -445,3 +445,7 @@ Owner agreed the spec and the T1–T13 ticket breakdown and authorised implement
 - **Lock text:** "· locked during the run" is now screen-reader only (`visually-hidden`); the dock's controls are still disabled and greyed during a run.
 - **Results:** the card and "Show results" live in a new `.top-stack` at the top centre, clear of the dock and the map's bottom.
 - **Animation:** the card grows open from its top centre (scale 0.8 → 1 and fades in, 180 ms) and shrinks closed the same way. It's hidden once the shrink ends (only the card's own transform counts), and reopening mid-close cancels the close. Show results appears, and takes focus after ×, once the card has closed, so it doesn't jump. On narrower windows the card fits between the side panels and its numbers go into two columns. With reduced motion it appears and disappears at once.
+
+## Route ring at the vehicle's centre — 2026-11-14
+
+- **Owner:** "the circle on the target of the vehicle is on the front of the vehicle but it should be in the center of the vehicle". The ring now sits at the vehicle's centre, half its length behind the front bumper, where the map draws it. `vehicleCentre` (`src/simulation/traffic/vehicleCentre.ts`) is shared by the traffic layer and the card's details (`centre`, unit-tested). The route itself still runs on from the front.

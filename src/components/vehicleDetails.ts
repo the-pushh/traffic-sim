@@ -3,11 +3,14 @@ import type { LaneGraph, Point3 } from '../simulation/network/buildLaneGraph';
 import { pointAlongLane } from '../simulation/network/laneGeometry';
 import type { SceneDefinition } from '../simulation/network/scene';
 import { METRES_PER_TILE, type VehicleState } from '../simulation/traffic/trafficSimulation';
+import { vehicleCentre } from '../simulation/traffic/vehicleCentre';
 import { modelFor } from '../simulation/traffic/vehicleTypes';
 
 /** A vehicle's card: a title, labelled rows in sections, and the rest of its route to draw on the map. */
 export interface VehicleDetails {
   title: string;
+  /** Its centre on the board (tiles; x, height, z): where the map draws it and its route ring sits. */
+  centre: Point3;
   /** The Car Kit model drawn for it on the map (for its picture on the card). */
   model: string;
   /** What the card shows first: the driver and their habits, the speed, what it's doing, where it's going. */
@@ -68,6 +71,7 @@ export function describeVehicle(v: VehicleState, graph: LaneGraph, scene: SceneD
   return {
     title: `${v.type.label} · ${d.label} driver`,
     model: modelFor(v),
+    centre: vehicleCentre(v, graph).point,
     highlights: [
       ['Driver', d.label],
       ['Habits', `${fixed(d.headway, 's')} gap · obeys ${percent(d.compliance)}`],
