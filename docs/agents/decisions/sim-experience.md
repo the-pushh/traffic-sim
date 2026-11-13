@@ -404,3 +404,8 @@ Owner agreed the spec and the T1–T13 ticket breakdown and authorised implement
 
 - **Markers:** the yellow "+" markers at open road ends are removed, because a part placed there snaps to the end anyway (owner). Scenery still keeps clear of those spots.
 - **Joining** (narrowing P10): only a **straight** road placed with its end against the side of a plain road piece makes a junction, as in the owner's original example. That piece becomes a T-junction, or a T becomes a crossroads. Bends, curves, ramps and other parts placed against a road leave it as it is, and only a straight laid across an open end grows an arm. The owner said converting for curves was "random and unnecessary".
+
+## Reset View button removed (2026-11-13)
+
+- **Owner:** remove the Reset View button from the dock. There is no on-screen Reset View now. Opening a scene still frames the view afresh, and the camera panel keeps zoom in, zoom out and the theme switch.
+- **Browser checks:** the focus and Space-pan checks use the Zoom in button instead, and a check confirms no Reset View button remains.
