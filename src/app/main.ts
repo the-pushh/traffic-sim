@@ -1,7 +1,5 @@
-import { DoubleSide, Group, Mesh, MeshBasicMaterial, type Object3D, PCFSoftShadowMap, PerspectiveCamera, RingGeometry, Timer, WebGLRenderer } from 'three';
-import { Line2 } from 'three/examples/jsm/lines/Line2.js';
-import { LineGeometry } from 'three/examples/jsm/lines/LineGeometry.js';
-import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
+import { BufferAttribute, BufferGeometry, DoubleSide, Group, Mesh, MeshBasicMaterial, type Object3D, PCFSoftShadowMap, PerspectiveCamera, RingGeometry, Timer, WebGLRenderer } from 'three';
+import { routeRibbon } from '../three/scene/routeRibbon';
 import type { LaneGraph } from '../simulation/network/buildLaneGraph';
 import type { TrafficSimulation } from '../simulation/traffic/trafficSimulation';
 import { boardToWorld } from '../scenes/board';
@@ -159,18 +157,19 @@ let vehicleAt: ((ndc: { x: number; y: number }) => number | undefined) | null = 
 let inspectedGraph: LaneGraph | null = null;
 let cardRefreshedAt = -Infinity;
 /**
- * The rest of the inspected vehicle's route, painted on the road: a band in world units (so it
- * scales with the road), depth-tested so vehicles on it hide it, and drawn after them (transparent)
- * without writing depth. A small depth offset keeps it on top of the road surface itself.
+ * The rest of the inspected vehicle's route, painted on the road: a flat ribbon lying on the
+ * road surface (`routeRibbon`), depth-tested so vehicles, signs and trees in front hide it, and
+ * drawn after them (transparent) without writing depth. A small depth offset keeps it on top of
+ * the road surface itself.
  */
 const ROUTE_COLOUR = '#f487b6';
 const ROUTE_WIDTH = 0.45; // world units: about a third of a lane
 const onRoad = { depthTest: true, depthWrite: false, transparent: true, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 };
-const routeMaterial = new LineMaterial({ color: ROUTE_COLOUR, linewidth: ROUTE_WIDTH, worldUnits: true, ...onRoad });
+const routeMaterial = new MeshBasicMaterial({ color: ROUTE_COLOUR, side: DoubleSide, ...onRoad });
 const routeLine = new Group();
 routeLine.name = 'inspected-route';
 routeLine.visible = false;
-let routePath: Line2 | null = null;
+let routePath: Mesh | null = null;
 let drawnRoute = '';
 /** A ring at the vehicle, where its route starts. */
 const routeStart = new Mesh(new RingGeometry(0.9, 1.3, 32), new MeshBasicMaterial({ color: ROUTE_COLOUR, side: DoubleSide, ...onRoad }));
@@ -210,11 +209,13 @@ function syncVehicleCard(simulation: TrafficSimulation, now: number) {
     routeLine.remove(routePath);
     routePath.geometry.dispose();
   }
-  routePath = new Line2(new LineGeometry().setPositions(points.flat()), routeMaterial);
-  routePath.computeLineDistances();
+  const ribbon = routeRibbon(points, ROUTE_WIDTH);
+  const geometry = new BufferGeometry();
+  geometry.setAttribute('position', new BufferAttribute(ribbon.positions, 3));
+  geometry.setIndex(ribbon.indices);
+  routePath = new Mesh(geometry, routeMaterial);
   routeLine.add(routePath);
   routeStart.position.set(...points[0]);
-  routeMaterial.resolution.set(renderer.domElement.clientWidth, renderer.domElement.clientHeight); // still needed by the line shader
   routeLine.visible = true;
   requestRender();
 }

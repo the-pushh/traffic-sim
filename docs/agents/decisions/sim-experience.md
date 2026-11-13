@@ -358,14 +358,14 @@ Owner agreed the spec and the T1–T13 ticket breakdown and authorised implement
   - **Driver:** every preference drawn for this driver, namely profile, speed against the limit, following time, smallest gap, acceleration used, comfortable braking, gap accepted at junctions, how often they obey signs and signals, patience, how often they let others out, and how much they watch for queues.
   - **Now:** position (tile), the piece it's on, heading, speed, wanted speed, acceleration, what it's doing, and time held up.
   - **Trajectory:** the exit (or driveway) it's heading for, the distance left, and the next pieces.
-- **On the map:** the remaining route is drawn as a 4 px pink line from a ring at the vehicle to its exit.
+- **On the map:** the remaining route is drawn in pink from a ring at the vehicle to its exit (since P13, a flat ribbon on the road that vehicles hide; see below).
 - **Updates:** the card refreshes every 200 ms. Only the values change, so the × is never rebuilt under a click. The route is redrawn only when it moves, so a paused run with the card open costs nothing. A vehicle that leaves the board is marked "left the board", and its route disappears.
 
 ## Owner feedback: earlier interface, route on the road, plain background (P13, #57) — 2026-11-13
 
 - **Interface:** the hardware-style controls (P12, #56) are reverted, because the owner preferred the earlier interface. The glass dock with Phosphor icons, the scene pill, and the camera panel with its joystick are back. The hardware work stays on its branch.
 - **Route line:** the inspected vehicle's route is painted on the road, not drawn over everything.
-  - It's a band in world units (0.45, about a third of a lane), 0.025 tiles up, just on the road surface where vehicles stand.
+  - It's a flat ribbon mesh (`routeRibbon`, unit-tested), 0.45 world units wide (about a third of a lane), 0.025 tiles up, just on the road surface where vehicles stand. It climbs ramps with the lanes, and corners are mitred. (Thick lines in world units would face the camera and sink half into the road.)
   - It's depth-tested without writing depth and drawn after the cars, so vehicles, signs and trees in front hide it. A polygon offset keeps it from flickering into the road.
   - The ring at the vehicle sits under it in the same way.
 - **Background:** the coloured vertical columns (P4) are removed. The page is the plain background colour, with the topographic contours (P9) as the only pattern.

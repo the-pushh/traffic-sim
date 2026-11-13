@@ -633,6 +633,10 @@ if (isDevServer) {
     opened = await card.waitFor({ state: 'visible', timeout: 2000 }).then(() => true, () => false);
     const text = (await card.textContent()) ?? '';
     opened &&= ['Vehicle', 'Driver', 'Now', 'Trajectory', 'Following time', 'Heading for', 'Distance left'].every((t) => text.includes(t));
+    // Its route (P13): a flat ribbon on the road that vehicles in front hide (depth-tested, not drawn over everything).
+    await page.waitForTimeout(300); // the card's first refresh draws the route
+    const route = await page.evaluate(() => window.__trafficDebug.route());
+    vehicleCardChecks.routeOnTheRoadUnderVehicles = route.shown && route.depthTested && !route.writesDepth;
     const position = () => page.locator('.vehicle-card dt', { hasText: 'Position' }).locator('xpath=following-sibling::dd[1]').textContent();
     const before = await position();
     await page.waitForTimeout(1200);
