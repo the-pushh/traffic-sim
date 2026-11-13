@@ -399,3 +399,8 @@ Owner agreed the spec and the T1–T13 ticket breakdown and authorised implement
 - **Customise:** the Parts button is now "Customise", with one icon: Phosphor's regular wrench and a mirrored hammer crossed into one (`src/components/icons-custom/tools-crossed.svg`).
 - **Tray header** (the owner's own edit): it reads "Components — Drag a component onto the map", and the Rotate, Undo and Redo buttons are gone. Turning is on R or Space, undo on Ctrl/⌘ Z, and redo on Shift+Ctrl/⌘ Z. The editor no longer assumes those buttons exist.
 - **Browser checks** compare the scene above the bottom panels, so a control's hover or focus in the dock isn't taken for a view change.
+
+## No "+" markers; only straights join (P17, #65) — 2026-11-13
+
+- **Markers:** the yellow "+" markers at open road ends are removed, because a part placed there snaps to the end anyway (owner). Scenery still keeps clear of those spots.
+- **Joining** (narrowing P10): only a **straight** road placed with its end against the side of a plain road piece makes a junction, as in the owner's original example. That piece becomes a T-junction, or a T becomes a crossroads. Bends, curves, ramps and other parts placed against a road leave it as it is, and only a straight laid across an open end grows an arm. The owner said converting for curves was "random and unnecessary".

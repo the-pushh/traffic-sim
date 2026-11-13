@@ -122,8 +122,26 @@ describe('placement rules (shared by preview and drop)', () => {
       expect(result.placement!.level ?? 0, `${part} at ${rotation}°`).toBeGreaterThanOrEqual(0);
       if (part === 'bridge') expect(result.joins, `${part} at ${rotation}°`).toBeUndefined(); // both ends are raised
     }
-    // A ramp whose foot meets the road's side joins it at ground level.
+    // A ramp whose foot meets the road's side doesn't turn it into a junction (only straights do, P17).
     const foot = placePart(road, { part: 'ramp-steep', pointer: [2.6, 7.4], rotation: 90 });
-    expect(foot).toMatchObject({ valid: true, placement: { level: 0 }, joins: [{ index: 2, from: 'straight', to: 't-junction' }] });
+    expect(foot.joins).toBeUndefined();
+    expect(foot.scene?.pieces[2].piece ?? 'straight').toBe('straight');
+  });
+
+  it('only a straight road joins: a bend or curve placed against a road leaves it as it is (P17)', () => {
+    for (const [part, rotation, pointer] of [['bend', 0, [2.5, 7.5]], ['bend', 90, [2.5, 7.5]], ['curve', 0, [2.5, 7]]] as const) {
+      for (const turn of [0, 90, 180, 270] as const) {
+        const result = placePart(road, { part, pointer: [...pointer], rotation: ((rotation + turn) % 360) as 0 | 90 | 180 | 270 });
+        expect(result.joins, `${part} at ${(rotation + turn) % 360}°`).toBeUndefined();
+        if (result.scene) expect(result.scene.pieces[2].piece).toBe('straight');
+      }
+    }
+  });
+
+  it('only a straight laid across an open road end grows the arm', () => {
+    // A T-junction (or any non-straight) dropped over the end keeps its own shape.
+    const tee = placePart(road, { part: 't-junction', pointer: [5.5, 8.5], rotation: 90 });
+    expect(tee.joins).toBeUndefined();
+    expect(tee.placement!.piece).toBe('t-junction');
   });
 });

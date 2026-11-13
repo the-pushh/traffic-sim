@@ -67,7 +67,6 @@ const ROAD_SURFACE = 0.02;
 /** 3D-scene marker colours (kept separate from the interface palette). */
 const LANE_COLOR = '#dfe9ff';
 const GATEWAY_COLOR = '#2f6fd6';
-const OPEN_END_COLOR = '#f2c14e';
 const ACCESS_COLOR = '#e07a5f';
 const BLOCKED_COLOR = '#c62f2f';
 
@@ -229,17 +228,7 @@ function createLaneOverlay(graph: LaneGraph) {
     label.position.copy(world([gateway.at[0], 0, gateway.at[1]], 1.4));
     overlay.add(label);
   }
-  const ring = new RingGeometry(0.9, 1.15, 32);
-  const openEndMaterial = new MeshBasicMaterial({ color: OPEN_END_COLOR });
-  for (const end of graph.openEnds) {
-    const marker = new Mesh(ring, openEndMaterial);
-    marker.rotation.x = -Math.PI / 2;
-    marker.position.copy(world([end.at[0] + end.facing[0] * 0.35, end.level, end.at[1] + end.facing[1] * 0.35], lift));
-    overlay.add(marker);
-    const plus = textSprite('+', OPEN_END_COLOR);
-    plus.position.copy(marker.position).add(new Vector3(0, 1.2, 0));
-    overlay.add(plus);
-  }
+  // Open road ends aren't marked (the owner removed the "+" markers): a part placed there snaps to the end anyway.
   // Driveways: where local trips start and end. Labelled with a house, not colour alone.
   const pad = new RingGeometry(0, 0.45, 4);
   const padMaterial = new MeshBasicMaterial({ color: ACCESS_COLOR });

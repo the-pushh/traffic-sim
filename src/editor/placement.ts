@@ -66,7 +66,9 @@ function placePiece(scene: SceneDefinition, request: PlacementRequest): Placemen
   let placement: PiecePlacement = snap?.placement ?? { piece: request.part, at: gridPosition(request.part, request.rotation, request.pointer), rotation: request.rotation, level: request.level ?? 0 };
   if (!def.ports.length) placement.level = request.level ?? 0;
   // Roads that touch the side of a piece join it: that piece becomes a junction.
-  const joined = request.join === false ? { scene, placement, joins: [] as Join[] } : joinTouching(scene, placement);
+  // Only a straight road joins the roads it touches (P17: bends, curves and ramps placed beside a road leave it alone).
+  const joins = request.join !== false && request.part === JOINING_PART;
+  const joined = joins ? joinTouching(scene, placement) : { scene, placement, joins: [] as Join[] };
   placement = joined.placement;
   const edited: SceneDefinition = { ...joined.scene, pieces: [...joined.scene.pieces, placement] };
   const fail = (reason: string): PlacementResult => ({ valid: false, reason, scene: null, placement, snappedTo: snap?.at ?? null });
@@ -87,7 +89,7 @@ function snapToOpenEnd(scene: SceneDefinition, request: PlacementRequest) {
   let best: { placement: PiecePlacement; at: [number, number, number]; distance: number } | null = null;
   const candidates = [
     ...openRoadEnds(scene).map((e) => ({ ...e, radius: SNAP_RADIUS, joinOnly: false })),
-    ...(request.join === false ? [] : joinPoints(scene).map((e) => ({ ...e, radius: JOIN_SNAP_RADIUS, joinOnly: true }))),
+    ...(request.join === false || request.part !== JOINING_PART ? [] : joinPoints(scene).map((e) => ({ ...e, radius: JOIN_SNAP_RADIUS, joinOnly: true }))),
   ];
   for (const end of candidates) {
     for (const port of def.ports.filter((p) => p.profile === 'road')) {
@@ -212,6 +214,8 @@ const compassOf = ([x, z]: [number, number]): Compass => (Math.abs(x) > Math.abs
 /** One-tile, ground-level, two-way road pieces that can grow an arm (and the shapes they can become). */
 const JOINABLE = new Set(['straight', 'bend', 't-junction']);
 const JUNCTION_SHAPES = ['straight', 'bend', 't-junction', 'crossroad'];
+/** The one part that joins roads when placed against them (the owner's case: a straight road end-on to a road). */
+const JOINING_PART = 'straight';
 const ROTATIONS: QuarterTurn[] = [0, 90, 180, 270];
 
 /** The compass directions a placed piece's road ends face. */
