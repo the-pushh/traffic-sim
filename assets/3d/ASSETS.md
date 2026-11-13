@@ -26,7 +26,7 @@ CC0 (`License.txt`). 329 models each in GLB, FBX, OBJ, DAE and STL, plus isometr
 
 **Drawn at** `NATURE_SCALE` = 0.55 tiles per kit unit, so a default tree stands about 0.9 tiles (twice a car's height). Each item's reach (half its footprint diagonal, measured with Three.js) is in `SCENERY_MODELS`: trees 0.27, grass 0.16, bushes 0.15, rocks 0.14, flowers 0.07 tiles.
 
-**Placement:** `sceneryFor(scene)` (`src/scenes/scenery.ts`) fills about 45% of the tiles no road covers. The board's corner tiles are skipped. Each item stays inside its own tile, clear of the tile's edges by its reach, so it can never touch a road. Placement is seeded per scene and tile.
+**Placement:** `sceneryFor(scene)` (`src/scenes/scenery.ts`) fills about 45% of the tiles no road covers. The board's corner tiles are skipped. Each item stays inside its own tile, clear of the tile's edges by its reach, so it can never touch a road. It also keeps clear of the spots beside road ends for signs and open-end markers. Placement is seeded per scene and tile.
 
 **Not used** (available): the other trees (fall and dark variants, palms, pines), cliffs, paths, fences, crops, tents, logs, mushrooms, water and ground tiles.
 

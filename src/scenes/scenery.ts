@@ -1,4 +1,5 @@
-import { rotate } from '../simulation/network/geometry';
+import { portPose } from '../simulation/network/buildLaneGraph';
+import { rightOf, rotate } from '../simulation/network/geometry';
 import { PIECES } from '../simulation/network/pieces';
 import { BOARD_TILES, type SceneDefinition } from '../simulation/network/scene';
 
@@ -38,14 +39,22 @@ const FILL = 0.45;
 const SECOND = 0.3;
 /** Scenery keeps this far inside its tile beyond its own reach, so it never touches a neighbouring road. */
 const EDGE_GAP = 0.03;
+/** Where the map may stand things beside a road end, in tiles from the end's centre: a sign either side, a "+" marker beyond. */
+const SIGN_OFFSET = 0.55;
+const MARKER_OFFSET = 0.35;
+/** Scenery keeps this far (beyond its own reach) from those spots, tiles. */
+const SPOT_CLEARANCE = 0.25;
 
 /**
- * Trees, bushes, grass, rocks and flowers on the tiles no road covers. Each tile's scenery
- * depends only on the scene's id and that tile, and stays inside the tile, so the same scene
- * always looks the same and an edit only changes the tiles it covers or frees.
+ * Trees, bushes, grass, rocks and flowers on the tiles no road covers, clear of the spots
+ * beside road ends where signs and open-end markers stand. Each tile's scenery depends only
+ * on the scene's id, that tile and the roads next to it, and stays inside the tile, so the
+ * same scene always looks the same and an edit only changes the tiles around it.
  */
 export function sceneryFor(scene: SceneDefinition): SceneryItem[] {
   const covered = coveredTiles(scene);
+  const spots = roadsideSpots(scene);
+  const clear = (s: SceneryItem) => spots.every(([x, z]) => Math.hypot(s.at[0] - x, s.at[1] - z) > s.radius + SPOT_CLEARANCE);
   const items: SceneryItem[] = [];
   for (let x = 0; x < BOARD_TILES; x++) {
     for (let z = 0; z < BOARD_TILES; z++) {
@@ -53,8 +62,10 @@ export function sceneryFor(scene: SceneDefinition): SceneryItem[] {
       if (corner || covered.has(`${x},${z}`)) continue;
       const random = tileRandom(scene.id, x, z);
       if (random() >= FILL) continue;
-      items.push(item(random, x, z, pickKind(random())));
-      if (random() < SECOND) items.push(item(random, x, z, random() < 0.5 ? 'grass' : 'flower'));
+      // Draw both before checking, so a skipped one doesn't shift what the tile gets otherwise.
+      const first = item(random, x, z, pickKind(random()));
+      const second = random() < SECOND ? item(random, x, z, random() < 0.5 ? 'grass' : 'flower') : null;
+      for (const s of [first, second]) if (s && clear(s)) items.push(s);
     }
   }
   return items;
@@ -82,6 +93,28 @@ function pickKind(r: number): SceneryKind {
     if (r < sum) return kind;
   }
   return 'tree';
+}
+
+/**
+ * Beside every road end: where a sign would stand (either side of the approach) and where an
+ * open end's "+" marker goes (just beyond it), whether or not one is there now, so adding a
+ * sign never moves a tree.
+ */
+function roadsideSpots(scene: SceneDefinition): [number, number][] {
+  return scene.pieces.flatMap((placement) =>
+    PIECES[placement.piece].ports
+      .filter((port) => port.profile === 'road')
+      .flatMap((port) => {
+        const { centre, facing } = portPose(placement, port.id);
+        const right = rightOf([-facing[0], -facing[1]]);
+        const [x, z] = [centre[0], centre[2]];
+        return [
+          [x + right[0] * SIGN_OFFSET, z + right[1] * SIGN_OFFSET],
+          [x - right[0] * SIGN_OFFSET, z - right[1] * SIGN_OFFSET],
+          [x + facing[0] * MARKER_OFFSET, z + facing[1] * MARKER_OFFSET],
+        ] as [number, number][];
+      }),
+  );
 }
 
 /** Tiles any road piece covers (its whole footprint, raised pieces included). */
