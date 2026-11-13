@@ -449,3 +449,9 @@ Owner agreed the spec and the T1–T13 ticket breakdown and authorised implement
 ## Route ring at the vehicle's centre — 2026-11-14
 
 - **Owner:** "the circle on the target of the vehicle is on the front of the vehicle but it should be in the center of the vehicle". The ring now sits at the vehicle's centre, half its length behind the front bumper, where the map draws it. `vehicleCentre` (`src/simulation/traffic/vehicleCentre.ts`) is shared by the traffic layer and the card's details (`centre`, unit-tested). The route itself still runs on from the front.
+
+## Scene pill of a fixed width (P23, #80) — 2026-11-14
+
+- **Owner:** "make the scene pill of fixed width, so the size of pill should be the same with any title".
+- The scene name has a fixed width of 11.5em, which fits the longest preset name ("Market Roundabout"), and is centred between the arrows. A longer (future) name is cut with an ellipsis, with the full name in its tooltip.
+- Save and Reset still appear beside the name when a scene has edits, so the pill widens then. Without them it's the same width for every scene.
