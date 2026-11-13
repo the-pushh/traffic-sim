@@ -68,7 +68,7 @@ describe('traffic session measures', () => {
 
   it('after a signal timing change and Restart, replays exactly the same arrivals, drivers and vehicles with a different outcome', () => {
     const msGraph = buildLaneGraph(mainStreet.pieces);
-    const run = thirtySecondRun();
+    const run = new RunController();
     run.setDuration(60);
     const play = (session: TrafficSession) => {
       run.play();

@@ -26,6 +26,7 @@ async function toMainStreetAt30s(p) {
     await p.getByRole('button', { name: 'Next scene' }).click();
     await p.waitForSelector('.status', { state: 'hidden', timeout: 60000 });
   }
+  if ((await p.locator('.scene-name').textContent())?.trim() !== 'Main Street') throw new Error('Couldn’t reach Main Street with the scene arrows');
   await p.getByRole('button', { name: '30 s' }).click();
 }
 
@@ -43,6 +44,7 @@ async function wholeBoardInView(p) {
     if (allIn === true || (allIn === null && i >= 3)) return;
     await p.getByRole('button', { name: 'Zoom out' }).click();
   }
+  throw new Error('Couldn’t zoom out far enough to see the whole board');
 }
 
 const consoleErrors = [];
@@ -656,6 +658,7 @@ for (const [width, height] of [[1440, 900], [1280, 800]]) {
   const page = await browser.newPage({ viewport: { width, height } });
   await page.goto(url);
   await page.waitForSelector('.status', { state: 'hidden', timeout: 60000 });
+  await wholeBoardInView(page); // zoomed out to the whole board, the tray must still leave it all in view
   await page.getByRole('button', { name: 'Customise' }).click();
   const pictured = await page
     .waitForFunction(() => [...document.querySelectorAll('.part-picture')].every((t) => t.style.backgroundImage.startsWith('url("data:image/png')), null, { timeout: 20000 })
@@ -672,11 +675,11 @@ for (const [width, height] of [[1440, 900], [1280, 800]]) {
       clearOfDock: !overlaps(tray, dock),
       belowCameraPanel: tray.top >= document.querySelector('.camera-controls').getBoundingClientRect().bottom,
       // The whole board stays in view beside the tray (its corners, on the dev server where they can be located).
-      // The board's centre stays in view beside the tray (the app starts zoomed in, P20, so its corners may not).
-      boardClear: !dev || (() => {
-        const p = window.__trafficDebug.screenOf(8, 8);
+      // Zoomed out to the whole board (the app starts closer since P20), its corners stay in view beside the tray.
+      boardClear: !dev || [[0, 0], [16, 0], [0, 16], [16, 16]].every(([x, z]) => {
+        const p = window.__trafficDebug.screenOf(x, z);
         return p.x < tray.left && p.x > 0 && p.y > 0;
-      })(),
+      }),
     };
   }, isDevServer);
   trayChecks[`at${width}`] = pictured && Object.values(layout).every(Boolean);

@@ -32,7 +32,7 @@ Full-window 3D view (cube-diagonal start, 64 × 64 board), no header bar.
 - **Scene pill** above the dock: `‹ Scene ›` cycles Main Street → Market Roundabout → School Run → Flyover Bottleneck → Blank board. Save appears only with unsaved edits; Reset appears when the network differs from the designer's.
 - **Hover a vehicle**: "Type · Profile · Reason" (e.g. "Compact car · Cautious · Waiting for a larger gap").
 - **Live queue labels** on each junction approach during a run.
-- **First visit**: tip "Press Play to run 30 s of traffic", shown once.
+- **First visit**: tip "Press Play to run 30 s of traffic" (the current run length; 60 s by default since P20), shown once.
 
 ## Run lifecycle
 

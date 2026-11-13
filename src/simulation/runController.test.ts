@@ -20,7 +20,6 @@ describe('run controller', () => {
 
   it('advances in fixed 1/30 s steps and ends exactly at the chosen duration', () => {
     const run = thirtySecondRun();
-    run.setDuration(30);
     run.play();
     expect(run.state).toBe('running');
 

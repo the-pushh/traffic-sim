@@ -35,7 +35,7 @@ import { TrafficSession } from '../simulation/traffic/trafficSession';
 
 /**
  * The scenes the pill cycles through, each as designed or as saved in this browser. The app
- * opens on Main Street; the dev server can open another with `?scene=<id>` for browser checks.
+ * opens on Flyover Bottleneck (DEFAULT_SCENE); the dev server can open another with `?scene=<id>` for browser checks.
  */
 const openingId = import.meta.env.DEV ? new URLSearchParams(location.search).get('scene') : null;
 /** The scene the app opens on (the owner's choice); `?scene=` overrides it on the dev server. */
