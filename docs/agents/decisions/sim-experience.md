@@ -321,3 +321,12 @@ Owner agreed the spec and the T1–T13 ticket breakdown and authorised implement
   - Escape cancels.
 - The editor handles these keys in the capture phase, ahead of the map's Space-pan, and only while placing. With nothing being placed, R just sets the next part's turn and the key carries on as usual. Key-ups always pass through, so the pan state can't stick.
 - **Tip:** the first placement of a road piece shows "Press Space to turn it" under the ✓/✕ label. It's remembered in this browser (`traffic-sim:space-turns-tip-seen`) once shown, and isn't shown for signs, where turning doesn't apply.
+
+## Scenery (P8, #38) — 2026-11-13
+
+- **Source:** the Kenney Nature Kit, supplied by the owner. The choice of models, scale and placement rule are recorded in `assets/3d/ASSETS.md`.
+- **Placement:** scenery goes on tiles no road covers and stays inside its own tile, so it never touches a road. It is decoration only: the simulation and the editor ignore it (picking only looks at road pieces and controls).
+- **Edits:** the scenery is worked out from the scene, so placing a road on a tile clears that tile's trees, and removing a road lets the tile grow some.
+- **Room for traffic furniture:** scenery keeps clear of the spots beside every road end, where a sign would stand on either side and where an open end's "+" marker goes. It does so whether or not one is there now, so adding a sign never moves a tree.
+- **Known:** while a road is dragged over trees, they stay until the drop, then disappear with the new layout. The road lands exactly where the preview shows.
+- **Drawing:** one instanced mesh per part of each model (under 40 meshes for a board), and only trees cast shadows. Cost while running: GPU time up 10–25% (Main Street at Congested: 125 → 137–154 ms/s); idle stays 0.

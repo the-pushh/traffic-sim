@@ -43,7 +43,7 @@ traffic-sim/
 │   │   └── thumbnails/               # Part pictures for the parts tray
 │   └── styles/                       # Visual tokens and interface styles
 ├── public/                           # Planned, subject to toolchain conventions
-│   ├── models/                       # Browser-ready models used by the app
+│   ├── models/                       # Browser-ready models used by the app (roads, vehicles, nature)
 │   └── textures/                     # Not used: City Kit pieces carry their own colormap.png beside the models
 └── artifacts/                        # Planned verification output
     ├── 3d/
@@ -57,7 +57,7 @@ Keep traffic rules in the simulation module so route, signal, and timer behavior
 
 ## Asset intake and browser delivery
 
-1. Use the three existing ZIPs under `assets/3d/incoming/`. Keep their original filenames. Inspect entries and sizes before extraction and check `assets/3d/source/` for existing copies. Extract each pack into its own source folder.
+1. Use the ZIPs under `assets/3d/incoming/` (the three original Kenney packs, and the Nature Kit the owner added for scenery on 2026-11-13). Keep their original filenames. Inspect entries and sizes before extraction and check `assets/3d/source/` for existing copies. Extract each pack into its own source folder.
 2. Create `assets/3d/ASSETS.md`. Record useful models and textures, observed formats, dependencies, sizes, known units, and available licensing. Record where the browser-ready versions are stored.
 3. Verify one supplied vehicle and a short road section with a supplied texture in Three.js. Follow `docs/agents/3D_SETUP.md` for scale, orientation, connection points, and browser checks.
 4. If the toolchain serves `public/`, put runtime models in `public/models/` and shared textures in `public/textures/`. Keep model-relative dependencies with their models. Verify served URLs under the deployed app’s base path.

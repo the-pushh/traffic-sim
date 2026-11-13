@@ -284,6 +284,7 @@ async function show(mode: 'open' | 'edit'): Promise<boolean> {
       canvas: renderer.domElement,
       camera,
       traffic: traffic.group,
+      view: scene,
       graph,
       simulation: () => session!.simulation,
       queues: () => session!.approaches.map((a, i) => ({ approach: a.name, live: session!.liveQueues()[i] })),

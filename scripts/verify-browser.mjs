@@ -700,6 +700,7 @@ if (isDevServer) {
   await page.getByRole('button', { name: 'Discard and switch' }).click();
   await page.waitForSelector('.status', { state: 'hidden', timeout: 30000 });
   scenarioChecks.onBlankBoard = (await page.locator('.scene-name').textContent())?.trim() === 'Blank board';
+  const sceneryBefore = await page.evaluate(() => window.__trafficDebug.scenery().items);
   await page.getByRole('button', { name: 'Parts' }).click();
   /** Drag a part from the drawer to tile (x, z); answers whether the preview said valid just before release. */
   const drop = async (part, x, z) => {
@@ -731,6 +732,8 @@ if (isDevServer) {
   const built = await page.evaluate(() => ({ pieces: window.__trafficDebug.scene().pieces.length, controls: window.__trafficDebug.scene().controls.length }));
   const blankPieces = 4; // the board's edge stubs
   scenarioChecks.networkBuilt = built.pieces === blankPieces + 27 && built.controls === 4;
+  // Roads built over open ground clear its scenery (P8).
+  scenarioChecks.roadsClearScenery = (await page.evaluate(() => window.__trafficDebug.scenery().items)) < sceneryBefore;
   await page.screenshot({ path: `${outDir}/26-blank-board-built.png` });
   // 90 s: in 30 s no trip has time to cross the 16-tile board through one default-timed light.
   await page.getByRole('button', { name: '90 s' }).click();
@@ -780,6 +783,11 @@ if (isDevServer) {
       pill: (await presetPage.locator('.scene-name').textContent())?.trim() === name,
       noFailedRequests: failed.length === 0,
       traffic: (await presetPage.evaluate(() => window.__trafficDebug.vehicles().length)) > 0,
+      // Scenery (P8): trees and the rest drawn, instanced (a few dozen draws for the whole board).
+      scenery: await presetPage.evaluate(() => {
+        const { meshes, items } = window.__trafficDebug.scenery();
+        return items > 0 && meshes > 0 && meshes < 40;
+      }),
       queueAtApproach: queued,
     };
     const target = (await presetPage.evaluate(() => window.__trafficDebug.vehicles())).find((v) => v.x > 100 && v.x < 1300 && v.y > 80 && v.y < 650);
