@@ -7,6 +7,8 @@ export interface FramingOptions {
    * centres the view in that area.
    */
   coveredBottom?: number;
+  /** Start this many times closer than the whole-board fit (zooming out still reaches the whole board). */
+  zoom?: number;
 }
 
 /** Where the camera looks and how it orbits around that point. Angles in radians. */
@@ -40,6 +42,8 @@ export class ObserverCamera {
   private constructor(
     private readonly camera: PerspectiveCamera,
     private readonly initialPose: CameraPose,
+    /** The distance at which the whole scene fits; zooming out is limited relative to it. */
+    private readonly fitDistance = initialPose.distance,
   ) {
     this.pose = clonePose(initialPose);
     this.apply();
@@ -49,7 +53,7 @@ export class ObserverCamera {
    * Frame the given bounds from the cube-diagonal starting angle, as close as possible while every
    * corner stays on screen with a small border. Uses the camera's current aspect ratio.
    */
-  static framing(camera: PerspectiveCamera, bounds: Box3, { coveredBottom = 0 }: FramingOptions = {}): ObserverCamera {
+  static framing(camera: PerspectiveCamera, bounds: Box3, { coveredBottom = 0, zoom = 1 }: FramingOptions = {}): ObserverCamera {
     const target = bounds.getCenter(new Vector3());
     const radius = bounds.getBoundingSphere(new Sphere()).radius;
     const corners = boxCorners(bounds);
@@ -73,7 +77,8 @@ export class ObserverCamera {
       if (screenExtent(mid) > FRAME_FILL) near = mid;
       else far = mid;
     }
-    return new ObserverCamera(camera, { ...pose, distance: far });
+    // Zoomed in from the fit; the zoom-out limit stays relative to the fit, so the whole board is still reachable.
+    return new ObserverCamera(camera, { ...pose, distance: far / zoom }, far);
   }
 
   /** Rotate around the point in view (radians, positive = counter-clockwise from above). */
@@ -109,7 +114,7 @@ export class ObserverCamera {
 
   /** Multiply the viewing distance: below 1 zooms in, above 1 zooms out. */
   zoom(factor: number) {
-    const maxDistance = this.initialPose.distance * MAX_DISTANCE_FACTOR;
+    const maxDistance = this.fitDistance * MAX_DISTANCE_FACTOR;
     this.pose.distance = clamp(this.pose.distance * factor, MIN_DISTANCE, maxDistance);
     this.apply();
   }

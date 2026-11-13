@@ -4,7 +4,7 @@ Parent: issue #1. Sources, in order of precedence: owner decisions `docs/agents/
 
 ## Goal
 
-A player opens the app on **Main Street** with traffic already on the roads, picks a traffic intensity and a run length, presses Play, and watches individual drivers deal with signals, roundabouts, merges and a flyover. They edit a road or control, rerun the same arrivals, drivers and vehicles, and compare the numbers. They can also build their own network on a blank board.
+A player opens the app on **Main Street** (*since P20: **Flyover Bottleneck**, 60 s runs, twice as close as the whole-board view*) with traffic already on the roads, picks a traffic intensity and a run length, presses Play, and watches individual drivers deal with signals, roundabouts, merges and a flyover. They edit a road or control, rerun the same arrivals, drivers and vehicles, and compare the numbers. They can also build their own network on a blank board.
 
 ## Screen
 
@@ -32,7 +32,7 @@ Full-window 3D view (cube-diagonal start, 64 × 64 board), no header bar.
 - **Scene pill** above the dock: `‹ Scene ›` cycles Main Street → Market Roundabout → School Run → Flyover Bottleneck → Blank board. Save appears only with unsaved edits; Reset appears when the network differs from the designer's.
 - **Hover a vehicle**: "Type · Profile · Reason" (e.g. "Compact car · Cautious · Waiting for a larger gap").
 - **Live queue labels** on each junction approach during a run.
-- **First visit**: tip "Press Play to run 30 s of traffic", shown once.
+- **First visit**: tip "Press Play to run 30 s of traffic" (the current run length; 60 s by default since P20), shown once.
 
 ## Run lifecycle
 

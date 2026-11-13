@@ -21,7 +21,7 @@ export const STEPS_PER_SECOND = 30;
  */
 export class RunController {
   state: RunState = 'ready';
-  duration: RunDuration = 30;
+  duration: RunDuration = 60; // the owner's default run length
   intensity: Intensity = 'medium';
   /**
    * Increases whenever the simulation must rebuild its starting traffic: Restart, a
