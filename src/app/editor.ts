@@ -214,12 +214,13 @@ export function createEditor(host: EditorHost) {
   joinGhosts.name = 'editor-join-ghosts';
   ghostRoot.add(joinGhosts);
   const joinMaterial = new MeshBasicMaterial({ color: VALID_COLOUR, transparent: true, opacity: GHOST_OPACITY, depthWrite: false });
-  const loadedModels = new Map<string, Object3D | 'loading'>();
-  /** A translucent copy of a piece's model, or null while it loads (the preview updates once it has). */
+  // Lives as long as the editor (the whole session): one material shared by every join ghost.
+  const loadedModels = new Map<string, Object3D | 'loading' | 'failed'>();
+  /** A translucent copy of a piece's model, or null while it loads or if it couldn't (the preview updates once it has). */
   function joinGhost(piece: string): Object3D | null {
     const name = PIECES[piece].model;
     const loaded = loadedModels.get(name);
-    if (loaded === 'loading') return null;
+    if (loaded === 'loading' || loaded === 'failed') return null;
     if (!loaded) {
       loadedModels.set(name, 'loading');
       void host.model(name).then(
@@ -227,7 +228,7 @@ export function createEditor(host: EditorHost) {
           loadedModels.set(name, model);
           update();
         },
-        () => loadedModels.delete(name),
+        () => loadedModels.set(name, 'failed'), // the dragged part's own ghost stands in
       );
       return null;
     }
@@ -245,9 +246,10 @@ export function createEditor(host: EditorHost) {
     if (!result.valid || !result.scene || !result.joins) return false;
     for (const join of result.joins) {
       const p = result.scene.pieces[join.index];
-      if (join.index === result.scene.pieces.length - 1) newPieceGrown = true;
       const ghost = joinGhost(p.piece);
       if (!ghost) continue;
+      // Only once its junction shape is showing does it replace the dragged part's ghost.
+      if (join.index === result.scene.pieces.length - 1) newPieceGrown = true;
       ghost.position.set(...boardToWorld([p.at[0], p.level ?? 0, p.at[1]]));
       ghost.rotation.y = (p.rotation * Math.PI) / 180;
       joinGhosts.add(ghost);

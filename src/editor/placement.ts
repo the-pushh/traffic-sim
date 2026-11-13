@@ -15,6 +15,8 @@ export interface PlacementRequest {
   level?: number;
   /** Snap to a nearby open road end (default true). */
   snap?: boolean;
+  /** Grow junctions where the piece's road ends touch a road's side (default true: new pieces; edits pass false). */
+  join?: boolean;
 }
 
 /** What would happen: the same answer for the translucent preview and for the drop. */
@@ -64,7 +66,7 @@ function placePiece(scene: SceneDefinition, request: PlacementRequest): Placemen
   let placement: PiecePlacement = snap?.placement ?? { piece: request.part, at: gridPosition(request.part, request.rotation, request.pointer), rotation: request.rotation, level: request.level ?? 0 };
   if (!def.ports.length) placement.level = request.level ?? 0;
   // Roads that touch the side of a piece join it: that piece becomes a junction.
-  const joined = joinTouching(scene, placement);
+  const joined = request.join === false ? { scene, placement, joins: [] as Join[] } : joinTouching(scene, placement);
   placement = joined.placement;
   const edited: SceneDefinition = { ...joined.scene, pieces: [...joined.scene.pieces, placement] };
   const fail = (reason: string): PlacementResult => ({ valid: false, reason, scene: null, placement, snappedTo: snap?.at ?? null });
@@ -83,17 +85,23 @@ function placePiece(scene: SceneDefinition, request: PlacementRequest): Placemen
 function snapToOpenEnd(scene: SceneDefinition, request: PlacementRequest) {
   const def = PIECES[request.part];
   let best: { placement: PiecePlacement; at: [number, number, number]; distance: number } | null = null;
-  const candidates = [...openRoadEnds(scene).map((e) => ({ ...e, radius: SNAP_RADIUS })), ...joinPoints(scene).map((e) => ({ ...e, radius: JOIN_SNAP_RADIUS }))];
+  const candidates = [
+    ...openRoadEnds(scene).map((e) => ({ ...e, radius: SNAP_RADIUS, joinOnly: false })),
+    ...(request.join === false ? [] : joinPoints(scene).map((e) => ({ ...e, radius: JOIN_SNAP_RADIUS, joinOnly: true }))),
+  ];
   for (const end of candidates) {
     for (const port of def.ports.filter((p) => p.profile === 'road')) {
       const facing = rotate(port.facing, request.rotation);
       // Our port must face back into the existing road.
       if (Math.abs(facing[0] + end.facing[0]) > EPSILON || Math.abs(facing[1] + end.facing[1]) > EPSILON) continue;
+      // A road's side takes only a ground-level road end (a ramp's foot, not its top or a bridge deck).
+      if (end.joinOnly && port.level !== 0) continue;
       const offset = rotate(port.at, request.rotation);
       const at: [number, number] = [end.at[0] - offset[0], end.at[2] - offset[1]];
       const distance = Math.hypot(at[0] - request.pointer[0], at[1] - request.pointer[1]);
       if (distance > end.radius || (best && distance >= best.distance)) continue;
       const placement: PiecePlacement = { piece: request.part, at, rotation: request.rotation, level: end.at[1] - port.level };
+      if (placement.level! < -EPSILON) continue; // never below the ground
       const flow = continuedFlow(request.part, port.id, end.flow);
       if (flow) placement.flow = flow;
       best = { placement, at: end.at, distance };
@@ -237,7 +245,10 @@ function joinPoints(scene: SceneDefinition) {
   });
 }
 
-/** The same piece grown an arm towards `side`, keeping its controls on the approaches they were on. */
+/**
+ * The same piece grown an arm towards `side`. Only its shape, place and height carry over,
+ * which is why pieces with a speed limit or one-way setting can't grow (see `canJoin`).
+ */
 function grow(p: PiecePlacement, side: Compass): PiecePlacement | null {
   const shape = shapeWithArms(new Set([...armsOf(p), side]));
   return shape ? { piece: shape.piece, at: p.at, rotation: shape.rotation, level: p.level ?? 0 } : null;

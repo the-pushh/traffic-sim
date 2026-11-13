@@ -151,4 +151,23 @@ describe('editing controls', () => {
     expect(moved.scene!.controls).toHaveLength(2);
     expect(moveControl(scene, 1, { pointer: [2, 2] })).toMatchObject({ valid: false, reason: 'Drop it where a road enters a junction' });
   });
+
+  it('only grows junctions for newly placed pieces: moving or turning a piece beside a road leaves the road as it is', () => {
+    const road: SceneDefinition = {
+      id: 'join',
+      name: 'Join',
+      pieces: [
+        ...Array.from({ length: 5 }, (_, i) => ({ piece: 'straight', at: [i + 0.5, 8.5] as [number, number], rotation: 0 as const })),
+        { piece: 'straight', at: [2.5, 6.5], rotation: 0 }, // a lone straight two tiles north
+      ],
+      controls: [],
+      demand: { gateways: { A: 1 } },
+    };
+    const moved = movePiece(road, 5, { pointer: [2.5, 7.5], rotation: 90 });
+    expect(moved.joins).toBeUndefined();
+    expect(moved.scene!.pieces[2].piece).toBe('straight');
+    const turned = rotatePiece({ ...road, pieces: road.pieces.map((p, i) => (i === 5 ? { ...p, at: [2.5, 7.5] as [number, number] } : p)) }, 5);
+    expect(turned.joins).toBeUndefined();
+    expect(turned.scene!.pieces.some((p) => p.piece === 't-junction')).toBe(false);
+  });
 });

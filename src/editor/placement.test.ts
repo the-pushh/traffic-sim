@@ -115,4 +115,15 @@ describe('placement rules (shared by preview and drop)', () => {
     const oneWay: SceneDefinition = { ...road, pieces: road.pieces.map((p) => ({ ...p, flow: { w: 'in', e: 'out' } })) };
     expect(placePart(oneWay, { part: 'straight', pointer: [2.6, 7.4], rotation: 90 }).joins).toBeUndefined();
   });
+
+  it('never snaps a ramp or bridge below the ground to sit beside a road; only a ramp’s foot joins one', () => {
+    for (const [part, rotation] of [['bridge', 0], ['bridge', 180], ['ramp', 270], ['ramp-steep', 90]] as const) {
+      const result = placePart(road, { part, pointer: [2.6, 7.4], rotation });
+      expect(result.placement!.level ?? 0, `${part} at ${rotation}°`).toBeGreaterThanOrEqual(0);
+      if (part === 'bridge') expect(result.joins, `${part} at ${rotation}°`).toBeUndefined(); // both ends are raised
+    }
+    // A ramp whose foot meets the road's side joins it at ground level.
+    const foot = placePart(road, { part: 'ramp-steep', pointer: [2.6, 7.4], rotation: 90 });
+    expect(foot).toMatchObject({ valid: true, placement: { level: 0 }, joins: [{ index: 2, from: 'straight', to: 't-junction' }] });
+  });
 });
