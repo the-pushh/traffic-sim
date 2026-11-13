@@ -157,7 +157,9 @@ const clockText = () => runPage.locator('.clock').textContent();
 const settingsDisabled = () =>
   runPage.evaluate(() => {
     const controls = [document.querySelector('.intensity input'), ...document.querySelectorAll('[data-duration]')];
-    return controls.every((c) => c.disabled) && !document.querySelector('.lock-hint').hidden;
+    // Disabled, with the reason for screen readers but not shown on screen (P22: the owner dropped the text).
+    const hint = document.querySelector('.lock-hint');
+    return controls.every((c) => c.disabled) && !hint.hidden && hint.getBoundingClientRect().width <= 1;
   });
 const settingsEnabled = () =>
   runPage.evaluate(() => [document.querySelector('.intensity input'), ...document.querySelectorAll('[data-duration]')].every((c) => !c.disabled));
@@ -207,21 +209,33 @@ runChecks.resultsHeadlinesFirst = await runPage.evaluate(() => {
   const labels = [...document.querySelectorAll('.results-headlines dt')].map((d) => d.textContent);
   return JSON.stringify(labels) === JSON.stringify(['Trips finished', 'Average travel time', 'Longest queue', 'Blocked trips']) && document.querySelector('#results-details').hidden;
 });
-await runPage.locator('.bottom-stack').screenshot({ path: `${outDir}/16-results-first-run.png` });
+await runPage.locator('.top-stack').screenshot({ path: `${outDir}/16-results-first-run.png` });
 const detailsToggle = runPage.locator('.results-details-toggle');
 await detailsToggle.click();
 runChecks.resultsDetailsToggle =
   (await detailsToggle.getAttribute('aria-expanded')) === 'true' &&
   (await runPage.locator('#results-details').isVisible()) &&
   (await detailsToggle.textContent()) === 'Hide details';
-await runPage.locator('.bottom-stack').screenshot({ path: `${outDir}/16b-results-details.png` });
+await runPage.locator('.top-stack').screenshot({ path: `${outDir}/16b-results-details.png` });
 await detailsToggle.click();
 runChecks.resultsDetailsToggle &&= (await runPage.locator('#results-details').isHidden()) && (await detailsToggle.getAttribute('aria-expanded')) === 'false';
+// P22: the card sits at the top centre, and shrinks closed then grows open again.
+runChecks.resultsAtTopCentre = await runPage.evaluate(() => {
+  const r = document.querySelector('.results-card').getBoundingClientRect();
+  return r.top < 40 && Math.abs(r.left + r.width / 2 - innerWidth / 2) < 4;
+});
 await runPage.getByRole('button', { name: 'Close results' }).click();
+const shrinking = await runPage.evaluate(() => document.querySelector('.results-card').classList.contains('results-closing'));
 runChecks.resultsCloseAndReopen =
-  (await runPage.locator('.results-card').isHidden()) &&
+  shrinking &&
+  (await runPage.locator('.results-card').waitFor({ state: 'hidden', timeout: 2000 }).then(() => true, () => false)) &&
   (await runPage.evaluate(() => document.activeElement?.textContent === 'Show results')) &&
-  (await runPage.getByRole('button', { name: 'Show results' }).click().then(() => runPage.locator('.results-card').isVisible()));
+  (await runPage.evaluate(() => {
+    const b = document.querySelector('.results-reopen').getBoundingClientRect();
+    return b.top < 60 && Math.abs(b.left + b.width / 2 - innerWidth / 2) < 4; // Show results at the top centre too
+  })) &&
+  (await runPage.getByRole('button', { name: 'Show results' }).click().then(() => runPage.locator('.results-card').isVisible())) &&
+  (await runPage.waitForFunction(() => getComputedStyle(document.querySelector('.results-card')).opacity === '1', null, { timeout: 2000 }).then(() => true, () => false));
 await runPage.locator('.dock').screenshot({ path: `${outDir}/13-dock-ended.png` });
 // Click Play and read the clock in the same task, so the check doesn't depend on timing.
 runChecks.playAfterEndContinuesFromZero = await runPage.evaluate(() => {
@@ -244,7 +258,7 @@ runChecks.resultsShowPreviousRun = await runPage.evaluate(() => {
 runChecks.resultsHeadlinesCompare =
   (await runPage.locator('.results-headlines .change').count()) === 4 &&
   ((await runPage.locator('.results-caption').textContent()) ?? '').includes('compared with the previous run');
-await runPage.locator('.bottom-stack').screenshot({ path: `${outDir}/17-results-with-previous.png` });
+await runPage.locator('.top-stack').screenshot({ path: `${outDir}/17-results-with-previous.png` });
 await runPage.getByRole('button', { name: '60 s' }).click();
 runChecks.resultsHiddenAfterFreshStart = await runPage
   .waitForFunction(() => document.querySelector('.results-card')?.hidden === true, null, { timeout: 2000 })
@@ -909,7 +923,7 @@ if (isDevServer) {
   scenarioChecks.beforeAfterEditChangesQueues = queues.length > 0 && queues.some(([, [now, before]]) => now !== before);
   scenarioChecks.beforeAfterResultsLabelled = ((await page.locator('.results-card').textContent()) ?? '').includes('Previous run');
   scenarioChecks.recorded = { beforeAfterQueues: Object.fromEntries(queues) };
-  await page.locator('.bottom-stack').screenshot({ path: `${outDir}/25-before-after.png` });
+  await page.locator('.top-stack').screenshot({ path: `${outDir}/25-before-after.png` });
 
   // The Blank board: a signalised crossroads in the middle with roads out to all four edges.
   await page.getByRole('button', { name: 'Previous scene' }).click();

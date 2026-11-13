@@ -3,6 +3,9 @@ import type { LabelledResults } from '../simulation/traffic/trafficSession';
 import { INTENSITY_LABELS } from './dock';
 import { comparable, resultsHeadlines, type Headline } from './resultsHeadlines';
 
+/** How long the card takes to grow open or shrink closed, ms (matches the CSS). */
+const CLOSE_MS = 180;
+
 const escapeHtml = (text: string) => text.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 
 function label(r: LabelledResults) {
@@ -51,9 +54,33 @@ export function createResultsCard(container: HTMLElement, results: () => Labelle
   announcer.setAttribute('aria-live', 'polite');
   container.prepend(card, reopen, announcer);
 
+  /** Grow open from the top centre, or shrink closed (instant with reduced motion); a reopen cancels a close. */
+  let closing: (() => void) | null = null;
   const show = (visible: boolean) => {
-    card.hidden = !visible;
     reopen.hidden = visible || !latest || state() !== 'ended';
+    if (visible) {
+      closing = null;
+      card.classList.remove('results-closing');
+      if (card.hidden) {
+        card.classList.add('results-opening');
+        card.hidden = false;
+        void card.offsetWidth; // start from the small, clear state
+        card.classList.remove('results-opening');
+      }
+      return;
+    }
+    if (card.hidden) return;
+    const done = () => {
+      if (closing !== done) return;
+      closing = null;
+      card.hidden = true;
+      card.classList.remove('results-closing');
+    };
+    closing = done;
+    card.classList.add('results-closing');
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) return done();
+    card.addEventListener('transitionend', done, { once: true });
+    setTimeout(done, CLOSE_MS + 50); // in case no transition runs
   };
   reopen.addEventListener('click', () => {
     show(true);
