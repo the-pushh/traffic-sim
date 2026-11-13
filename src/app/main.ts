@@ -14,13 +14,12 @@ import { icon } from '../components/icons';
 import { createDock } from '../components/dock';
 import { createFirstVisitTip } from '../components/firstVisitTip';
 import { createResultsCard } from '../components/resultsCard';
+import { attachJoystickControl, setJoystickEnabled } from '../components/joystickControl';
 import { createLeaveDialog } from '../components/leaveDialog';
 import { createScenePill } from '../components/scenePill';
 import { createVehicleTooltip } from '../components/vehicleTooltip';
 import { RunController } from '../simulation/runController';
 import '../styles/main.css';
-import '../hardware/hardware.css';
-import { createControlsDrawer, createJoystick, createPushButton } from '../hardware/controls';
 import { CameraJoystick } from '../three/controls/cameraJoystick';
 import { fitCameraToViewport } from '../three/controls/cameraViewport';
 import { ObserverCamera } from '../three/controls/observerCamera';
@@ -59,6 +58,17 @@ const app = document.querySelector<HTMLDivElement>('#app')!;
 app.innerHTML = `
   <h1 class="visually-hidden">Traffic Simulator</h1>
   <main class="viewport" aria-label="3D traffic scene">
+    <div class="camera-controls" role="group" aria-label="Camera">
+      <div class="joystick" tabindex="0" role="application" aria-roledescription="joystick"
+        aria-label="Orbit and tilt camera" aria-describedby="joystick-help" title="Drag or use arrow keys: left/right orbits, up/down tilts">
+        <div class="joystick-knob"></div>
+      </div>
+      <span id="joystick-help" class="visually-hidden">Drag the knob or hold arrow keys. Left and right orbit around the view; up tilts toward overhead, down toward an angled view.</span>
+      <button type="button" data-action="zoom-in" disabled aria-label="Zoom in" title="Zoom in">${icon('plus')}</button>
+      <button type="button" data-action="zoom-out" disabled aria-label="Zoom out" title="Zoom out">${icon('minus')}</button>
+      <button type="button" data-action="reset-view" disabled class="primary">Reset View</button>
+      <button type="button" data-action="theme" class="theme-toggle"></button>
+    </div>
     <div class="bottom-stack"></div>
     <div class="status" role="status" aria-live="polite"><p>Loading roads and vehicles…</p></div>
   </main>
@@ -101,15 +111,7 @@ async function resetScene() {
   store.reset();
   if (await start()) pill.focus('next');
 }
-const dock = createDock(bottomStack, run, {
-  onPlay: () => tip.dismiss(),
-  // Scrubbed: run on to that moment, or start the same traffic again and replay to it.
-  onSeek: (seconds) => {
-    const { steps } = run.seek(seconds);
-    session?.advance(steps);
-    requestRender();
-  },
-});
+const dock = createDock(bottomStack, run, { onPlay: () => tip.dismiss() });
 let session: TrafficSession | null = null;
 const results = createResultsCard(bottomStack, () => session!.results(), () => run.state);
 bottomStack.inert = true;
@@ -242,60 +244,15 @@ renderer.domElement.addEventListener('webglcontextrestored', requestRender);
 resize();
 
 
-// ---- The Controls drawer: camera (joystick, zoom, reset view) and display, from hardware parts ----
-const cameraControls = document.createElement('section');
-cameraControls.className = 'camera-controls';
-cameraControls.innerHTML = '<div class="hw-drawer-scroll"></div>';
-const controlsScroll = cameraControls.querySelector<HTMLElement>('.hw-drawer-scroll')!;
-const controlGroup = (title: string) => {
-  const group = document.createElement('div');
-  group.className = 'hw-group';
-  group.setAttribute('role', 'group');
-  group.setAttribute('aria-label', title);
-  group.innerHTML = `<h3>${title}</h3>`;
-  controlsScroll.append(group);
-  return group;
-};
-const cameraButton = (label: string, action: string, face: { icon?: string; wide?: boolean }) => {
-  const button = createPushButton({ label, icon: face.icon, wide: face.wide });
-  button.element.dataset.action = action;
-  return button;
-};
-const hardwareJoystick = createJoystick({
-  label: 'Orbit and tilt camera',
-  // Left/right orbits, up/down tilts; let go and it springs back to centre (the camera stops).
-  onTilt: (x, y) => {
-    if (!joystick) return;
-    if (x === 0 && y === 0) joystick.release();
-    else joystick.push(x, y, 1);
-  },
-});
-hardwareJoystick.element.classList.add('joystick');
-const zoomIn = cameraButton('Zoom in', 'zoom-in', { icon: icon('plus') });
-const zoomOut = cameraButton('Zoom out', 'zoom-out', { icon: icon('minus') });
-const resetView = cameraButton('Reset View', 'reset-view', { wide: true });
-const themeButton = cameraButton('Switch theme', 'theme', { icon: icon('moon') });
-themeButton.element.classList.add('theme-toggle');
-const cameraRow = document.createElement('div');
-cameraRow.className = 'hw-row';
-const cameraButtons = document.createElement('div');
-cameraButtons.className = 'hw-stack';
-cameraButtons.append(zoomIn.element, zoomOut.element, resetView.element);
-cameraRow.append(hardwareJoystick.element, cameraButtons);
-controlGroup('Camera').append(cameraRow);
-const displayRow = document.createElement('div');
-displayRow.className = 'hw-row';
-displayRow.append(themeButton.element, Object.assign(document.createElement('span'), { className: 'hw-legend', textContent: 'Light / dark' }));
-controlGroup('Display').append(displayRow);
-viewport.append(cameraControls);
-const controlsDrawer = createControlsDrawer({ label: 'Controls', pane: cameraControls });
-
+const cameraControls = app.querySelector<HTMLElement>('.camera-controls')!;
 let observer: ObserverCamera | null = null;
 let detachInput: (() => void) | null = null;
+const joystickElement = app.querySelector<HTMLElement>('.joystick')!;
 const timer = new Timer();
 
 // Light or dark: follows the system until the player picks one, remembered in this browser.
 const THEME_KEY = 'traffic-sim:theme';
+const themeToggle = app.querySelector<HTMLButtonElement>('.theme-toggle')!;
 function currentTheme(): 'light' | 'dark' {
   const chosen = document.documentElement.dataset.theme;
   if (chosen === 'light' || chosen === 'dark') return chosen;
@@ -303,7 +260,9 @@ function currentTheme(): 'light' | 'dark' {
 }
 function showTheme() {
   const next = currentTheme() === 'dark' ? 'light' : 'dark';
-  themeButton.setFace(icon(next === 'dark' ? 'moon' : 'sun'), `Switch to ${next} mode`);
+  themeToggle.innerHTML = icon(next === 'dark' ? 'moon' : 'sun');
+  themeToggle.setAttribute('aria-label', `Switch to ${next} mode`);
+  themeToggle.title = `Switch to ${next} mode`;
 }
 try {
   const saved = localStorage.getItem(THEME_KEY);
@@ -334,8 +293,8 @@ cameraControls.addEventListener('click', (e) => {
 });
 
 function setCameraControlsEnabled(enabled: boolean) {
-  for (const button of [zoomIn, zoomOut, resetView]) button.setDisabled(!enabled);
-  hardwareJoystick.setDisabled(!enabled);
+  for (const button of cameraControls.querySelectorAll('button:not(.theme-toggle)')) (button as HTMLButtonElement).disabled = !enabled;
+  setJoystickEnabled(joystickElement, enabled);
 }
 
 let tooltip: ReturnType<typeof createVehicleTooltip> | null = null;
@@ -417,7 +376,12 @@ async function show(mode: 'open' | 'edit'): Promise<boolean> {
     if (opening) {
       observer = ObserverCamera.framing(camera, bounds, { coveredBottom });
       joystick = new CameraJoystick(observer);
-      detachInput = attachViewportInput(renderer.domElement, observer);
+      const detachViewport = attachViewportInput(renderer.domElement, observer);
+      const detachJoystick = attachJoystickControl(joystickElement, joystick);
+      detachInput = () => {
+        detachViewport();
+        detachJoystick();
+      };
       editor.reset();
       timer.reset();
       resolution.reset();
@@ -520,9 +484,6 @@ const editor = createEditor({
   canEdit: () => run.state !== 'running',
 });
 dock.addSection(editor.toggle);
-dock.addSection(controlsDrawer.button);
-// The Controls pane opens top-right; the parts tray below it moves to make room.
-controlsDrawer.button.addEventListener('click', () => editor.layoutChanged());
 rightPanel = editor.tray;
 
 start();

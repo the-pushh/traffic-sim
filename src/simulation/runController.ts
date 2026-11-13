@@ -64,23 +64,6 @@ export class RunController {
   }
 
   /**
-   * Scrub to a moment of the run. Forward, the simulation catches up by running the steps in
-   * between; back, it starts the same traffic again (same seed) and replays to that moment.
-   * The run is left paused there (Ready at 0:00, Ended at the end). Returns what the
-   * simulation has to do.
-   */
-  seek(seconds: number): { rewind: boolean; steps: number } {
-    const target = Math.round(Math.min(this.duration, Math.max(0, seconds)) * STEPS_PER_SECOND);
-    const rewind = target < this.stepsDone;
-    if (rewind) this.freshStarts++;
-    const steps = rewind ? target : target - this.stepsDone;
-    this.stepsDone = target;
-    this.pendingSeconds = 0;
-    this.state = target >= this.totalSteps ? 'ended' : target === 0 ? 'ready' : 'paused';
-    return { rewind, steps };
-  }
-
-  /**
    * Returns false (and changes nothing) while the run's settings are locked. Changing it
    * after a run ended goes back to Ready, so the next Play starts fresh.
    */
