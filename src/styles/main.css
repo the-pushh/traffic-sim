@@ -26,16 +26,10 @@
   --glass-border: rgb(255 255 255 / 0.7);
   --glass-highlight: inset 0 1px 0 rgb(255 255 255 / 0.85);
   --glass-blur: blur(22px) saturate(180%);
-  /*
-   * Buttons: a neutral grey fill and a 1px ridge in the same grey, light along the top edge and
-   * dark along the bottom, like a machined edge catching light from above (glass style).
-   */
-  --button-fill: rgb(226 226 230 / 0.82);
-  --button-fill-hover: rgb(236 236 240 / 0.95);
-  --button-ridge-top: rgb(255 255 255 / 0.95);
-  --button-ridge-bottom: rgb(150 150 158 / 0.75);
-  --primary-ridge-top: color-mix(in srgb, var(--color-accent) 55%, white);
-  --primary-ridge-bottom: color-mix(in srgb, var(--color-accent) 65%, black);
+  /* Flat buttons (owner): colour at 50% opacity, a light 1px border, no shadow. */
+  --button-fill: rgb(200 200 206 / 0.5);
+  --button-fill-hover: rgb(200 200 206 / 0.7);
+  --button-border: rgb(255 255 255 / 0.85);
   /* Contour lines of the topographic backdrop: ink-blue, faint. */
   --backdrop-contour: rgb(55 114 255 / 0.16);
 
@@ -73,12 +67,9 @@
     --glass-bg-strong: rgb(30 25 32 / 0.7);
     --glass-border: rgb(247 243 227 / 0.16);
     --glass-highlight: inset 0 1px 0 rgb(247 243 227 / 0.12);
-    --button-fill: rgb(74 70 78 / 0.72);
-    --button-fill-hover: rgb(90 86 94 / 0.85);
-    --button-ridge-top: rgb(255 255 255 / 0.26);
-    --button-ridge-bottom: rgb(0 0 0 / 0.55);
-    --primary-ridge-top: color-mix(in srgb, var(--color-accent) 60%, white);
-    --primary-ridge-bottom: color-mix(in srgb, var(--color-accent) 55%, black);
+    --button-fill: rgb(120 116 126 / 0.5);
+    --button-fill-hover: rgb(120 116 126 / 0.7);
+    --button-border: rgb(255 255 255 / 0.22);
     --backdrop-contour: rgb(247 243 227 / 0.07);
     --shadow-floating: 0 12px 34px rgb(0 0 0 / 0.45), 0 2px 6px rgb(0 0 0 / 0.3);
     color-scheme: dark;
@@ -98,12 +89,9 @@
   --glass-bg-strong: rgb(30 25 32 / 0.7);
   --glass-border: rgb(247 243 227 / 0.16);
   --glass-highlight: inset 0 1px 0 rgb(247 243 227 / 0.12);
-  --button-fill: rgb(74 70 78 / 0.72);
-  --button-fill-hover: rgb(90 86 94 / 0.85);
-  --button-ridge-top: rgb(255 255 255 / 0.26);
-  --button-ridge-bottom: rgb(0 0 0 / 0.55);
-  --primary-ridge-top: color-mix(in srgb, var(--color-accent) 60%, white);
-  --primary-ridge-bottom: color-mix(in srgb, var(--color-accent) 55%, black);
+  --button-fill: rgb(120 116 126 / 0.5);
+  --button-fill-hover: rgb(120 116 126 / 0.7);
+  --button-border: rgb(255 255 255 / 0.22);
   --backdrop-contour: rgb(247 243 227 / 0.07);
   --shadow-floating: 0 12px 34px rgb(0 0 0 / 0.45), 0 2px 6px rgb(0 0 0 / 0.3);
   color-scheme: dark;
@@ -206,8 +194,8 @@ button:focus-visible {
 }
 
 button.primary {
-  /* Fill and ridge come from the glass button rules below. */
-  color: var(--color-on-accent);
+  /* Fill and border come from the flat button rules below. */
+  color: var(--color-text);
   font-weight: 600;
 }
 
@@ -401,7 +389,7 @@ button.primary {
 }
 
 .duration .segment[aria-pressed='true'] {
-  color: var(--color-on-accent);
+  color: var(--color-text);
   font-weight: 600;
 }
 
@@ -663,7 +651,6 @@ button.primary {
 
 .results-reopen {
   border-radius: var(--radius-pill);
-  box-shadow: var(--shadow-floating);
 }
 
 /*
@@ -732,19 +719,15 @@ body {
 }
 
 /*
- * Buttons inside glass: a grey fill with a 1px ridge, light at the top and dark at the bottom
- * (a transparent border showing a vertical gradient painted under it). Each button sets only
- * --fill and the two ridge colours, so specific buttons can recolour without losing the ridge.
+ * Flat buttons (owner, P24): the button's colour at 50% opacity, a 1px light border, no
+ * gradient and no shadow. Each button sets only --fill; primary ones use the accent.
  */
 button {
   --fill: var(--button-fill);
-  --ridge-top: var(--button-ridge-top);
-  --ridge-bottom: var(--button-ridge-bottom);
-  border: 1px solid transparent;
-  background:
-    linear-gradient(var(--fill), var(--fill)) padding-box,
-    linear-gradient(180deg, var(--ridge-top), var(--ridge-bottom)) border-box;
-  transition: transform 100ms ease, box-shadow 150ms ease;
+  border: 1px solid var(--button-border);
+  background: var(--fill);
+  box-shadow: none;
+  transition: transform 100ms ease, background-color 150ms ease;
 }
 
 button:hover:not(:disabled):not(.primary):not([aria-pressed='true']) {
@@ -757,20 +740,17 @@ button:active:not(:disabled) {
 
 .duration {
   padding: 2px;
-  border: 1px solid transparent;
+  border: 1px solid var(--button-border);
   border-radius: var(--radius-pill);
-  background:
-    linear-gradient(var(--button-fill), var(--button-fill)) padding-box,
-    linear-gradient(180deg, var(--button-ridge-top), var(--button-ridge-bottom)) border-box;
+  background: var(--button-fill);
 }
 
-/* The run lengths sit on the track's own ridge: the unchosen ones are flat. */
+/* The run lengths sit on the track: the unchosen ones are clear. */
 .duration .segment,
 .duration .segment:first-of-type,
 .duration .segment:last-child {
   --fill: transparent;
-  --ridge-top: transparent;
-  --ridge-bottom: transparent;
+  border-color: transparent;
   border-radius: var(--radius-pill);
 }
 
@@ -778,27 +758,22 @@ button:active:not(:disabled) {
   margin-left: 0;
 }
 
-/* The main action and the chosen option: solid accent with an accent ridge, brighter on hover. */
+/* The main action and the chosen option: the accent at 50%, in the text colour so it stays readable. */
 button.primary,
 .duration .segment[aria-pressed='true'] {
-  --fill: var(--color-accent);
-  --ridge-top: var(--primary-ridge-top);
-  --ridge-bottom: var(--primary-ridge-bottom);
-  color: var(--color-on-accent);
-  box-shadow: 0 4px 14px color-mix(in srgb, var(--color-accent) 35%, transparent);
+  --fill: color-mix(in srgb, var(--color-accent) 50%, transparent);
+  border-color: var(--button-border);
+  color: var(--color-text);
 }
 
 button.primary:hover:not(:disabled),
 .duration .segment[aria-pressed='true']:hover:not(:disabled) {
-  --fill: color-mix(in srgb, var(--color-accent) 88%, white);
+  --fill: color-mix(in srgb, var(--color-accent) 65%, transparent);
 }
 
-/* Show results floats on its own: glass behind, the same ridge round it. */
+/* Show results floats on its own: glass behind it, flat like the rest. */
 button.results-reopen {
   --fill: var(--glass-bg-strong);
-  background:
-    linear-gradient(var(--fill), var(--fill)) padding-box,
-    linear-gradient(180deg, var(--ridge-top), var(--ridge-bottom)) border-box;
 }
 
 .progress {
@@ -1275,7 +1250,9 @@ body.placing canvas {
   padding: 0;
   border-radius: 50%;
   transform: translate(-50%, calc(-100% - 10px));
-  box-shadow: var(--shadow-floating);
+  /* Flat like every button (P24); the border and the glass behind it keep it visible over the map. */
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
 }
 
 .piece-rotate .icon {

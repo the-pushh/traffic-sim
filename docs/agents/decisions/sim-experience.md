@@ -462,3 +462,9 @@ Owner agreed the spec and the T1–T13 ticket breakdown and authorised implement
 - **Rotate on the piece:** a round rotate button floats just above a road piece when it's selected or under the pointer. It stays briefly as the pointer moves onto it. A dropped piece is selected, so its button shows straight away. Clicking turns the piece a quarter (the same action as the inspector's Rotate).
 - **Straights turn to fit:** a straight (or a crossing) dropped at an open road end turns to continue that road, trying its current turn first and then a quarter turn. Dropped one after another they make one long straight road.
 - **No new-piece junctions:** a new piece never becomes a junction because an old road end touches its side. Only a straight's end placed against a road's side still makes a T-junction (P10/P17).
+
+## Flat buttons (P24, #82) — 2026-11-14
+
+- **Owner:** "make all of the buttons flat, with light border and opacity 50 with colors". This supersedes the ridge from #72.
+- Every button is flat: its colour at 50% opacity (grey for secondary buttons, the accent for primary ones), a 1px light border (`--button-border`, light in both themes), and no gradient or shadow. Hover deepens the fill to 70%.
+- Primary labels and icons use the text colour, because white on a half-transparent accent isn't readable.
