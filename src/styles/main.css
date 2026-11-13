@@ -155,12 +155,13 @@ body {
   border-radius: var(--radius);
 }
 
+/* Buttons are fully rounded: pills, or circles where they're as wide as they're tall. */
 button {
   height: var(--control-height);
   min-width: var(--control-height);
   padding: 0 var(--space-3);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius);
+  border-radius: var(--radius-pill);
   background: var(--color-surface);
   color: var(--color-text);
   font: inherit;
@@ -233,7 +234,7 @@ button.primary {
   gap: var(--space-3);
   padding: var(--space-2) var(--space-3);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-pill); /* the dock is a pill */
   background: color-mix(in srgb, var(--color-surface) 94%, transparent);
   box-shadow: var(--shadow-floating);
 }
@@ -255,6 +256,7 @@ button.primary {
   place-items: center;
   width: var(--control-height);
   padding: 0;
+  border-radius: 50%;
 }
 
 .icon-button .icon {
@@ -355,7 +357,7 @@ button.primary {
 
 .duration .segment {
   min-width: 52px;
-  border-radius: 0;
+  border-radius: var(--radius-pill);
 }
 
 /* Focus rings stay visible: no overflow clipping; raise the focused segment above its neighbours. */
@@ -369,11 +371,11 @@ button.primary {
 }
 
 .duration .segment:first-of-type {
-  border-radius: var(--radius) 0 0 var(--radius);
+  border-radius: var(--radius-pill);
 }
 
 .duration .segment:last-child {
-  border-radius: 0 var(--radius) var(--radius) 0;
+  border-radius: var(--radius-pill);
 }
 
 .duration .segment[aria-pressed='true'] {
@@ -720,14 +722,14 @@ button:active:not(:disabled) {
 
 .duration {
   padding: 2px;
-  border-radius: var(--radius);
+  border-radius: var(--radius-pill);
   background: var(--color-surface);
 }
 
 .duration .segment,
 .duration .segment:first-of-type,
 .duration .segment:last-child {
-  border-radius: calc(var(--radius) - 2px);
+  border-radius: var(--radius-pill);
   background: transparent;
 }
 
@@ -912,13 +914,19 @@ button.primary:hover:not(:disabled),
   font-weight: 600;
 }
 
-/* A part: its picture over its name. */
+/* A part: one square tile, the same size for every part, its picture over its name, centred. */
 .parts-group .part {
   display: grid;
-  justify-items: center;
+  place-items: center;
+  align-content: center;
   gap: var(--space-1);
+  width: 100%;
   height: auto;
+  aspect-ratio: 1;
+  min-width: 0;
   padding: var(--space-1);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
   font-size: var(--font-meta);
   line-height: 1.2;
   text-align: center;
@@ -936,9 +944,9 @@ button.primary:hover:not(:disabled),
 }
 
 .part-picture {
-  /* The size the pictures are drawn at (partThumbnails.ts). */
-  width: 56px;
-  height: 56px;
+  /* Drawn at 56 px (partThumbnails.ts), shown a little smaller so picture and name fit the square tile. */
+  width: 48px;
+  height: 48px;
   background: center / contain no-repeat;
 }
 
