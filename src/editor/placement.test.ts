@@ -61,4 +61,69 @@ describe('placement rules (shared by preview and drop)', () => {
     expect(yieldThere.scene!.controls).toEqual([{ type: 'yield', piece: 5, port: 'w' }]);
     expect(placePart(junction, { part: 'signal', pointer: [12, 2], rotation: 0 })).toMatchObject({ valid: false, reason: 'Drop it where a road enters a junction' });
   });
+
+  it('joins a road dropped against the side of a straight: the straight becomes a T-junction', () => {
+    // A north–south straight whose south end touches the side of the road's third tile.
+    const result = placePart(road, { part: 'straight', pointer: [2.6, 7.4], rotation: 90 });
+    expect(result.valid).toBe(true);
+    expect(result.placement).toMatchObject({ piece: 'straight', at: [2.5, 7.5], rotation: 90 });
+    expect(result.joins).toEqual([{ index: 2, from: 'straight', to: 't-junction' }]);
+    expect(result.scene!.pieces[2]).toMatchObject({ piece: 't-junction', at: [2.5, 8.5] });
+    const graph = buildLaneGraph(result.scene!.pieces);
+    expect(graph.mismatches).toEqual([]);
+    // Only the new road's far end (north) and the road's own east end are open.
+    expect(graph.openEnds.map((e) => e.at)).toEqual(expect.arrayContaining([[2.5, 7], [5, 8.5]]));
+    expect(graph.openEnds).toHaveLength(2);
+  });
+
+  it('gives the new piece the arm when an old open road end touches its side', () => {
+    // A north–south straight across the road's open east end (x = 5).
+    const result = placePart(road, { part: 'straight', pointer: [5.5, 8.5], rotation: 90 });
+    expect(result.valid).toBe(true);
+    expect(result.placement!.piece).toBe('t-junction');
+    expect(result.joins).toEqual([{ index: 5, from: 'straight', to: 't-junction' }]);
+    const graph = buildLaneGraph(result.scene!.pieces);
+    expect(graph.mismatches).toEqual([]);
+    expect(graph.openEnds.map((e) => e.at)).toEqual(expect.arrayContaining([[5.5, 8], [5.5, 9]]));
+    expect(graph.openEnds).toHaveLength(2);
+  });
+
+  it('turns a T-junction into a crossroads, keeping its signs on their approaches', () => {
+    const tee = placePart(road, { part: 'straight', pointer: [2.6, 7.4], rotation: 90 }).scene!;
+    // A stop sign on the T's west approach, then a road against its open south side.
+    const signed = placePart(tee, { part: 'stop', pointer: [2.1, 8.5], rotation: 0 }).scene!;
+    expect(signed.controls).toHaveLength(1);
+    const result = placePart(signed, { part: 'straight', pointer: [2.4, 9.6], rotation: 90 });
+    expect(result.joins).toEqual([{ index: 2, from: 't-junction', to: 'crossroad' }]);
+    expect(result.scene!.pieces[2]).toMatchObject({ piece: 'crossroad', rotation: 0 });
+    expect(result.scene!.controls).toEqual([{ type: 'stop', piece: 2, port: 'w' }]); // still the west approach
+    expect(buildLaneGraph(result.scene!.pieces).mismatches).toEqual([]);
+  });
+
+  it('turns a bend into a T-junction', () => {
+    const bent: SceneDefinition = { ...road, pieces: [...road.pieces, { piece: 'bend', at: [5.5, 8.5], rotation: 0 }] }; // west ↔ south
+    const result = placePart(bent, { part: 'straight', pointer: [6.4, 8.5], rotation: 0 });
+    expect(result.joins).toEqual([{ index: 5, from: 'bend', to: 't-junction' }]);
+    expect(buildLaneGraph(result.scene!.pieces).mismatches).toEqual([]);
+  });
+
+  it('leaves pieces that can’t take an arm as they are (a pedestrian crossing, a one-way road)', () => {
+    const crossing: SceneDefinition = { ...road, pieces: road.pieces.map((p, i) => (i === 2 ? { ...p, piece: 'crossing' } : p)) };
+    const beside = placePart(crossing, { part: 'straight', pointer: [2.6, 7.4], rotation: 90 });
+    expect(beside.joins).toBeUndefined();
+    expect(beside.scene!.pieces[2].piece).toBe('crossing');
+    const oneWay: SceneDefinition = { ...road, pieces: road.pieces.map((p) => ({ ...p, flow: { w: 'in', e: 'out' } })) };
+    expect(placePart(oneWay, { part: 'straight', pointer: [2.6, 7.4], rotation: 90 }).joins).toBeUndefined();
+  });
+
+  it('never snaps a ramp or bridge below the ground to sit beside a road; only a ramp’s foot joins one', () => {
+    for (const [part, rotation] of [['bridge', 0], ['bridge', 180], ['ramp', 270], ['ramp-steep', 90]] as const) {
+      const result = placePart(road, { part, pointer: [2.6, 7.4], rotation });
+      expect(result.placement!.level ?? 0, `${part} at ${rotation}°`).toBeGreaterThanOrEqual(0);
+      if (part === 'bridge') expect(result.joins, `${part} at ${rotation}°`).toBeUndefined(); // both ends are raised
+    }
+    // A ramp whose foot meets the road's side joins it at ground level.
+    const foot = placePart(road, { part: 'ramp-steep', pointer: [2.6, 7.4], rotation: 90 });
+    expect(foot).toMatchObject({ valid: true, placement: { level: 0 }, joins: [{ index: 2, from: 'straight', to: 't-junction' }] });
+  });
 });

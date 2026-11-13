@@ -34,6 +34,8 @@ function replaceWith(scene: SceneDefinition, index: number, request: { part?: Pa
     rotation: request.rotation ?? old.rotation,
     level: old.level ?? 0,
     snap: request.snap,
+    // Moving, turning or swapping a piece never grows junctions on its neighbours (only new pieces join).
+    join: false,
   });
   return reattach(result, controls);
 }

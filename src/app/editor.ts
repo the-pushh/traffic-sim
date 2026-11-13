@@ -48,6 +48,9 @@ const GROUPS: PartGroup[] = ['Roads', 'Curves', 'Junctions', 'Ends', 'Flyovers',
 const DRAG_THRESHOLD = 6;
 const CONTROL_TYPES: ControlPlacement['type'][] = ['signal', 'stop', 'yield'];
 
+/** What the preview says a drop makes when it joins a road's side. */
+const JUNCTION_NAMES: Record<string, string> = { 't-junction': 'a T-junction', crossroad: 'a crossroads', bend: 'a bend' };
+
 /** Remembers in this browser that the Space-to-turn tip has been shown. */
 const SPACE_TIP_KEY = 'traffic-sim:space-turns-tip-seen';
 
@@ -206,6 +209,53 @@ export function createEditor(host: EditorHost) {
   highlight.renderOrder = 2;
   highlight.visible = false;
   ghostRoot.add(highlight);
+  // Pieces a drop would turn into junctions (and the new piece, when it becomes one), shown as they'll be.
+  const joinGhosts = new Group();
+  joinGhosts.name = 'editor-join-ghosts';
+  ghostRoot.add(joinGhosts);
+  const joinMaterial = new MeshBasicMaterial({ color: VALID_COLOUR, transparent: true, opacity: GHOST_OPACITY, depthWrite: false });
+  // Lives as long as the editor (the whole session): one material shared by every join ghost.
+  const loadedModels = new Map<string, Object3D | 'loading' | 'failed'>();
+  /** A translucent copy of a piece's model, or null while it loads or if it couldn't (the preview updates once it has). */
+  function joinGhost(piece: string): Object3D | null {
+    const name = PIECES[piece].model;
+    const loaded = loadedModels.get(name);
+    if (loaded === 'loading' || loaded === 'failed') return null;
+    if (!loaded) {
+      loadedModels.set(name, 'loading');
+      void host.model(name).then(
+        (model) => {
+          loadedModels.set(name, model);
+          update();
+        },
+        () => loadedModels.set(name, 'failed'), // the dragged part's own ghost stands in
+      );
+      return null;
+    }
+    const copy = loaded.clone();
+    copy.scale.setScalar(TILE_SIZE);
+    copy.traverse((object) => {
+      if ((object as Mesh).isMesh) (object as Mesh).material = joinMaterial;
+    });
+    return copy;
+  }
+  /** Show the junctions a drop would make, exactly where they'll be; true when the new piece itself becomes one. */
+  function showJoins(result: PlacementResult): boolean {
+    joinGhosts.clear();
+    let newPieceGrown = false;
+    if (!result.valid || !result.scene || !result.joins) return false;
+    for (const join of result.joins) {
+      const p = result.scene.pieces[join.index];
+      const ghost = joinGhost(p.piece);
+      if (!ghost) continue;
+      // Only once its junction shape is showing does it replace the dragged part's ghost.
+      if (join.index === result.scene.pieces.length - 1) newPieceGrown = true;
+      ghost.position.set(...boardToWorld([p.at[0], p.level ?? 0, p.at[1]]));
+      ghost.rotation.y = (p.rotation * Math.PI) / 180;
+      joinGhosts.add(ghost);
+    }
+    return newPieceGrown;
+  }
   const outline = new Box3Helper(new Box3(), new Color(SELECTED_COLOUR));
   outline.name = 'editor-selection';
   outline.renderOrder = 3;
@@ -275,7 +325,8 @@ export function createEditor(host: EditorHost) {
     }
     const result = (drag.latest = compute());
     if (!result) return;
-    model.visible = true;
+    // When the new piece itself becomes a junction, its junction ghost stands in for it.
+    model.visible = !showJoins(result);
     for (const m of materials) m.color.set(result.valid ? VALID_COLOUR : INVALID_COLOUR);
     if (result.placement) {
       const p = result.placement;
@@ -292,7 +343,7 @@ export function createEditor(host: EditorHost) {
     highlight.visible = result.valid && result.snappedTo !== null;
     if (result.snappedTo) highlight.position.set(...boardToWorld(result.snappedTo)).add(new Vector3(0, 0.05, 0));
     // Valid and invalid differ by outline and words as well as colour.
-    showLabel(result.valid ? (result.snappedTo ? '✓ Connects here' : '✓ Place here') : `✕ ${result.reason}`, result.valid);
+    showLabel(result.valid ? (result.joins ? `✓ Makes ${JUNCTION_NAMES[result.joins.at(-1)!.to] ?? 'a junction'}` : result.snappedTo ? '✓ Connects here' : '✓ Place here') : `✕ ${result.reason}`, result.valid);
   }
 
   function showLabel(text: string, valid: boolean) {
@@ -345,6 +396,7 @@ export function createEditor(host: EditorHost) {
       drag.ghost.materials.forEach((m) => m.dispose());
     }
     highlight.visible = false;
+    joinGhosts.clear();
     reasonLabel.hidden = true;
     ghostRoot.parent?.remove(ghostRoot);
     document.body.classList.remove('placing');

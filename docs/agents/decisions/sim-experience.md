@@ -336,3 +336,17 @@ Owner agreed the spec and the T1–T13 ticket breakdown and authorised implement
 - **What:** the owner's contour drawing (three hills), ringed by generated contours out to the screen's edges, sits over the faint vertical columns (P4). Both are kept: the columns give colour, the contours give texture.
 - **How:** a fixed `body::before` layer whose background colour (`--backdrop-contour`) is masked by `public/images/topographic.svg` at `center / cover`, so lines are 1.2 px at every size and follow the theme toggle. `#app` sits above it. It's CSS only: the 3D view, the panels and the idle cost (0 draws) are unaffected.
 - **Asset record:** `assets/ui/ASSETS.md`; the generator is `scripts/build-topographic.mjs`.
+
+## New pieces join the roads they touch (P10, #50) — 2026-11-13
+
+- **Owner's request:** a road placed against another should join it. Before, a straight dropped perpendicular to a straight was placed but left unconnected.
+- **The rule** lives in the shared placement code (`placePart`), so the preview and the drop agree. When a new piece's road end meets the middle of a side of a plain road piece, that piece grows an arm there:
+  - a straight or a bend becomes a T-junction;
+  - a T-junction becomes a crossroads.
+- **And the other way round:** when an old open road end meets the side of the new piece, the new piece grows the arm. A straight laid across a road's end becomes a T.
+- **What can grow an arm:** one-tile, ground-level, two-way pieces without a speed limit (straight, bend, T-junction). Pedestrian crossings, one-way carriageways, ramps, bridges and multi-tile pieces are left as they are. *The owner confirmed these exclusions on 2026-11-13.*
+- **Signs and demand:** signs on a grown piece stay on the approach they were on, by compass direction. Demand follows its entries, as for any edit.
+- **Snapping:** the preview snaps to these join points when the pointer is over the tile the new piece would take (within 0.6 tile). Open road ends keep their wider 1.1-tile snap, so a drop on top of a road still says "Something's already there".
+- **Only new pieces join.** Moving, turning or swapping a piece that's already placed never grows junctions, so signs stay on their approaches and turning a piece doesn't change its neighbours.
+- **Heights:** only ground-level road ends join a road's side. A ramp's foot can; a bridge deck or a ramp's top can't. No snap ever puts a piece below the ground.
+- **Preview:** it shows each piece that will become a junction as a translucent copy of its new shape (and the new piece as its junction shape, when it grows), labelled "✓ Makes a T-junction" or "✓ Makes a crossroads". Undo restores the original pieces.
