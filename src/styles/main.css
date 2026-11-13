@@ -1239,3 +1239,22 @@ body.placing canvas {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+/* The rotate button on a road piece itself (selected or under the pointer): centred above the piece. */
+.piece-rotate {
+  position: absolute;
+  z-index: 3;
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  padding: 0;
+  border-radius: 50%;
+  transform: translate(-50%, calc(-100% - 10px));
+  box-shadow: var(--shadow-floating);
+}
+
+.piece-rotate .icon {
+  width: 18px;
+  height: 18px;
+  margin: 0 auto;
+}

@@ -482,6 +482,24 @@ if (isDevServer) {
     await page3.waitForTimeout(200);
     editorChecks.spaceNeverStuck = placingFromSpace && !stuckAfterKeyboardStart && !(await spaceStuck());
   }
+  // P24: straights dropped one after another below a north–south road end (at the default turn) line up
+  // into one road, with no junctions; the dropped piece shows a rotate button on itself that turns it.
+  {
+    const before = await page3.evaluate(() => window.__trafficDebug.scene().pieces.length);
+    for (const z of [1.6, 2.6, 3.6]) await dragPart('straight', 8.5, z);
+    const placed = await page3.evaluate((n) => window.__trafficDebug.scene().pieces.slice(n), before);
+    const lined = placed.length === 3 && placed.every((p, i) => p.piece === 'straight' && p.rotation % 180 === 90 && p.at[0] === 8.5 && p.at[1] === 1.5 + i);
+    const button = page3.locator('.piece-rotate');
+    const shown = await button.isVisible();
+    await button.click();
+    await page3.waitForTimeout(500);
+    const turned = (await page3.evaluate(() => window.__trafficDebug.scene().pieces.at(-1).rotation)) % 180 === 0;
+    editorChecks.straightsInSeriesStayStraight = lined;
+    editorChecks.rotateButtonOnDroppedPiece = shown && turned;
+    for (let i = 0; i < 4; i++) await page3.keyboard.press('Control+z'); // back to the empty board
+    await page3.waitForTimeout(400);
+    await page3.evaluate(() => window.__trafficDebug.select(null));
+  }
   const startCount = await pieces();
   const valid = await dragPart('straight', 1.6, 8.6);
   await page3.screenshot({ path: `${outDir}/23-editor-dropped.png` });
