@@ -412,3 +412,8 @@ Owner agreed the spec and the T1–T13 ticket breakdown and authorised implement
 - **Zoom:** the camera starts twice as close as the whole-board fit (`ObserverCamera.framing(…, { zoom: 2 })`, unit-tested). Zooming out is limited relative to the fit, so the whole board is still one scroll away. Opening a scene, and Reset View, return to this closer view.
 - **Browser checks:** written for Main Street at 30 s, they get there with the arrows and the 30 s button first (`toMainStreetAt30s`). Checks that drag across the board zoom out to see it all (`wholeBoardInView`). A new check confirms a fresh visit opens on Flyover Bottleneck at 60 s.
 - **P17 review follow-ups** also landed here: stale "+" wording in the scenery code and a test title.
+
+## Reset View button removed (2026-11-13)
+
+- **Owner:** remove the Reset View button from the dock. There is no on-screen Reset View now. Opening a scene still frames the view afresh, and the camera panel keeps zoom in, zoom out and the theme switch.
+- **Browser checks:** the focus and Space-pan checks use the Zoom in button instead, and a check confirms no Reset View button remains.

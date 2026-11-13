@@ -136,10 +136,10 @@ const zoomed = await shot('08-after-wheel-zoom');
 
 await page.getByRole('button', { name: 'Zoom in' }).click();
 const zoomButton = await shot('08b-after-zoom-in-button');
-await page.getByRole('button', { name: 'Reset View' }).click();
-const reset = await shot('09-after-reset-view');
-
-// Reset View keeps focus; Space + drag over the map must pan, and releasing Space must not press Reset View.
+// No Reset View button any more: a camera button (Zoom in) keeps focus instead; Space + drag over the map
+// must pan, and releasing Space must not press the focused button.
+await page.getByRole('button', { name: 'Zoom in' }).focus();
+const reset = await shot('09-zoom-in-focused');
 await spacePan();
 const panAfterReset = await shot('09b-space-pan-with-reset-focused');
 await page.waitForTimeout(200);
@@ -636,17 +636,11 @@ const dockChecks = {};
     );
   });
   dockChecks.labelsUnchanged = (await page.getByRole('button', { name: 'Customise' }).count()) === 1 && (await page.getByRole('button', { name: 'Restart run' }).count()) === 1;
-  // P16: one Reset View, an icon in the dock; the camera panel is a slim strip of three icon buttons.
-  dockChecks.resetViewOnceInDock = await page.evaluate(() => {
+  // No Reset View button (removed from the dock at the owner's request); the camera panel is a slim strip of three icon buttons.
+  dockChecks.noResetViewButton = await page.evaluate(() => {
     const resets = [...document.querySelectorAll('button')].filter((b) => (b.getAttribute('aria-label') ?? b.textContent ?? '').trim().toLowerCase() === 'reset view');
     const panel = [...document.querySelectorAll('.camera-controls button')];
-    return (
-      resets.length === 1 &&
-      !!resets[0].closest('.dock') &&
-      !!resets[0].querySelector('svg.icon-frameCorners') &&
-      panel.length === 3 &&
-      panel.every((b) => b.querySelector('svg.icon') && !b.textContent?.trim())
-    );
+    return resets.length === 0 && panel.length === 3 && panel.every((b) => b.querySelector('svg.icon') && !b.textContent?.trim());
   });
   await page.locator('.dock').screenshot({ path: `${outDir}/30-dock-icons.png` });
   await page.close();
@@ -1011,12 +1005,12 @@ await failPage.goto(url);
 await failPage.waitForSelector('.status.error', { timeout: 30000 });
 const failureMessage = (await failPage.locator('.status.error p').textContent())?.trim();
 const retryFocused = await failPage.evaluate(() => document.activeElement?.textContent === 'Retry');
-const resetDisabledDuringFailure = await failPage.getByRole('button', { name: 'Reset View' }).isDisabled();
+const resetDisabledDuringFailure = await failPage.getByRole('button', { name: 'Zoom in' }).isDisabled();
 await failPage.screenshot({ path: `${outDir}/10-asset-failure.png` });
 blockVehicle = false;
 await failPage.getByRole('button', { name: 'Retry' }).click();
 await failPage.waitForSelector('.status', { state: 'hidden', timeout: 30000 });
-const retryRecovered = await failPage.getByRole('button', { name: 'Reset View' }).isEnabled();
+const retryRecovered = await failPage.getByRole('button', { name: 'Zoom in' }).isEnabled();
 await browser.close();
 
 const differs = (a, b) => !a.equals(b);
@@ -1033,7 +1027,6 @@ const result = {
   rightDragChangedView: differs(panWithMapFocused, rightDragged),
   zoomChangedView: differs(rightDragged, zoomed),
   zoomButtonChangedView: differs(zoomed, zoomButton),
-  resetMatchesInitial: !differs(initial, reset),
   spacePanWorksWithButtonFocused: differs(reset, panAfterReset),
   spaceReleaseDidNotPressFocusedButton: !differs(panAfterReset, afterSpaceRelease) && differs(initial, afterSpaceRelease),
   headed,
@@ -1075,7 +1068,6 @@ const ok =
   result.spacePanWorksWithButtonFocused &&
   result.spaceReleaseDidNotPressFocusedButton &&
   result.zoomChangedView &&
-  result.resetMatchesInitial &&
   failureMessage === "Couldn't load models/vehicles/sedan.glb" &&
   retryFocused &&
   resetDisabledDuringFailure &&

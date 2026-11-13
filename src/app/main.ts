@@ -296,19 +296,8 @@ cameraControls.addEventListener('click', (e) => {
   if (action === 'zoom-out') observer.zoom(1 / ZOOM_STEP);
 });
 
-/** Reset View: one icon button, in the dock (camera back to the start; the run and layout are untouched). */
-const resetViewButton = document.createElement('button');
-resetViewButton.type = 'button';
-resetViewButton.className = 'icon-button reset-view';
-resetViewButton.setAttribute('aria-label', 'Reset view');
-resetViewButton.title = 'Reset view';
-resetViewButton.disabled = true;
-resetViewButton.innerHTML = icon('frameCorners');
-resetViewButton.addEventListener('click', () => observer?.resetView());
-
 function setCameraControlsEnabled(enabled: boolean) {
   for (const button of cameraControls.querySelectorAll('button:not(.theme-toggle)')) (button as HTMLButtonElement).disabled = !enabled;
-  resetViewButton.disabled = !enabled;
 }
 
 let tooltip: ReturnType<typeof createVehicleTooltip> | null = null;
@@ -490,7 +479,6 @@ const editor = createEditor({
   apply: (scene, fromHistory) => applyEdit(scene, fromHistory).then(() => undefined),
   canEdit: () => run.state !== 'running',
 });
-dock.addSection(resetViewButton);
 dock.addSection(editor.toggle);
 rightPanel = editor.tray;
 
