@@ -26,9 +26,6 @@
   --glass-border: rgb(255 255 255 / 0.7);
   --glass-highlight: inset 0 1px 0 rgb(255 255 255 / 0.85);
   --glass-blur: blur(22px) saturate(180%);
-  /* Faint vertical columns of the palette behind the scene (pink and blue, washed out). */
-  --backdrop-column-pink: rgb(244 135 182 / 0.11);
-  --backdrop-column-blue: rgb(55 114 255 / 0.065);
   /* Contour lines of the topographic backdrop: ink-blue, faint. */
   --backdrop-contour: rgb(55 114 255 / 0.16);
 
@@ -66,8 +63,6 @@
     --glass-bg-strong: rgb(30 25 32 / 0.7);
     --glass-border: rgb(247 243 227 / 0.16);
     --glass-highlight: inset 0 1px 0 rgb(247 243 227 / 0.12);
-    --backdrop-column-pink: rgb(244 135 182 / 0.055);
-    --backdrop-column-blue: rgb(55 114 255 / 0.075);
     --backdrop-contour: rgb(247 243 227 / 0.07);
     --shadow-floating: 0 12px 34px rgb(0 0 0 / 0.45), 0 2px 6px rgb(0 0 0 / 0.3);
     color-scheme: dark;
@@ -87,8 +82,6 @@
   --glass-bg-strong: rgb(30 25 32 / 0.7);
   --glass-border: rgb(247 243 227 / 0.16);
   --glass-highlight: inset 0 1px 0 rgb(247 243 227 / 0.12);
-  --backdrop-column-pink: rgb(244 135 182 / 0.055);
-  --backdrop-column-blue: rgb(55 114 255 / 0.075);
   --backdrop-contour: rgb(247 243 227 / 0.07);
   --shadow-floating: 0 12px 34px rgb(0 0 0 / 0.45), 0 2px 6px rgb(0 0 0 / 0.3);
   color-scheme: dark;
@@ -138,6 +131,75 @@ body {
   cursor: grabbing;
 }
 
+.camera-controls .joystick {
+  --joystick-size: 88px;
+  --knob-size: 32px;
+  position: relative;
+  align-self: center;
+  width: var(--joystick-size);
+  height: var(--joystick-size);
+  border: 1px solid var(--color-border);
+  border-radius: 50%;
+  background:
+    radial-gradient(circle, transparent 38%, color-mix(in srgb, var(--color-border) 50%, transparent) 39% 40%, transparent 41%),
+    var(--color-background);
+  touch-action: none;
+  cursor: grab;
+}
+
+.joystick::before,
+.joystick::after {
+  /* Direction ticks: orbit on the horizontal axis, tilt on the vertical. */
+  content: '';
+  position: absolute;
+  inset: 50% var(--space-2) auto;
+  height: 1px;
+  background: var(--color-border);
+}
+
+.joystick::after {
+  inset: var(--space-2) auto var(--space-2) 50%;
+  width: 1px;
+  height: auto;
+}
+
+.joystick-knob {
+  position: absolute;
+  z-index: 1;
+  top: calc(50% - var(--knob-size) / 2);
+  left: calc(50% - var(--knob-size) / 2);
+  width: var(--knob-size);
+  height: var(--knob-size);
+  border-radius: 50%;
+  background: var(--color-accent);
+  pointer-events: none;
+  transition: transform 120ms ease-out;
+}
+
+.joystick[data-active] .joystick-knob {
+  transition: none;
+}
+
+.joystick[data-active] {
+  cursor: grabbing;
+}
+
+.joystick:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.joystick[aria-disabled='true'] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .joystick-knob {
+    transition: none;
+  }
+}
+
 .visually-hidden {
   position: absolute;
   width: 1px;
@@ -145,6 +207,18 @@ body {
   overflow: hidden;
   clip-path: inset(50%);
   white-space: nowrap;
+}
+
+.camera-controls {
+  position: absolute;
+  top: var(--space-4);
+  right: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  background: color-mix(in srgb, var(--color-surface) 92%, transparent);
+  border-radius: var(--radius);
 }
 
 button {
@@ -217,6 +291,43 @@ button.primary {
   pointer-events: auto;
 }
 
+.dock {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--color-surface) 94%, transparent);
+  box-shadow: var(--shadow-floating);
+}
+
+.dock-section {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.dock-divider {
+  align-self: stretch;
+  width: 1px;
+  background: var(--color-border);
+}
+
+.icon-button {
+  display: grid;
+  place-items: center;
+  width: var(--control-height);
+  padding: 0;
+}
+
+.icon-button .icon {
+  width: 20px;
+  height: 20px;
+}
+
 /* Phosphor icons: sized by their context, coloured by the text. */
 .icon {
   display: block;
@@ -225,8 +336,156 @@ button.primary {
   height: 18px;
 }
 
+/* A section's icon in the dock: clock for run length, gauge for intensity. */
+.dock-icon {
+  display: grid;
+  place-items: center;
+  color: var(--color-text-muted);
+}
+
+.duration .dock-icon {
+  margin: 0 var(--space-1) 0 var(--space-2);
+}
+
+.dock-traffic {
+  gap: var(--space-2);
+}
+
+.parts-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.parts-toggle-icons {
+  display: inline-flex;
+  gap: 1px;
+}
+
+.camera-controls button[data-action^='zoom'] .icon,
+.theme-toggle .icon {
+  margin: 0 auto;
+}
+
+.timeline {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 160px;
+}
+
+.clock {
+  font-variant-numeric: tabular-nums;
+  font-size: var(--font-meta);
+  color: var(--color-text-muted);
+}
+
+.progress {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--color-border);
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: var(--color-accent);
+  transform-origin: left;
+  transform: scaleX(0);
+}
+
+.dock-label {
+  font-size: var(--font-meta);
+  color: var(--color-text-muted);
+}
+
+.dock-label strong {
+  color: var(--color-text);
+  font-weight: 600;
+}
+
+.intensity {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 170px;
+}
+
+.intensity input {
+  width: 100%;
+  accent-color: var(--color-accent);
+}
+
+.duration {
+  display: flex;
+  align-items: center;
+}
+
+.duration .segment {
+  min-width: 52px;
+  border-radius: 0;
+}
+
+/* Focus rings stay visible: no overflow clipping; raise the focused segment above its neighbours. */
+.duration .segment:focus-visible {
+  position: relative;
+  z-index: 1;
+}
+
+.duration .segment + .segment {
+  margin-left: -1px;
+}
+
+.duration .segment:first-of-type {
+  border-radius: var(--radius) 0 0 var(--radius);
+}
+
+.duration .segment:last-child {
+  border-radius: 0 var(--radius) var(--radius) 0;
+}
+
+.duration .segment[aria-pressed='true'] {
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+  font-weight: 600;
+}
+
+/* Disabled settings during a run: greyed out, still readable. */
+.intensity input:disabled,
+.dock button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .lock-hint {
   color: var(--color-text-muted);
+}
+
+.intensity:has(input:disabled) .dock-label strong {
+  color: var(--color-text-muted);
+}
+
+.scene-pill {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--color-surface) 94%, transparent);
+  box-shadow: var(--shadow-floating);
+}
+
+.scene-name {
+  padding: 0 var(--space-2);
+  font-weight: 600;
+}
+
+.pill-arrow {
+  height: 32px;
+  min-width: 32px;
+  padding: 0;
+  border-radius: var(--radius-pill);
+  font-size: 18px;
+  line-height: 1;
 }
 
 .first-visit-tip {
@@ -445,7 +704,7 @@ button.primary {
 }
 
 /*
- * Topographic contours over the columns: the owner's three hills in the middle with rings
+ * Topographic contours over the plain background: the owner's three hills in the middle with rings
  * around them to the screen's edges (public/images/topographic.svg, generated by
  * scripts/build-topographic.mjs). The drawing is a mask, so the lines take the theme's
  * token colour. It's a fixed layer behind everything, not part of the 3D view.
@@ -454,7 +713,7 @@ body::before {
   content: '';
   position: fixed;
   inset: 0;
-  z-index: 0; /* above the body's own background (the columns), below the app */
+  z-index: 0; /* above the body's own background, below the app */
   pointer-events: none;
   background-color: var(--backdrop-contour);
   -webkit-mask: url('/images/topographic.svg') center / cover no-repeat;
@@ -465,34 +724,15 @@ body::before {
 
 html,
 body {
-  /*
-   * Faint vertical columns of uneven width in the palette's colours, like washes of
-   * colour on paper, top to bottom; they give the glass something to blur. A few pink
-   * columns are lighter still (half and 60% strength).
-   */
-  background:
-    linear-gradient(
-      90deg,
-      transparent 0 5%,
-      var(--backdrop-column-pink) 5% 13%,
-      transparent 13% 19%,
-      var(--backdrop-column-blue) 19% 23%,
-      color-mix(in srgb, var(--backdrop-column-pink) 50%, transparent) 23% 36%,
-      transparent 36% 52%,
-      var(--backdrop-column-blue) 52% 61%,
-      transparent 61% 68%,
-      color-mix(in srgb, var(--backdrop-column-pink) 60%, transparent) 68% 72%,
-      var(--backdrop-column-blue) 72% 84%,
-      transparent 84% 91%,
-      var(--backdrop-column-pink) 91% 95%,
-      transparent 95% 100%
-    ),
-    var(--color-background);
-  background-attachment: fixed;
+  /* A plain background (the owner removed the coloured columns); the contours above give the glass something to blur. */
+  background: var(--color-background);
   font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, 'Segoe UI', sans-serif;
   -webkit-font-smoothing: antialiased;
 }
 
+.camera-controls,
+.dock,
+.scene-pill,
 .first-visit-tip,
 .vehicle-tooltip,
 .results-card,
@@ -503,6 +743,11 @@ body {
   box-shadow: var(--glass-highlight), var(--shadow-floating);
   -webkit-backdrop-filter: var(--glass-blur);
   backdrop-filter: var(--glass-blur);
+}
+
+.camera-controls {
+  border-radius: var(--radius-lg);
+  padding: var(--space-3);
 }
 
 .vehicle-tooltip,
@@ -530,16 +775,60 @@ button:active:not(:disabled) {
   transform: scale(0.97);
 }
 
+.duration {
+  padding: 2px;
+  border-radius: var(--radius);
+  background: var(--color-surface);
+}
+
+.duration .segment,
+.duration .segment:first-of-type,
+.duration .segment:last-child {
+  border-radius: calc(var(--radius) - 2px);
+  background: transparent;
+}
+
+.duration .segment + .segment {
+  margin-left: 0;
+}
+
 /* The main action and the chosen option: solid accent, brighter on hover. */
-button.primary {
+button.primary,
+.duration .segment[aria-pressed='true'] {
   background: var(--color-accent);
   border-color: transparent;
   color: var(--color-on-accent);
   box-shadow: 0 4px 14px color-mix(in srgb, var(--color-accent) 35%, transparent);
 }
 
-button.primary:hover:not(:disabled) {
+button.primary:hover:not(:disabled),
+.duration .segment[aria-pressed='true']:hover:not(:disabled) {
   background: color-mix(in srgb, var(--color-accent) 88%, white);
+}
+
+.progress {
+  background: var(--color-border);
+}
+
+/* Pink for things in motion: the run's progress and the joystick knob. */
+.progress-fill,
+.joystick-knob {
+  background: linear-gradient(90deg, var(--color-accent-2), color-mix(in srgb, var(--color-accent-2) 70%, var(--color-accent)));
+}
+
+.joystick-knob {
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--color-accent-2) 45%, transparent);
+}
+
+.camera-controls .joystick {
+  border-color: var(--glass-border);
+  background:
+    radial-gradient(circle, transparent 38%, color-mix(in srgb, var(--color-border) 60%, transparent) 39% 40%, transparent 41%),
+    var(--color-surface);
+}
+
+.intensity input {
+  accent-color: var(--color-accent);
 }
 
 .first-visit-tip {
@@ -548,19 +837,25 @@ button.primary:hover:not(:disabled) {
 
 /* No blur support: fall back to solid panels so text stays readable. */
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .camera-controls,
+  .dock,
+  .scene-pill,
   .first-visit-tip,
-.vehicle-tooltip,
-.results-card,
-.results-reopen {
+  .vehicle-tooltip,
+  .results-card,
+  .results-reopen {
     background: var(--glass-bg-strong);
   }
 }
 
 @media (prefers-reduced-transparency: reduce) {
+  .camera-controls,
+  .dock,
+  .scene-pill,
   .first-visit-tip,
-.vehicle-tooltip,
-.results-card,
-.results-reopen {
+  .vehicle-tooltip,
+  .results-card,
+  .results-reopen {
     background: var(--color-background);
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
@@ -568,6 +863,23 @@ button.primary:hover:not(:disabled) {
 }
 
 /* Keep the dock on one row on desktop: the intensity label wraps within its column instead. */
+@media (min-width: 900px) {
+  .dock {
+    flex-wrap: nowrap;
+  }
+
+  .intensity {
+    max-width: 210px;
+  }
+}
+
+/* Save and Reset in the scene pill. */
+.pill-action {
+  height: 28px;
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-pill);
+  font-size: var(--font-meta);
+}
 
 /* Asks before leaving a scene with unsaved edits. */
 .leave-dialog {
@@ -605,6 +917,11 @@ button.primary:hover:not(:disabled) {
   height: 28px;
   min-width: 28px;
   padding: 0;
+}
+
+/* ---- Editor: Parts drawer, inspector, placement label ---- */
+.parts-toggle {
+  align-self: center;
 }
 
 .parts-drawer {
@@ -834,6 +1151,10 @@ body.placing canvas {
 .placement-reason.invalid {
   color: var(--color-error);
   border-style: dashed;
+}
+
+.duration .segment {
+  white-space: nowrap;
 }
 
 .inspector .timing label {

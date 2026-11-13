@@ -177,7 +177,7 @@ for (let s = 0; s < 5; s++) {
     for (const load of QUICK ? LOADS.slice(1) : LOADS) {
       await page.getByRole('button', { name: 'Restart run' }).click();
       await page.getByRole('button', { name: '90 s' }).click();
-      const slider = page.locator('.intensity [role="slider"]');
+      const slider = page.locator('.intensity input');
       await slider.focus();
       await page.keyboard.press(load.key ?? 'Home');
       if (!load.key) for (let i = 0; i < 2; i++) await page.keyboard.press('ArrowRight'); // Medium
@@ -241,7 +241,7 @@ if (THROTTLE > 1) {
   const before = await width();
   const slowCdp = await slow.context().newCDPSession(slow);
   await slowCdp.send('Emulation.setCPUThrottlingRate', { rate: THROTTLE });
-  await slow.locator('.intensity [role="slider"]').focus();
+  await slow.locator('.intensity input').focus();
   await slow.keyboard.press('End');
   await slow.locator('.dock [data-action="play-pause"]').click();
   await slow.waitForTimeout(8000);

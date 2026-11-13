@@ -120,7 +120,7 @@ export function createResultsCard(container: HTMLElement, results: () => Labelle
         render();
         show(true);
         announcer.textContent = `Run ended. Results: ${latest.finished} of ${latest.due} trips finished.`;
-      } else if (now === 'running' || now === 'ready' || now === 'paused') { // paused: scrubbed back from the end
+      } else if (now === 'running' || now === 'ready') {
         show(false);
         announcer.textContent = '';
       }

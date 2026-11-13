@@ -156,46 +156,4 @@ describe('run controller', () => {
     run.setDuration(60); // a new duration needs no new traffic
     expect(run.freshStarts).toBe(2);
   });
-
-  describe('scrubbing the timeline', () => {
-    const at = (seconds: number) => {
-      const run = new RunController();
-      run.play();
-      run.tick(seconds);
-      return run;
-    };
-
-    it('jumps forward by simulating the steps in between, and leaves the run paused there', () => {
-      const run = at(10);
-      expect(run.seek(20)).toEqual({ rewind: false, steps: 300 });
-      expect(run.clock).toBe(20);
-      expect(run.state).toBe('paused');
-    });
-
-    it('jumps back by starting the same traffic again and replaying to that moment', () => {
-      const run = at(10);
-      const fresh = run.freshStarts;
-      expect(run.seek(4)).toEqual({ rewind: true, steps: 120 });
-      expect(run.freshStarts).toBe(fresh + 1);
-      expect(run.clock).toBe(4);
-      expect(run.state).toBe('paused');
-    });
-
-    it('ends the run when dragged to the end, and is Ready again at 0:00', () => {
-      const run = at(10);
-      run.seek(45);
-      expect(run.clock).toBe(30);
-      expect(run.state).toBe('ended');
-      run.seek(0);
-      expect(run.clock).toBe(0);
-      expect(run.state).toBe('ready');
-    });
-
-    it('can scrub from Ready into the run', () => {
-      const run = new RunController();
-      expect(run.seek(3)).toEqual({ rewind: false, steps: 90 });
-      expect(run.state).toBe('paused');
-    });
-  });
 });
-

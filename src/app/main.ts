@@ -1,7 +1,5 @@
-import { DoubleSide, Group, Mesh, MeshBasicMaterial, type Object3D, PCFSoftShadowMap, PerspectiveCamera, RingGeometry, Timer, WebGLRenderer } from 'three';
-import { Line2 } from 'three/examples/jsm/lines/Line2.js';
-import { LineGeometry } from 'three/examples/jsm/lines/LineGeometry.js';
-import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
+import { BufferAttribute, BufferGeometry, DoubleSide, Group, Mesh, MeshBasicMaterial, type Object3D, PCFSoftShadowMap, PerspectiveCamera, RingGeometry, Timer, WebGLRenderer } from 'three';
+import { routeRibbon } from '../three/scene/routeRibbon';
 import type { LaneGraph } from '../simulation/network/buildLaneGraph';
 import type { TrafficSimulation } from '../simulation/traffic/trafficSimulation';
 import { boardToWorld } from '../scenes/board';
@@ -14,13 +12,12 @@ import { icon } from '../components/icons';
 import { createDock } from '../components/dock';
 import { createFirstVisitTip } from '../components/firstVisitTip';
 import { createResultsCard } from '../components/resultsCard';
+import { attachJoystickControl, setJoystickEnabled } from '../components/joystickControl';
 import { createLeaveDialog } from '../components/leaveDialog';
 import { createScenePill } from '../components/scenePill';
 import { createVehicleTooltip } from '../components/vehicleTooltip';
 import { RunController } from '../simulation/runController';
 import '../styles/main.css';
-import '../hardware/hardware.css';
-import { createControlsDrawer, createJoystick, createPushButton } from '../hardware/controls';
 import { CameraJoystick } from '../three/controls/cameraJoystick';
 import { fitCameraToViewport } from '../three/controls/cameraViewport';
 import { ObserverCamera } from '../three/controls/observerCamera';
@@ -59,6 +56,17 @@ const app = document.querySelector<HTMLDivElement>('#app')!;
 app.innerHTML = `
   <h1 class="visually-hidden">Traffic Simulator</h1>
   <main class="viewport" aria-label="3D traffic scene">
+    <div class="camera-controls" role="group" aria-label="Camera">
+      <div class="joystick" tabindex="0" role="application" aria-roledescription="joystick"
+        aria-label="Orbit and tilt camera" aria-describedby="joystick-help" title="Drag or use arrow keys: left/right orbits, up/down tilts">
+        <div class="joystick-knob"></div>
+      </div>
+      <span id="joystick-help" class="visually-hidden">Drag the knob or hold arrow keys. Left and right orbit around the view; up tilts toward overhead, down toward an angled view.</span>
+      <button type="button" data-action="zoom-in" disabled aria-label="Zoom in" title="Zoom in">${icon('plus')}</button>
+      <button type="button" data-action="zoom-out" disabled aria-label="Zoom out" title="Zoom out">${icon('minus')}</button>
+      <button type="button" data-action="reset-view" disabled class="primary">Reset View</button>
+      <button type="button" data-action="theme" class="theme-toggle"></button>
+    </div>
     <div class="bottom-stack"></div>
     <div class="status" role="status" aria-live="polite"><p>Loading roads and vehicles…</p></div>
   </main>
@@ -101,15 +109,7 @@ async function resetScene() {
   store.reset();
   if (await start()) pill.focus('next');
 }
-const dock = createDock(bottomStack, run, {
-  onPlay: () => tip.dismiss(),
-  // Scrubbed: run on to that moment, or start the same traffic again and replay to it.
-  onSeek: (seconds) => {
-    const { steps } = run.seek(seconds);
-    session?.advance(steps);
-    requestRender();
-  },
-});
+const dock = createDock(bottomStack, run, { onPlay: () => tip.dismiss() });
 let session: TrafficSession | null = null;
 const results = createResultsCard(bottomStack, () => session!.results(), () => run.state);
 bottomStack.inert = true;
@@ -150,24 +150,30 @@ let lastFrameTime = 0;
 // ---- A clicked vehicle: its card (where the road inspector goes) and the rest of its route on the map ----
 /** How often the open card's values refresh, ms (it changes as the vehicle drives). */
 const CARD_REFRESH_MS = 200;
-const ROUTE_LIFT = 0.03; // tiles above the road, so the line isn't hidden in it
+/** Lane points are at a piece's base; the road surface is 0.02 tiles up (where vehicles stand). The line sits just on it. */
+const ROUTE_LIFT = 0.025;
 let inspected: number | null = null;
 let vehicleAt: ((ndc: { x: number; y: number }) => number | undefined) | null = null;
 let inspectedGraph: LaneGraph | null = null;
 let cardRefreshedAt = -Infinity;
-/** The rest of the inspected vehicle's route: a 4 px line (plain WebGL lines are 1 px), drawn over the roads. */
+/**
+ * The rest of the inspected vehicle's route, painted on the road: a flat ribbon lying on the
+ * road surface (`routeRibbon`), depth-tested so vehicles, signs and trees in front hide it, and
+ * drawn after them (transparent) without writing depth. A small depth offset keeps it on top of
+ * the road surface itself.
+ */
 const ROUTE_COLOUR = '#f487b6';
-const routeMaterial = new LineMaterial({ color: ROUTE_COLOUR, linewidth: 4, depthTest: false, transparent: true });
+const ROUTE_WIDTH = 0.45; // world units: about a third of a lane
+const onRoad = { depthTest: true, depthWrite: false, transparent: true, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 };
+const routeMaterial = new MeshBasicMaterial({ color: ROUTE_COLOUR, side: DoubleSide, ...onRoad });
 const routeLine = new Group();
 routeLine.name = 'inspected-route';
-routeLine.renderOrder = 10;
 routeLine.visible = false;
-let routePath: Line2 | null = null;
+let routePath: Mesh | null = null;
 let drawnRoute = '';
 /** A ring at the vehicle, where its route starts. */
-const routeStart = new Mesh(new RingGeometry(0.9, 1.3, 32), new MeshBasicMaterial({ color: ROUTE_COLOUR, depthTest: false, transparent: true, side: DoubleSide }));
+const routeStart = new Mesh(new RingGeometry(0.9, 1.3, 32), new MeshBasicMaterial({ color: ROUTE_COLOUR, side: DoubleSide, ...onRoad }));
 routeStart.rotation.x = -Math.PI / 2;
-routeStart.renderOrder = 10;
 routeLine.add(routeStart);
 const vehicleCard = createVehicleCard(viewport, () => inspectVehicle(null));
 /** Open the card for a vehicle, or close it (null). The road inspector closes while a vehicle's card is open. */
@@ -203,12 +209,13 @@ function syncVehicleCard(simulation: TrafficSimulation, now: number) {
     routeLine.remove(routePath);
     routePath.geometry.dispose();
   }
-  routePath = new Line2(new LineGeometry().setPositions(points.flat()), routeMaterial);
-  routePath.renderOrder = 10;
-  routePath.computeLineDistances();
+  const ribbon = routeRibbon(points, ROUTE_WIDTH);
+  const geometry = new BufferGeometry();
+  geometry.setAttribute('position', new BufferAttribute(ribbon.positions, 3));
+  geometry.setIndex(ribbon.indices);
+  routePath = new Mesh(geometry, routeMaterial);
   routeLine.add(routePath);
   routeStart.position.set(...points[0]);
-  routeMaterial.resolution.set(renderer.domElement.clientWidth, renderer.domElement.clientHeight); // CSS pixels: linewidth is in these
   routeLine.visible = true;
   requestRender();
 }
@@ -242,60 +249,15 @@ renderer.domElement.addEventListener('webglcontextrestored', requestRender);
 resize();
 
 
-// ---- The Controls drawer: camera (joystick, zoom, reset view) and display, from hardware parts ----
-const cameraControls = document.createElement('section');
-cameraControls.className = 'camera-controls';
-cameraControls.innerHTML = '<div class="hw-drawer-scroll"></div>';
-const controlsScroll = cameraControls.querySelector<HTMLElement>('.hw-drawer-scroll')!;
-const controlGroup = (title: string) => {
-  const group = document.createElement('div');
-  group.className = 'hw-group';
-  group.setAttribute('role', 'group');
-  group.setAttribute('aria-label', title);
-  group.innerHTML = `<h3>${title}</h3>`;
-  controlsScroll.append(group);
-  return group;
-};
-const cameraButton = (label: string, action: string, face: { icon?: string; wide?: boolean }) => {
-  const button = createPushButton({ label, icon: face.icon, wide: face.wide });
-  button.element.dataset.action = action;
-  return button;
-};
-const hardwareJoystick = createJoystick({
-  label: 'Orbit and tilt camera',
-  // Left/right orbits, up/down tilts; let go and it springs back to centre (the camera stops).
-  onTilt: (x, y) => {
-    if (!joystick) return;
-    if (x === 0 && y === 0) joystick.release();
-    else joystick.push(x, y, 1);
-  },
-});
-hardwareJoystick.element.classList.add('joystick');
-const zoomIn = cameraButton('Zoom in', 'zoom-in', { icon: icon('plus') });
-const zoomOut = cameraButton('Zoom out', 'zoom-out', { icon: icon('minus') });
-const resetView = cameraButton('Reset View', 'reset-view', { wide: true });
-const themeButton = cameraButton('Switch theme', 'theme', { icon: icon('moon') });
-themeButton.element.classList.add('theme-toggle');
-const cameraRow = document.createElement('div');
-cameraRow.className = 'hw-row';
-const cameraButtons = document.createElement('div');
-cameraButtons.className = 'hw-stack';
-cameraButtons.append(zoomIn.element, zoomOut.element, resetView.element);
-cameraRow.append(hardwareJoystick.element, cameraButtons);
-controlGroup('Camera').append(cameraRow);
-const displayRow = document.createElement('div');
-displayRow.className = 'hw-row';
-displayRow.append(themeButton.element, Object.assign(document.createElement('span'), { className: 'hw-legend', textContent: 'Light / dark' }));
-controlGroup('Display').append(displayRow);
-viewport.append(cameraControls);
-const controlsDrawer = createControlsDrawer({ label: 'Controls', pane: cameraControls });
-
+const cameraControls = app.querySelector<HTMLElement>('.camera-controls')!;
 let observer: ObserverCamera | null = null;
 let detachInput: (() => void) | null = null;
+const joystickElement = app.querySelector<HTMLElement>('.joystick')!;
 const timer = new Timer();
 
 // Light or dark: follows the system until the player picks one, remembered in this browser.
 const THEME_KEY = 'traffic-sim:theme';
+const themeToggle = app.querySelector<HTMLButtonElement>('.theme-toggle')!;
 function currentTheme(): 'light' | 'dark' {
   const chosen = document.documentElement.dataset.theme;
   if (chosen === 'light' || chosen === 'dark') return chosen;
@@ -303,7 +265,9 @@ function currentTheme(): 'light' | 'dark' {
 }
 function showTheme() {
   const next = currentTheme() === 'dark' ? 'light' : 'dark';
-  themeButton.setFace(icon(next === 'dark' ? 'moon' : 'sun'), `Switch to ${next} mode`);
+  themeToggle.innerHTML = icon(next === 'dark' ? 'moon' : 'sun');
+  themeToggle.setAttribute('aria-label', `Switch to ${next} mode`);
+  themeToggle.title = `Switch to ${next} mode`;
 }
 try {
   const saved = localStorage.getItem(THEME_KEY);
@@ -334,8 +298,8 @@ cameraControls.addEventListener('click', (e) => {
 });
 
 function setCameraControlsEnabled(enabled: boolean) {
-  for (const button of [zoomIn, zoomOut, resetView]) button.setDisabled(!enabled);
-  hardwareJoystick.setDisabled(!enabled);
+  for (const button of cameraControls.querySelectorAll('button:not(.theme-toggle)')) (button as HTMLButtonElement).disabled = !enabled;
+  setJoystickEnabled(joystickElement, enabled);
 }
 
 let tooltip: ReturnType<typeof createVehicleTooltip> | null = null;
@@ -417,7 +381,12 @@ async function show(mode: 'open' | 'edit'): Promise<boolean> {
     if (opening) {
       observer = ObserverCamera.framing(camera, bounds, { coveredBottom });
       joystick = new CameraJoystick(observer);
-      detachInput = attachViewportInput(renderer.domElement, observer);
+      const detachViewport = attachViewportInput(renderer.domElement, observer);
+      const detachJoystick = attachJoystickControl(joystickElement, joystick);
+      detachInput = () => {
+        detachViewport();
+        detachJoystick();
+      };
       editor.reset();
       timer.reset();
       resolution.reset();
@@ -520,9 +489,6 @@ const editor = createEditor({
   canEdit: () => run.state !== 'running',
 });
 dock.addSection(editor.toggle);
-dock.addSection(controlsDrawer.button);
-// The Controls pane opens top-right; the parts tray below it moves to make room.
-controlsDrawer.button.addEventListener('click', () => editor.layoutChanged());
 rightPanel = editor.tray;
 
 start();

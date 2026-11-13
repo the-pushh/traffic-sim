@@ -36,9 +36,6 @@ await page.waitForSelector('.status', { state: 'hidden', timeout: 30000 });
 const settle = () => page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
 await settle();
 
-// The camera's joystick, zoom and Reset View live in the Controls drawer (hardware controls).
-await page.getByRole('button', { name: 'Controls' }).click();
-await page.waitForTimeout(400);
 const canvas = await page.locator('canvas').boundingBox();
 const controls = await page.locator('.camera-controls').boundingBox();
 // Compare only the 3D scene, left of the camera controls, so control animations don't count as view changes.
@@ -133,14 +130,11 @@ const dockState = () => runPage.locator('.dock').getAttribute('data-state');
 const clockText = () => runPage.locator('.clock').textContent();
 const settingsDisabled = () =>
   runPage.evaluate(() => {
-    const locked = (c) => c.disabled || c.getAttribute('aria-disabled') === 'true';
-    const controls = [document.querySelector('.intensity [role="slider"]'), ...document.querySelectorAll('[data-duration]')];
-    return controls.every(locked) && !document.querySelector('.lock-hint').hidden;
+    const controls = [document.querySelector('.intensity input'), ...document.querySelectorAll('[data-duration]')];
+    return controls.every((c) => c.disabled) && !document.querySelector('.lock-hint').hidden;
   });
 const settingsEnabled = () =>
-  runPage.evaluate(() =>
-    [document.querySelector('.intensity [role="slider"]'), ...document.querySelectorAll('[data-duration]')].every((c) => !c.disabled && c.getAttribute('aria-disabled') !== 'true'),
-  );
+  runPage.evaluate(() => [document.querySelector('.intensity input'), ...document.querySelectorAll('[data-duration]')].every((c) => !c.disabled));
 const runChecks = {};
 let blockedAtEntries = null;
 let hoverTag = null;
@@ -156,13 +150,9 @@ runChecks.sceneArrowsEnabledWhenReady = await runPage.evaluate(() => [...documen
 runChecks.pillShowsMainStreet = (await runPage.locator('.scene-name').textContent())?.trim() === 'Main Street';
 runChecks.tipShownOnFirstVisit = await runPage.locator('.first-visit-tip').isVisible();
 runChecks.readyClock = (await clockText()) === '0:00 / 0:30' && (await dockState()) === 'ready' && (await settingsEnabled());
-// The traffic volume switch: End throws the lever to the top position.
-await runPage.locator('.intensity [role="slider"]').focus();
-await runPage.keyboard.press('End');
+await runPage.locator('.intensity input').fill('4');
 runChecks.intensityChangeShowsLabel = (await runPage.locator('.intensity-name').textContent()) === 'Congested';
-await runPage.keyboard.press('Home');
-await runPage.keyboard.press('ArrowRight');
-await runPage.keyboard.press('ArrowRight');
+await runPage.locator('.intensity input').fill('2');
 await runPage.locator('.dock').screenshot({ path: `${outDir}/11-dock-ready.png` });
 await runPage.getByRole('button', { name: 'Play' }).click();
 runChecks.playRunsAndLocksSettings = (await dockState()) === 'running' && (await settingsDisabled());
@@ -568,14 +558,15 @@ const dockChecks = {};
 {
   const { page } = await openPage(url);
   dockChecks.layout = await page.evaluate(() => {
-    const run = document.querySelector('.dock > .dock-section');
+    const run = document.querySelector('.dock-run');
     const has = (selector, ...names) => names.every((n) => document.querySelector(`${selector} .icon-${n}`));
     return (
-      !!run?.querySelector('.timeline') && // the timeline sits with Play and Restart
+      !!run?.querySelector('.timeline') &&
+      !!run.querySelector('.duration') && // run length sits with Play and the progress bar
       has('[data-action="play-pause"]', 'play') &&
       has('[data-action="restart"]', 'restart') &&
       has('.duration', 'clock') &&
-      has('.dock', 'gauge') &&
+      has('.dock-traffic', 'gauge') &&
       has('.parts-toggle', 'wrench', 'hammer') &&
       has('[data-action="zoom-in"]', 'plus') &&
       [...document.querySelectorAll('svg.icon')].every((svg) => svg.getAttribute('aria-hidden') === 'true')
@@ -642,6 +633,10 @@ if (isDevServer) {
     opened = await card.waitFor({ state: 'visible', timeout: 2000 }).then(() => true, () => false);
     const text = (await card.textContent()) ?? '';
     opened &&= ['Vehicle', 'Driver', 'Now', 'Trajectory', 'Following time', 'Heading for', 'Distance left'].every((t) => text.includes(t));
+    // Its route (P13): a flat ribbon on the road that vehicles in front hide (depth-tested, not drawn over everything).
+    await page.waitForTimeout(300); // the card's first refresh draws the route
+    const route = await page.evaluate(() => window.__trafficDebug.route());
+    vehicleCardChecks.routeOnTheRoadUnderVehicles = route.shown && route.depthTested && !route.writesDepth;
     const position = () => page.locator('.vehicle-card dt', { hasText: 'Position' }).locator('xpath=following-sibling::dd[1]').textContent();
     const before = await position();
     await page.waitForTimeout(1200);
@@ -656,12 +651,13 @@ if (isDevServer) {
   await page.close();
 }
 
-// Background (P4): faint vertical colour columns, no radial glows.
+// Background: plain colour (P13), with the topographic contours (P9) as their own layer.
 const backgroundChecks = {};
 {
   const { page } = await openPage(url);
   const image = await page.evaluate(() => getComputedStyle(document.body).backgroundImage);
-  backgroundChecks.columnsNotGlows = !image.includes('radial-gradient') && image.includes('linear-gradient(90deg');
+  // Plain background (P13: the owner removed the coloured columns); the contours are their own layer below.
+  backgroundChecks.plainBackground = image === 'none';
   // Topographic contours (P9): a fixed layer masked by the generated SVG, behind the app, in the theme's colour.
   const contours = () =>
     page.evaluate(() => {
@@ -670,57 +666,10 @@ const backgroundChecks = {};
     });
   const light = await contours();
   const svgLoads = await page.evaluate(() => fetch('images/topographic.svg').then((r) => r.ok && r.headers.get('content-type')?.includes('svg')));
-  await page.getByRole('button', { name: 'Controls' }).click();
-  await page.waitForTimeout(300);
   await page.locator('.theme-toggle').click();
   const toggled = await contours();
   await page.locator('.theme-toggle').click();
   backgroundChecks.topographicContours = light.mask.includes('topographic.svg') && light.position === 'fixed' && svgLoads && toggled.colour !== light.colour;
-  await page.close();
-}
-
-// Hardware controls (P10): the timeline scrubs, Controls opens its pane with its light on, the switch steps.
-const hardwareChecks = {};
-{
-  const { page, errors } = await openPage(url);
-  const state = () => page.evaluate(() => ({ state: document.querySelector('.dock').dataset.state, clock: document.querySelector('.clock').textContent }));
-  const track = await page.locator('.dock .timeline').boundingBox();
-  // The cap's travel runs from the first mark (0 s) to the last (30 s), 10 px in from each end.
-  const at = (seconds) => track.x + 10 + ((track.width - 20) * seconds) / 30;
-  const drag = async (from, to) => {
-    await page.mouse.move(at(from), track.y + track.height - 12);
-    await page.mouse.down();
-    await page.mouse.move(at(to), track.y + track.height - 12, { steps: 8 });
-    await page.mouse.up();
-    await page.waitForTimeout(300);
-  };
-  await drag(0, 15);
-  const forward = await state();
-  await drag(15, 5);
-  const back = await state();
-  hardwareChecks.timelineScrubsForward = forward.state === 'paused' && forward.clock === '0:15 / 0:30';
-  hardwareChecks.timelineScrubsBack = back.state === 'paused' && back.clock === '0:05 / 0:30';
-  await page.getByRole('button', { name: 'Restart run' }).click();
-
-  const controls = page.getByRole('button', { name: 'Controls' });
-  const paneOpen = () => page.evaluate(() => document.querySelector('.camera-controls').dataset.open === 'true');
-  const lit = () => page.evaluate(() => !!document.querySelector('[aria-controls="' + document.querySelector('.camera-controls').id + '"] .hw-led.is-on'));
-  await controls.click();
-  await page.waitForTimeout(300);
-  const opened = (await paneOpen()) && (await lit()) && (await controls.getAttribute('aria-expanded')) === 'true';
-  await page.locator('.camera-controls').screenshot({ path: `${outDir}/34-controls-pane.png` });
-  await controls.click();
-  await page.waitForTimeout(300);
-  hardwareChecks.controlsOpensAndCloses = opened && !(await paneOpen()) && !(await lit()) && (await controls.isVisible());
-
-  const volume = page.locator('.intensity [role="slider"]');
-  await volume.focus();
-  await page.keyboard.press('ArrowRight');
-  const stepped = await volume.getAttribute('aria-valuetext');
-  await page.keyboard.press('ArrowLeft');
-  hardwareChecks.volumeSwitchSteps = stepped === 'High' && (await volume.getAttribute('aria-valuetext')) === 'Medium';
-  await page.locator('.dock').screenshot({ path: `${outDir}/35-hardware-dock.png` });
-  hardwareChecks.noPageErrors = errors.length === 0;
   await page.close();
 }
 
@@ -959,13 +908,12 @@ await failPage.goto(url);
 await failPage.waitForSelector('.status.error', { timeout: 30000 });
 const failureMessage = (await failPage.locator('.status.error p').textContent())?.trim();
 const retryFocused = await failPage.evaluate(() => document.activeElement?.textContent === 'Retry');
-// Reset View is in the (closed, inert) Controls drawer: query it directly.
-const resetDisabledDuringFailure = await failPage.locator('[data-action="reset-view"]').isDisabled();
+const resetDisabledDuringFailure = await failPage.getByRole('button', { name: 'Reset View' }).isDisabled();
 await failPage.screenshot({ path: `${outDir}/10-asset-failure.png` });
 blockVehicle = false;
 await failPage.getByRole('button', { name: 'Retry' }).click();
 await failPage.waitForSelector('.status', { state: 'hidden', timeout: 30000 });
-const retryRecovered = await failPage.locator('[data-action="reset-view"]').isEnabled();
+const retryRecovered = await failPage.getByRole('button', { name: 'Reset View' }).isEnabled();
 await browser.close();
 
 const differs = (a, b) => !a.equals(b);
@@ -1000,7 +948,6 @@ const result = {
   dockChecks,
   trayChecks,
   backgroundChecks,
-  hardwareChecks,
   pressChecks,
   presetRunChecks,
   scenarioChecks,
@@ -1035,7 +982,6 @@ const ok =
   passed(dockChecks) &&
   passed(trayChecks) &&
   passed(backgroundChecks) &&
-  passed(hardwareChecks) &&
   passed(pressChecks) &&
   passed(presetRunChecks) &&
   passed(scenarioChecks);

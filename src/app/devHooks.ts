@@ -1,4 +1,4 @@
-import { type Camera, type InstancedMesh, type Object3D, Vector3 } from 'three';
+import { type Camera, type InstancedMesh, type Mesh, type MeshBasicMaterial, type Object3D, Vector3 } from 'three';
 import type { LaneGraph } from '../simulation/network/buildLaneGraph';
 import { boardToWorld } from '../scenes/board';
 import type { SceneStore } from '../scenes/sceneStore';
@@ -39,6 +39,13 @@ export function exposeTrafficDebug({ canvas, camera, traffic, view, graph, simul
         return { x: rect.left + ((p.x + 1) / 2) * rect.width, y: rect.top + ((1 - p.y) / 2) * rect.height, reason: v.reason, speed: v.speed };
       }),
     counts: () => simulation().counts,
+    /** The inspected vehicle's route as drawn: a flat ribbon on the road, depth-tested so what's in front hides it. */
+    route: () => {
+      const group = view.getObjectByName('inspected-route');
+      const ribbon = group?.children.find((c) => (c as Mesh).isMesh && (c as Mesh).geometry.index) as Mesh | undefined;
+      const material = ribbon?.material as MeshBasicMaterial | undefined;
+      return { shown: !!group?.visible && !!ribbon, depthTested: material?.depthTest === true, writesDepth: material?.depthWrite === true };
+    },
     /** Scenery drawn: how many trees, bushes, rocks and so on, and how many draw calls they take. */
     scenery: () => {
       const layer = view.getObjectByName('scenery');
