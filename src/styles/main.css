@@ -1217,7 +1217,8 @@ body.placing canvas {
   flex-direction: column;
   align-items: center;
   gap: var(--space-2);
-  width: min(600px, calc(100% - 2 * var(--space-4)));
+  /* Room for the inspector or vehicle card (top-left) and the parts tray (right) either side. */
+  width: min(600px, max(360px, calc(100% - 2 * 312px)));
   transform: translateX(-50%);
   pointer-events: none;
 }
@@ -1228,6 +1229,7 @@ body.placing canvas {
 
 /* The card grows open from the top centre and shrinks closed. */
 .results-card {
+  container-type: inline-size;
   transform-origin: top center;
   transition:
     transform 180ms ease-out,
@@ -1247,5 +1249,12 @@ body.placing canvas {
 @media (prefers-reduced-motion: reduce) {
   .results-card {
     transition: none;
+  }
+}
+
+/* A narrow results card (between the side panels) puts its four numbers in two columns. */
+@container (max-width: 520px) {
+  .results-headlines {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }

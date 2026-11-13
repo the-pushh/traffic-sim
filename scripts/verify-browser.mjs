@@ -229,7 +229,7 @@ const shrinking = await runPage.evaluate(() => document.querySelector('.results-
 runChecks.resultsCloseAndReopen =
   shrinking &&
   (await runPage.locator('.results-card').waitFor({ state: 'hidden', timeout: 2000 }).then(() => true, () => false)) &&
-  (await runPage.evaluate(() => document.activeElement?.textContent === 'Show results')) &&
+  (await runPage.waitForFunction(() => document.activeElement?.textContent === 'Show results', null, { timeout: 1000 }).then(() => true, () => false)) &&
   (await runPage.evaluate(() => {
     const b = document.querySelector('.results-reopen').getBoundingClientRect();
     return b.top < 60 && Math.abs(b.left + b.width / 2 - innerWidth / 2) < 4; // Show results at the top centre too
