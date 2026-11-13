@@ -47,7 +47,8 @@
     "archives": {
       "vehicles": "assets/3d/incoming/kenney_car-kit.zip",
       "roadPieces": "assets/3d/incoming/kenney_city-kit-roads.zip",
-      "roadTextures": "assets/3d/incoming/kenney_road-textures.zip"
+      "roadTextures": "assets/3d/incoming/kenney_road-textures.zip",
+      "scenery": "assets/3d/incoming/kenney_nature-kit.zip"
     },
     "sourceFormats": [
       "GLB",
@@ -93,6 +94,13 @@
         "totalBytes": "about 3.5 MB",
         "conversion": "none (copied)",
         "scale": "type length in metres / 8.75 m per tile × 4 units per tile; width capped at 75% of a lane"
+      },
+      "scenery": {
+        "source": "assets/3d/source/kenney_nature-kit/Models/GLTF format/*.glb (14 chosen: trees, bushes, grass, rocks, flowers)",
+        "served": "public/models/nature/*.glb (self-contained, no textures)",
+        "appScale": "NATURE_SCALE 0.55 tiles per kit unit × TILE_SIZE 4",
+        "conversion": "none (copied)",
+        "totalBytes": "about 144 KB"
       }
     },
     "license": "CC0 1.0 (all three Kenney packs)"
@@ -366,6 +374,17 @@
           "all scene assets of the five scenes; road and control GLBs as editor previews"
         ],
         "result": "pass (exit code gated on these checks): production cycles all five scenes and all four presets run (clock passes 0:01) with no page errors; dev server: Main Street retimed (Junction 1 green 8 s) gives the same arrivals and different peak queues side by side on the results card; Blank board built from the drawer (31 drops, each previewed valid) into a signalised crossroads, 90 s run reaches the results card with 70 due, 43 entered, 11 finished, and Save stores the 31-piece layout. Screenshots 25-before-after.png, 26-blank-board-built.png, 27-blank-board-results.png inspected.",
+        "previews": "artifacts/3d/previews/ (git-ignored)"
+      },
+      {
+        "date": "2026-11-13",
+        "check": "P8 scenery (#38)",
+        "command": "npm test, npm run build, npm run dev then node scripts/verify-browser.mjs; npm run perf -- --quick",
+        "browser": "Google Chrome 157 on macOS, headless, 1440x900 (@2x for perf)",
+        "assets": [
+          "public/models/nature/*.glb (14)"
+        ],
+        "result": "pass: every nature model HTTP 200; each preset shows instanced scenery (under 40 instanced meshes); no scenery on or touching roads (unit tests); light and dark overview and a close-up with traffic inspected; trees about twice a car's height. Running GPU time +10–25% (only trees cast shadows); idle still 0.",
         "previews": "artifacts/3d/previews/ (git-ignored)"
       }
     ]

@@ -1,3 +1,5 @@
+import { sceneryFor } from '../../scenes/scenery';
+import { createSceneryLayer } from './sceneryLayer';
 import {
   Box3,
   BufferGeometry,
@@ -84,7 +86,12 @@ export async function createSceneView(definition: SceneDefinition, baseUrl: stri
     ...definition.pieces.map((p) => PIECES[p.piece].model),
     ...definition.controls.map((c) => CONTROL_MODELS[c.type]),
   ]);
-  const models = await Promise.all([...modelNames].map((name) => load.model(`models/roads/${name}.glb`)));
+  const scenery = sceneryFor(definition);
+  const natureNames = [...new Set(scenery.map((s) => s.model))];
+  const [models, natureModels] = await Promise.all([
+    Promise.all([...modelNames].map((name) => load.model(`models/roads/${name}.glb`))),
+    Promise.all(natureNames.map((name) => load.model(`models/nature/${name}.glb`))),
+  ]);
   const byName = new Map([...modelNames].map((name, i) => [name, models[i]]));
 
   // No scene background: the canvas is transparent so the CSS background token shows through.
@@ -106,6 +113,8 @@ export async function createSceneView(definition: SceneDefinition, baseUrl: stri
   });
   setShadows(pieces, { receive: true });
   scene.add(pieces);
+  // Trees, bushes and rocks on the tiles no road covers (decoration only).
+  scene.add(createSceneryLayer(scenery, new Map(natureNames.map((name, i) => [name, natureModels[i]]))));
 
   const controls = new Group();
   controls.name = 'traffic-controls';
@@ -172,6 +181,7 @@ export async function createSceneView(definition: SceneDefinition, baseUrl: stri
       if (object instanceof Sprite) return; // badge materials are shared across scenes
       const mesh = object as Mesh;
       if (mesh.geometry && !shared.has(mesh.geometry)) mesh.geometry.dispose();
+      if ((object as InstancedMesh).isInstancedMesh) (object as InstancedMesh).dispose(); // the per-instance buffers
       for (const material of [mesh.material].flat()) if (material && !shared.has(material)) material.dispose();
     });
   };

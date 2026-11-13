@@ -9,8 +9,26 @@ All three packs are by Kenney (www.kenney.nl) and licensed **Creative Commons Ze
 | `assets/3d/incoming/kenney_car-kit.zip` | Car Kit 3.1 (created 02-04-2026) | 4.8 MB zip / 14 MB extracted, 268 entries | `fac7daca…f3d0c4` | `assets/3d/source/kenney_car-kit/` |
 | `assets/3d/incoming/kenney_city-kit-roads.zip` | City Kit Roads 2.2 (created 10-10-2026) | 2.9 MB zip / 7.8 MB extracted, 496 entries | `374a4552…a959` | `assets/3d/source/kenney_city-kit-roads/` |
 | `assets/3d/incoming/kenney_road-textures.zip` | Road Textures (created 23-11-2019, orig. 20-05-2013) | 0.5 MB zip / 1.4 MB extracted, 288 entries | `cca05f64…a10c` | `assets/3d/source/kenney_road-textures/` |
+| `assets/3d/incoming/kenney_nature-kit.zip` | Nature Kit 2.1 (created 29-04-2020); supplied by the owner 2026-11-13 | 10.5 MB zip / 29 MB extracted, 3,626 entries | `fa7974a0…8c4d9d` | `assets/3d/source/kenney_nature-kit/` |
 
 Extraction: `unzip -q -n <zip> -d assets/3d/source/<pack>` (UnZip 6.00, macOS), one folder per pack, after checking `assets/3d/source/` was empty and that no entry used an absolute or `../` path. Archive SHA-256 sums were identical before and after extraction. The `source/` folders are git-ignored; re-create them with the same command.
+
+## Nature Kit — scenery (P8, 2026-11-13)
+
+CC0 (`License.txt`). 329 models each in GLB, FBX, OBJ, DAE and STL, plus isometric and side-view PNG renders. The GLBs are self-contained (flat-coloured materials such as `leafsGreen` and `woodBark`, with no texture files), 2–19 KB each, and stand on y = 0 in kit units (a default tree is 0.76 × 1.71 × 0.65).
+
+**Served:** 14 models copied unchanged to `public/models/nature/` (144 KB in all; conversion: none):
+- trees: `tree_default`, `tree_oak`, `tree_fat`, `tree_simple`, `tree_cone`, `tree_pineRoundA`;
+- bushes: `plant_bush`, `plant_bushLarge`;
+- grass: `grass`, `grass_large`;
+- rocks: `rock_smallA`, `rock_smallB`;
+- flowers: `flower_redA`, `flower_yellowA`.
+
+**Drawn at** `NATURE_SCALE` = 0.55 tiles per kit unit, so a default tree stands about 0.9 tiles (twice a car's height). Each item's reach (half its footprint diagonal, measured with Three.js) is in `SCENERY_MODELS`: trees 0.27, grass 0.16, bushes 0.15, rocks 0.14, flowers 0.07 tiles.
+
+**Placement:** `sceneryFor(scene)` (`src/scenes/scenery.ts`) fills about 45% of the tiles no road covers. The board's corner tiles are skipped. Each item stays inside its own tile, clear of the tile's edges by its reach, so it can never touch a road. Placement is seeded per scene and tile.
+
+**Not used** (available): the other trees (fall and dark variants, palms, pines), cliffs, paths, fences, crops, tents, logs, mushrooms, water and ground tiles.
 
 ## Car Kit — vehicles
 

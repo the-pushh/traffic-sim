@@ -1,4 +1,4 @@
-import { type Camera, type Object3D, Vector3 } from 'three';
+import { type Camera, type InstancedMesh, type Object3D, Vector3 } from 'three';
 import type { LaneGraph } from '../simulation/network/buildLaneGraph';
 import { boardToWorld } from '../scenes/board';
 import type { SceneStore } from '../scenes/sceneStore';
@@ -14,6 +14,8 @@ export interface TrafficDebugSources {
   canvas: HTMLCanvasElement;
   camera: Camera;
   traffic: Object3D;
+  /** The 3D scene on screen (for checks on what it draws, such as scenery). */
+  view: Object3D;
   graph: LaneGraph;
   simulation: () => TrafficSimulation;
   queues: () => { approach: string; live: number }[];
@@ -26,7 +28,7 @@ export interface TrafficDebugSources {
   select: (target: { kind: 'piece' | 'control'; index: number } | null) => void;
 }
 
-export function exposeTrafficDebug({ canvas, camera, traffic, graph, simulation, queues, queueLabelsShown, store, apply, preview, select }: TrafficDebugSources) {
+export function exposeTrafficDebug({ canvas, camera, traffic, view, graph, simulation, queues, queueLabelsShown, store, apply, preview, select }: TrafficDebugSources) {
   if (!import.meta.env.DEV) return;
   (window as unknown as { __trafficDebug: unknown }).__trafficDebug = {
     vehicles: () =>
@@ -37,6 +39,12 @@ export function exposeTrafficDebug({ canvas, camera, traffic, graph, simulation,
         return { x: rect.left + ((p.x + 1) / 2) * rect.width, y: rect.top + ((1 - p.y) / 2) * rect.height, reason: v.reason, speed: v.speed };
       }),
     counts: () => simulation().counts,
+    /** Scenery drawn: how many trees, bushes, rocks and so on, and how many draw calls they take. */
+    scenery: () => {
+      const layer = view.getObjectByName('scenery');
+      const meshes = (layer?.children ?? []) as InstancedMesh[];
+      return { meshes: meshes.length, items: meshes.reduce((n, m) => n + m.count, 0) };
+    },
     blocked: () => simulation().blockedAtEntries(),
     queues,
     /** Queue labels currently drawn over approaches. */
