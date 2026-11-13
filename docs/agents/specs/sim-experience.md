@@ -4,7 +4,7 @@ Parent: issue #1. Sources, in order of precedence: owner decisions `docs/agents/
 
 ## Goal
 
-A player opens the app on **Main Street** with traffic already on the roads, picks a traffic intensity and a run length, presses Play, and watches individual drivers deal with signals, roundabouts, merges and a flyover. They edit a road or control, rerun the same arrivals, drivers and vehicles, and compare the numbers. They can also build their own network on a blank board.
+A player opens the app on **Main Street** (*since P20: **Flyover Bottleneck**, 60 s runs, twice as close as the whole-board view*) with traffic already on the roads, picks a traffic intensity and a run length, presses Play, and watches individual drivers deal with signals, roundabouts, merges and a flyover. They edit a road or control, rerun the same arrivals, drivers and vehicles, and compare the numbers. They can also build their own network on a blank board.
 
 ## Screen
 

@@ -404,3 +404,11 @@ Owner agreed the spec and the T1–T13 ticket breakdown and authorised implement
 
 - **Markers:** the yellow "+" markers at open road ends are removed, because a part placed there snaps to the end anyway (owner). Scenery still keeps clear of those spots.
 - **Joining** (narrowing P10): only a **straight** road placed with its end against the side of a plain road piece makes a junction, as in the owner's original example. That piece becomes a T-junction, or a T becomes a crossroads. Bends, curves, ramps and other parts placed against a road leave it as it is, and only a straight laid across an open end grows an arm. The owner said converting for curves was "random and unnecessary".
+
+## Defaults: Flyover Bottleneck, 60 s, closer view (P20, #67) — 2026-11-13
+
+- **Opening scene:** Flyover Bottleneck (`DEFAULT_SCENE` in `main.ts`). The scene arrows still cycle in the same order, and `?scene=` overrides it on the dev server.
+- **Run length:** 60 s by default (`RunController`); 30 s and 90 s are still offered.
+- **Zoom:** the camera starts twice as close as the whole-board fit (`ObserverCamera.framing(…, { zoom: 2 })`, unit-tested). Zooming out is limited relative to the fit, so the whole board is still one scroll away. Opening a scene, and Reset View, return to this closer view.
+- **Browser checks:** written for Main Street at 30 s, they get there with the arrows and the 30 s button first (`toMainStreetAt30s`). Checks that drag across the board zoom out to see it all (`wholeBoardInView`). A new check confirms a fresh visit opens on Flyover Bottleneck at 60 s.
+- **P17 review follow-ups** also landed here: stale "+" wording in the scenery code and a test title.

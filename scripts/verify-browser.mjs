@@ -17,6 +17,34 @@ mkdirSync(outDir, { recursive: true });
 const browser = await chromium.launch({ channel: 'chrome', headless: !headed, args: headed ? [] : ['--enable-unsafe-swiftshader'] });
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
 
+/**
+ * P20: the app opens on Flyover Bottleneck with 60 s runs. Checks written for Main Street and
+ * 30 s runs move there first, with the scene arrows and the 30 s button, as a player would.
+ */
+async function toMainStreetAt30s(p) {
+  for (let i = 0; i < 5 && (await p.locator('.scene-name').textContent())?.trim() !== 'Main Street'; i++) {
+    await p.getByRole('button', { name: 'Next scene' }).click();
+    await p.waitForSelector('.status', { state: 'hidden', timeout: 60000 });
+  }
+  await p.getByRole('button', { name: '30 s' }).click();
+}
+
+/** The app starts zoomed in (P20); checks that drag to points across the board zoom out until it's all in view. */
+async function wholeBoardInView(p) {
+  for (let i = 0; i < 8; i++) {
+    const allIn = await p.evaluate(() => {
+      const debug = window.__trafficDebug;
+      if (!debug) return null; // production: no hooks, so zoom out a fixed amount
+      return [[0, 0], [16, 0], [0, 16], [16, 16]].every(([x, z]) => {
+        const q = debug.screenOf(x, z);
+        return q.x > 0 && q.y > 0 && q.x < innerWidth && q.y < innerHeight - 160;
+      });
+    });
+    if (allIn === true || (allIn === null && i >= 3)) return;
+    await p.getByRole('button', { name: 'Zoom out' }).click();
+  }
+}
+
 const consoleErrors = [];
 const assetRequests = [];
 page.on('console', (m) => m.type() === 'error' && consoleErrors.push(m.text()));
@@ -36,6 +64,10 @@ await page.waitForSelector('.status', { state: 'hidden', timeout: 30000 });
 const settle = () => page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
 await settle();
 
+// P20: a fresh visit opens on Flyover Bottleneck with a 60 s run.
+const opensOnDefaults =
+  (await page.locator('.scene-name').textContent())?.trim() === 'Flyover Bottleneck' &&
+  (await page.getByRole('button', { name: '60 s' }).getAttribute('aria-pressed')) === 'true';
 const canvas = await page.locator('canvas').boundingBox();
 const controls = await page.locator('.camera-controls').boundingBox();
 // Compare only the 3D scene: left of the camera controls and above the bottom panels (the dock holds
@@ -117,6 +149,7 @@ const runUrl = new URL(url);
 runUrl.searchParams.set('timeScale', '15');
 await runPage.goto(runUrl.href);
 await runPage.waitForSelector('.status', { state: 'hidden', timeout: 30000 });
+await toMainStreetAt30s(runPage);
 const dockState = () => runPage.locator('.dock').getAttribute('data-state');
 const clockText = () => runPage.locator('.clock').textContent();
 const settingsDisabled = () =>
@@ -271,6 +304,7 @@ if (isDevServer) {
   const ready = () => page2.waitForSelector('.status', { state: 'hidden', timeout: 30000 });
   const sceneName = async () => (await page2.locator('.scene-name').textContent())?.trim();
   await ready();
+  await toMainStreetAt30s(page2);
   // Warm-up traffic appears on the first frames after loading: allow a moment before calling a scene empty.
   const hasTraffic = () =>
     page2.waitForFunction(() => window.__trafficDebug.vehicles().length > 0, null, { timeout: 2000 }).then(() => true, () => false);
@@ -343,6 +377,8 @@ if (isDevServer) {
   await page3.evaluate(() => localStorage.clear());
   await page3.reload();
   await page3.waitForSelector('.status', { state: 'hidden', timeout: 30000 });
+  await page3.getByRole('button', { name: '30 s' }).click(); // the editor checks were written for 30 s runs
+  await wholeBoardInView(page3);
   const pieces = () => page3.evaluate(() => window.__trafficDebug.scene().pieces.length);
   await page3.getByRole('button', { name: 'Customise' }).click();
   editorChecks.drawerGroupsParts = (await page3.locator('.parts-group').count()) === 6 && (await page3.locator('.parts-drawer').isVisible());
@@ -575,6 +611,7 @@ const openPage = async (target) => {
   page.on('pageerror', (e) => errors.push(String(e)));
   await page.goto(target);
   await page.waitForSelector('.status', { state: 'hidden', timeout: 60000 });
+  await toMainStreetAt30s(page);
   return { page, errors };
 };
 // Dock (P2): Phosphor icons, the run length beside the progress bar, an icon per section.
@@ -635,10 +672,11 @@ for (const [width, height] of [[1440, 900], [1280, 800]]) {
       clearOfDock: !overlaps(tray, dock),
       belowCameraPanel: tray.top >= document.querySelector('.camera-controls').getBoundingClientRect().bottom,
       // The whole board stays in view beside the tray (its corners, on the dev server where they can be located).
-      boardClear: !dev || [[0, 0], [16, 0], [0, 16], [16, 16]].every(([x, z]) => {
-        const p = window.__trafficDebug.screenOf(x, z);
+      // The board's centre stays in view beside the tray (the app starts zoomed in, P20, so its corners may not).
+      boardClear: !dev || (() => {
+        const p = window.__trafficDebug.screenOf(8, 8);
         return p.x < tray.left && p.x > 0 && p.y > 0;
-      }),
+      })(),
     };
   }, isDevServer);
   trayChecks[`at${width}`] = pictured && Object.values(layout).every(Boolean);
@@ -815,6 +853,7 @@ if (isDevServer) {
   await page.evaluate(() => localStorage.clear());
   await page.reload();
   await page.waitForSelector('.status', { state: 'hidden', timeout: 30000 });
+  await toMainStreetAt30s(page); // the reload opens on the defaults again
   const finishRun = () => page.waitForFunction(() => document.querySelector('.dock')?.dataset.state === 'ended', null, { timeout: 60000 });
   /** Each results row's cells, by its heading: { 'Trips due · entered · finished': ['11 · 11 · 2', '11 · 11 · 1'], ... }. */
   const resultRows = () =>
@@ -851,6 +890,7 @@ if (isDevServer) {
   await page.getByRole('button', { name: 'Discard and switch' }).click();
   await page.waitForSelector('.status', { state: 'hidden', timeout: 30000 });
   scenarioChecks.onBlankBoard = (await page.locator('.scene-name').textContent())?.trim() === 'Blank board';
+  await wholeBoardInView(page); // a scene opens zoomed in; the build drags across the whole board
   const sceneryBefore = await page.evaluate(() => window.__trafficDebug.scenery().items);
   await page.getByRole('button', { name: 'Customise' }).click();
   /** Drag a part from the drawer to tile (x, z); answers whether the preview said valid just before release. */
@@ -981,6 +1021,7 @@ const result = {
   url,
   consoleErrors,
   assetRequests,
+  opensOnDefaults,
   plainDragTurnsView: differs(initial, plainDrag),
   spaceDragPanChangedView: differs(plainDrag, panned),
   arrowKeysOnFocusedMapTurnView: differs(panned, keyboardTurned) && mapFocusRing,
@@ -1020,6 +1061,7 @@ const passed = (checks) => Object.entries(checks).every(([name, value]) => name 
 const ok =
   consoleErrors.length === 0 &&
   !assetRequests.some((r) => !r.startsWith('200') && !r.startsWith('304')) &&
+  result.opensOnDefaults &&
   result.plainDragTurnsView &&
   result.spaceDragPanChangedView &&
   result.arrowKeysOnFocusedMapTurnView &&
