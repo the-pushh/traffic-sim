@@ -344,7 +344,7 @@ Owner agreed the spec and the T1–T13 ticket breakdown and authorised implement
   - a straight or a bend becomes a T-junction;
   - a T-junction becomes a crossroads.
 - **And the other way round:** when an old open road end meets the side of the new piece, the new piece grows the arm. A straight laid across a road's end becomes a T.
-- **What can grow an arm:** one-tile, ground-level, two-way pieces without a speed limit (straight, bend, T-junction). Pedestrian crossings, one-way carriageways, ramps, bridges and multi-tile pieces are left as they are.
+- **What can grow an arm:** one-tile, ground-level, two-way pieces without a speed limit (straight, bend, T-junction). Pedestrian crossings, one-way carriageways, ramps, bridges and multi-tile pieces are left as they are. *The owner confirmed these exclusions on 2026-11-13.*
 - **Signs and demand:** signs on a grown piece stay on the approach they were on, by compass direction. Demand follows its entries, as for any edit.
 - **Snapping:** the preview snaps to these join points when the pointer is over the tile the new piece would take (within 0.6 tile). Open road ends keep their wider 1.1-tile snap, so a drop on top of a road still says "Something's already there".
 - **Preview:** it shows each piece that will become a junction as a translucent copy of its new shape (and the new piece as its junction shape, when it grows), labelled "✓ Makes a T-junction" or "✓ Makes a crossroads". Undo restores the original pieces.
