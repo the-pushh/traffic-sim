@@ -3,8 +3,9 @@ import type { VehicleDetails } from './vehicleDetails';
 const escapeHtml = (text: string) => text.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 
 /**
- * The card for a clicked vehicle, in the same place and style as the road inspector: its
- * type's and driver's settings, where it is and what it's doing, and the rest of its trip.
+ * The card for a clicked vehicle, in the same place and style as the road inspector. It leads
+ * with highlights (how the driver drives, the speed, what it's doing, where it's going); "Show
+ * more details" opens every setting of its type and driver, where it is, and the rest of its trip.
  * The layout is built once per vehicle; later updates only change the values, so the close
  * button is never rebuilt under a click.
  */
@@ -17,31 +18,48 @@ export function createVehicleCard(container: HTMLElement, onClose: () => void) {
 
   let shownFor: number | null = null;
   let values: HTMLElement[] = [];
+  /** Whether the full details are open; stays as the player left it from one vehicle to the next. */
+  let detailsOpen = false;
+
+  const showDetails = (open: boolean) => {
+    detailsOpen = open;
+    const toggle = card.querySelector<HTMLButtonElement>('.vehicle-details-toggle');
+    const body = card.querySelector<HTMLElement>('.vehicle-card-body');
+    if (!toggle || !body) return;
+    toggle.setAttribute('aria-expanded', String(open));
+    toggle.textContent = open ? 'Hide details' : 'Show more details';
+    body.hidden = !open;
+  };
 
   card.addEventListener('click', (event) => {
-    if ((event.target as HTMLElement).closest('.vehicle-card-close')) onClose();
+    const target = event.target as HTMLElement;
+    if (target.closest('.vehicle-card-close')) onClose();
+    if (target.closest('.vehicle-details-toggle')) showDetails(!detailsOpen);
   });
 
   return {
     element: card,
     /** Show (or refresh) the card for vehicle `id`. */
     show(id: number, details: VehicleDetails) {
-      if (shownFor !== id || values.length !== details.sections.reduce((n, s) => n + s.rows.length, 0)) {
+      const rows = [...details.highlights, ...details.sections.flatMap((s) => s.rows)];
+      if (shownFor !== id || values.length !== rows.length) {
         shownFor = id;
         card.innerHTML = `
           <header>
             <h2>${escapeHtml(details.title)} <span class="vehicle-id">#${id}</span></h2>
             <button type="button" class="vehicle-card-close" aria-label="Close vehicle details">×</button>
           </header>
-          <div class="vehicle-card-body">
+          <dl class="vehicle-highlights">${details.highlights.map(([label]) => `<dt>${escapeHtml(label)}</dt><dd></dd>`).join('')}</dl>
+          <button type="button" class="vehicle-details-toggle" aria-controls="vehicle-card-details"></button>
+          <div class="vehicle-card-body" id="vehicle-card-details">
             ${details.sections
               .map((s) => `<h3>${escapeHtml(s.heading)}</h3><dl>${s.rows.map(([label]) => `<dt>${escapeHtml(label)}</dt><dd></dd>`).join('')}</dl>`)
               .join('')}
           </div>`;
         values = [...card.querySelectorAll<HTMLElement>('dd')];
+        showDetails(detailsOpen);
       }
       card.querySelector('h2')!.firstChild!.textContent = `${details.title} `;
-      const rows = details.sections.flatMap((s) => s.rows);
       rows.forEach(([, value], i) => {
         if (values[i].textContent !== value) values[i].textContent = value;
       });

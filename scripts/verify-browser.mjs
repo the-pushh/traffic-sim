@@ -655,6 +655,15 @@ if (isDevServer) {
     opened = await card.waitFor({ state: 'visible', timeout: 2000 }).then(() => true, () => false);
     const text = (await card.textContent()) ?? '';
     opened &&= ['Vehicle', 'Driver', 'Now', 'Trajectory', 'Following time', 'Heading for', 'Distance left'].every((t) => text.includes(t));
+    // P15: highlights first (driver, speed, doing, heading for); the full sections behind Show more details.
+    const highlights = await page.locator('.vehicle-highlights dt').allTextContents();
+    const toggle = page.locator('.vehicle-details-toggle');
+    const body = page.locator('.vehicle-card-body');
+    const collapsed = JSON.stringify(highlights) === JSON.stringify(['Driver', 'Speed', 'Doing', 'Heading for']) && (await body.isHidden()) && (await toggle.getAttribute('aria-expanded')) === 'false';
+    await page.screenshot({ path: `${outDir}/38-vehicle-card-highlights.png` });
+    await toggle.click();
+    const expanded = (await body.isVisible()) && (await toggle.getAttribute('aria-expanded')) === 'true' && (await toggle.textContent()) === 'Hide details';
+    vehicleCardChecks.highlightsFirstThenDetails = collapsed && expanded;
     // Its route (P13): a flat ribbon on the road that vehicles in front hide (depth-tested, not drawn over everything).
     await page.waitForTimeout(300); // the card's first refresh draws the route
     const route = await page.evaluate(() => window.__trafficDebug.route());
@@ -663,7 +672,7 @@ if (isDevServer) {
     const before = await position();
     await page.waitForTimeout(1200);
     moves = (await position()) !== before || (await card.textContent())?.includes('left the board');
-    await page.screenshot({ path: `${outDir}/38-vehicle-card.png` });
+    await page.screenshot({ path: `${outDir}/38b-vehicle-card-details.png` });
   }
   vehicleCardChecks.clickOpensCard = opened;
   vehicleCardChecks.cardFollowsTheVehicle = moves;
