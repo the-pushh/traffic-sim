@@ -43,6 +43,8 @@ export interface Join {
 
 /** A piece snaps to an open road end when its matching port would be this close to the pointer, tiles. */
 const SNAP_RADIUS = 1.1;
+/** Parts that turn themselves to continue the road end they're dropped at (straight, symmetric pieces). */
+const TURNS_TO_FIT = new Set(['straight', 'crossing']);
 /** Joining the side of a road needs the pointer over the tile the new piece would take, tiles. */
 const JOIN_SNAP_RADIUS = 0.6;
 /** A control lands on an approach whose opening is this close to the pointer, tiles. */
@@ -91,18 +93,22 @@ function snapToOpenEnd(scene: SceneDefinition, request: PlacementRequest) {
     ...openRoadEnds(scene).map((e) => ({ ...e, radius: SNAP_RADIUS, joinOnly: false })),
     ...(request.join === false || request.part !== JOINING_PART ? [] : joinPoints(scene).map((e) => ({ ...e, radius: JOIN_SNAP_RADIUS, joinOnly: true }))),
   ];
+  // A straight road turns to fit the road end it's dropped at (the player's turn first, then a quarter turn).
+  const turns: QuarterTurn[] = TURNS_TO_FIT.has(request.part) ? [request.rotation, (((request.rotation + 90) % 360) as QuarterTurn)] : [request.rotation];
   for (const end of candidates) {
-    for (const port of def.ports.filter((p) => p.profile === 'road')) {
-      const facing = rotate(port.facing, request.rotation);
+    for (const rotation of turns) for (const port of def.ports.filter((p) => p.profile === 'road')) {
+      // A join point (a road's side) only takes the part at the player's own turn.
+      if (end.joinOnly && rotation !== request.rotation) continue;
+      const facing = rotate(port.facing, rotation);
       // Our port must face back into the existing road.
       if (Math.abs(facing[0] + end.facing[0]) > EPSILON || Math.abs(facing[1] + end.facing[1]) > EPSILON) continue;
       // A road's side takes only a ground-level road end (a ramp's foot, not its top or a bridge deck).
       if (end.joinOnly && port.level !== 0) continue;
-      const offset = rotate(port.at, request.rotation);
+      const offset = rotate(port.at, rotation);
       const at: [number, number] = [end.at[0] - offset[0], end.at[2] - offset[1]];
       const distance = Math.hypot(at[0] - request.pointer[0], at[1] - request.pointer[1]);
       if (distance > end.radius || (best && distance >= best.distance)) continue;
-      const placement: PiecePlacement = { piece: request.part, at, rotation: request.rotation, level: end.at[1] - port.level };
+      const placement: PiecePlacement = { piece: request.part, at, rotation, level: end.at[1] - port.level };
       if (placement.level! < -EPSILON) continue; // never below the ground
       const flow = continuedFlow(request.part, port.id, end.flow);
       if (flow) placement.flow = flow;
@@ -267,8 +273,8 @@ function samePort(from: PiecePlacement, portId: string, to: PiecePlacement): str
 const near = (a: number, b: number) => Math.abs(a - b) < EPSILON;
 
 /**
- * Grow arms where roads touch: on old pieces whose side the new piece's road ends touch, and
- * on the new piece where an old open road end touches its side. Controls follow their approach.
+ * Grow arms where roads touch: on old pieces whose side the new piece's road ends touch.
+ * Controls follow their approach.
  */
 function joinTouching(scene: SceneDefinition, placement: PiecePlacement) {
   const joins: Join[] = [];
@@ -297,20 +303,7 @@ function joinTouching(scene: SceneDefinition, placement: PiecePlacement) {
       pieces[index] = grown;
     }
   });
-  // An old open road end against the new piece's side: the new piece grows the arm.
-  let placed = placement;
-  if (canJoin(placement)) {
-    for (const end of openRoadEnds({ ...scene, pieces })) {
-      const [dx, dz] = [end.at[0] - placed.at[0], end.at[2] - placed.at[1]];
-      const onSide = (near(Math.abs(dx), 0.5) && near(dz, 0)) || (near(Math.abs(dz), 0.5) && near(dx, 0));
-      if (!onSide || !near(end.at[1], 0) || end.flow !== 'two-way') continue;
-      const side = compassOf([dx, dz]);
-      if (armsOf(placed).has(side)) continue;
-      const grown = grow(placed, side);
-      if (!grown) continue;
-      joins.push({ index: scene.pieces.length, from: placed.piece, to: grown.piece });
-      placed = grown;
-    }
-  }
+  // (The new piece itself never grows an arm: a road end beside it doesn't make it a junction.)
+  const placed = placement;
   return { scene: { ...scene, pieces, controls }, placement: placed, joins };
 }

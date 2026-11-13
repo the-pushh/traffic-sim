@@ -411,6 +411,8 @@ export function createEditor(host: EditorHost) {
     cancelDrag();
     if (!result?.valid || !result.scene) return;
     await commit(result.scene);
+    // A new or moved piece is selected, so its rotate button shows on it straight away.
+    if (!moving && result.placement) select({ kind: 'piece', index: result.scene.pieces.length - 1 });
     if (moving?.kind === 'piece') select({ kind: 'piece', index: result.scene.pieces.length - 1 });
     if (moving?.kind === 'control') select({ kind: 'control', index: result.scene.controls.length - 1 });
   }
@@ -621,11 +623,7 @@ export function createEditor(host: EditorHost) {
     if (!action || !selected) return;
     if (action === 'deselect') select(null);
     if (action === 'remove') void removeSelected();
-    if (action === 'rotate-piece' && selected.kind === 'piece') {
-      const result = rotatePiece(host.scene(), selected.index);
-      if (result.valid && result.scene) void commit(result.scene).then(() => select({ kind: 'piece', index: result.scene!.pieces.length - 1 }));
-      else showError(result.reason ?? 'Can’t rotate it here');
-    }
+    if (action === 'rotate-piece' && selected.kind === 'piece') rotateAt(selected.index);
     if (action === 'apply-timing' && selected.kind === 'control') {
       const value = (key: string) => Number(inspector.querySelector<HTMLInputElement>(`[data-timing="${key}"]`)!.value);
       const timing = { green: value('green'), amber: value('amber'), red: value('red'), offset: value('offset') };
@@ -657,6 +655,54 @@ export function createEditor(host: EditorHost) {
   }
 
   // ---- Applying, undo and redo ----
+  /** Turn a placed piece a quarter (as the inspector's Rotate does) and keep it selected. */
+  function rotateAt(index: number) {
+    const result = rotatePiece(host.scene(), index);
+    if (result.valid && result.scene) void commit(result.scene).then(() => select({ kind: 'piece', index: result.scene!.pieces.length - 1 }));
+    else showError(result.reason ?? 'Can’t rotate it here');
+  }
+
+  // ---- A rotate button on the piece itself: over the selected piece, or the one under the pointer ----
+  const pieceRotate = document.createElement('button');
+  pieceRotate.type = 'button';
+  pieceRotate.className = 'icon-button piece-rotate';
+  pieceRotate.setAttribute('aria-label', 'Rotate this piece');
+  pieceRotate.title = 'Rotate (R)';
+  pieceRotate.innerHTML = icon('rotate');
+  pieceRotate.hidden = true;
+  host.viewport.append(pieceRotate);
+  /** The piece under the pointer, kept a moment after the pointer leaves it so the button can be reached. */
+  let hovered: { index: number; until: number } | null = null;
+  const HOVER_GRACE_MS = 700;
+  host.canvas.addEventListener('pointermove', (event) => {
+    if (drag || pressed || !host.canEdit()) return;
+    const hit = pick(event);
+    if (hit?.kind === 'piece') hovered = { index: hit.index, until: Infinity };
+    else if (hovered?.until === Infinity) hovered.until = performance.now() + HOVER_GRACE_MS;
+  });
+  pieceRotate.addEventListener('pointerenter', () => hovered && (hovered.until = Infinity));
+  pieceRotate.addEventListener('pointerleave', () => hovered && (hovered.until = performance.now() + HOVER_GRACE_MS));
+  pieceRotate.addEventListener('click', () => {
+    const index = selected?.kind === 'piece' ? selected.index : hovered?.index;
+    if (index !== undefined) rotateAt(index);
+  });
+  /** Keep the button just above its piece on screen (the camera may move), or hide it. */
+  function placeRotateButton() {
+    if (hovered && hovered.until < performance.now()) hovered = null;
+    const index = drag || !host.canEdit() ? undefined : selected?.kind === 'piece' ? selected.index : hovered?.index;
+    const piece = index === undefined ? undefined : host.scene().pieces[index];
+    if (!piece) {
+      pieceRotate.hidden = true;
+      return;
+    }
+    const p = new Vector3(...boardToWorld([piece.at[0], piece.level ?? 0, piece.at[1]])).project(host.camera);
+    const rect = host.canvas.getBoundingClientRect();
+    const area = host.viewport.getBoundingClientRect();
+    pieceRotate.style.left = `${rect.left - area.left + ((p.x + 1) / 2) * rect.width}px`;
+    pieceRotate.style.top = `${rect.top - area.top + ((1 - p.y) / 2) * rect.height}px`;
+    pieceRotate.hidden = false;
+  }
+
   async function commit(scene: SceneDefinition) {
     await host.apply(scene);
     // Remember the scene as it was applied (with its demand following the entries).
@@ -704,6 +750,7 @@ export function createEditor(host: EditorHost) {
     /** Call every frame: locks the parts while traffic runs, and keeps the outline and preview on the current view. */
     /** Call every frame; true when the editor changed what the map shows (a part being placed, the outline). */
     sync(): boolean {
+      placeRotateButton();
       const placing = drag !== null;
       const changed = showOutline() || placing || wasPlacing;
       wasPlacing = placing; // one more frame after placing ends, to clear the preview

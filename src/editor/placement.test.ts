@@ -76,18 +76,6 @@ describe('placement rules (shared by preview and drop)', () => {
     expect(graph.openEnds).toHaveLength(2);
   });
 
-  it('gives the new piece the arm when an old open road end touches its side', () => {
-    // A north–south straight across the road's open east end (x = 5).
-    const result = placePart(road, { part: 'straight', pointer: [5.5, 8.5], rotation: 90 });
-    expect(result.valid).toBe(true);
-    expect(result.placement!.piece).toBe('t-junction');
-    expect(result.joins).toEqual([{ index: 5, from: 'straight', to: 't-junction' }]);
-    const graph = buildLaneGraph(result.scene!.pieces);
-    expect(graph.mismatches).toEqual([]);
-    expect(graph.openEnds.map((e) => e.at)).toEqual(expect.arrayContaining([[5.5, 8], [5.5, 9]]));
-    expect(graph.openEnds).toHaveLength(2);
-  });
-
   it('turns a T-junction into a crossroads, keeping its signs on their approaches', () => {
     const tee = placePart(road, { part: 'straight', pointer: [2.6, 7.4], rotation: 90 }).scene!;
     // A stop sign on the T's west approach, then a road against its open south side.
@@ -143,5 +131,29 @@ describe('placement rules (shared by preview and drop)', () => {
     const tee = placePart(road, { part: 't-junction', pointer: [5.5, 8.5], rotation: 90 });
     expect(tee.joins).toBeUndefined();
     expect(tee.placement!.piece).toBe('t-junction');
+  });
+
+  it('lines straights up into one road when they are dropped one after another, without making junctions', () => {
+    // A north–south straight, then four more dropped below it at the default turn (east–west).
+    let scene: SceneDefinition = { ...road, pieces: [{ piece: 'straight', at: [10.5, 2.5], rotation: 90 }] };
+    for (const z of [3.6, 4.6, 5.6, 6.6]) {
+      const result = placePart(scene, { part: 'straight', pointer: [10.5, z], rotation: 0 });
+      expect(result.valid, `drop at z ${z}`).toBe(true);
+      expect(result.joins, `drop at z ${z}`).toBeUndefined();
+      scene = result.scene!;
+    }
+    expect(scene.pieces.map((p) => p.piece)).toEqual(['straight', 'straight', 'straight', 'straight', 'straight']);
+    expect(scene.pieces.map((p) => p.at)).toEqual([[10.5, 2.5], [10.5, 3.5], [10.5, 4.5], [10.5, 5.5], [10.5, 6.5]]);
+    const graph = buildLaneGraph(scene.pieces);
+    expect(graph.mismatches).toEqual([]);
+    expect(graph.openEnds).toHaveLength(2); // one long road: open only at its two ends
+  });
+
+  it('never turns the new piece into a junction just because an old road end touches its side', () => {
+    // A straight dropped across the road's open east end is turned to continue the road instead.
+    const result = placePart(road, { part: 'straight', pointer: [5.5, 8.5], rotation: 90 });
+    expect(result.joins).toBeUndefined();
+    expect(result.placement).toMatchObject({ piece: 'straight', at: [5.5, 8.5] });
+    expect(buildLaneGraph(result.scene!.pieces).openEnds).toHaveLength(1);
   });
 });

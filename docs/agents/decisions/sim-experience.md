@@ -455,3 +455,10 @@ Owner agreed the spec and the T1–T13 ticket breakdown and authorised implement
 - **Owner:** "make the scene pill of fixed width, so the size of pill should be the same with any title".
 - The scene name has a fixed width of 11.5em, which fits the longest preset name ("Market Roundabout"), and is centred between the arrows. A longer (future) name is cut with an ellipsis, with the full name in its tooltip.
 - Save and Reset still appear beside the name when a scene has edits, so the pill widens then. Without them it's the same width for every scene.
+
+## Rotate button on the piece; straights in series stay straight (P24, #83) — 2026-11-14
+
+- **Owner:** placing was "still weird". A dropped part came at the default turn with no handy way to turn it, and straights placed in a row turned into T-junctions.
+- **Rotate on the piece:** a round rotate button floats just above a road piece when it's selected or under the pointer. It stays briefly as the pointer moves onto it. A dropped piece is selected, so its button shows straight away. Clicking turns the piece a quarter (the same action as the inspector's Rotate).
+- **Straights turn to fit:** a straight (or a crossing) dropped at an open road end turns to continue that road, trying its current turn first and then a quarter turn. Dropped one after another they make one long straight road.
+- **No new-piece junctions:** a new piece never becomes a junction because an old road end touches its side. Only a straight's end placed against a road's side still makes a T-junction (P10/P17).
