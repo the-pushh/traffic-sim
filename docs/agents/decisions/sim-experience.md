@@ -330,3 +330,9 @@ Owner agreed the spec and the T1–T13 ticket breakdown and authorised implement
 - **Room for traffic furniture:** scenery keeps clear of the spots beside every road end, where a sign would stand on either side and where an open end's "+" marker goes. It does so whether or not one is there now, so adding a sign never moves a tree.
 - **Known:** while a road is dragged over trees, they stay until the drop, then disappear with the new layout. The road lands exactly where the preview shows.
 - **Drawing:** one instanced mesh per part of each model (under 40 meshes for a board), and only trees cast shadows. Cost while running: GPU time up 10–25% (Main Street at Congested: 125 → 137–154 ms/s); idle stays 0.
+
+## Topographic backdrop (P9, #48) — 2026-11-13
+
+- **What:** the owner's contour drawing (three hills), ringed by generated contours out to the screen's edges, sits over the faint vertical columns (P4). Both are kept: the columns give colour, the contours give texture.
+- **How:** a fixed `body::before` layer whose background colour (`--backdrop-contour`) is masked by `public/images/topographic.svg` at `center / cover`, so lines are 1.2 px at every size and follow the theme toggle. `#app` sits above it. It's CSS only: the 3D view, the panels and the idle cost (0 draws) are unaffected.
+- **Asset record:** `assets/ui/ASSETS.md`; the generator is `scripts/build-topographic.mjs`.

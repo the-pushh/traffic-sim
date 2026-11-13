@@ -44,6 +44,7 @@ traffic-sim/
 │   └── styles/                       # Visual tokens and interface styles
 ├── public/                           # Planned, subject to toolchain conventions
 │   ├── models/                       # Browser-ready models used by the app (roads, vehicles, nature)
+│   ├── images/                       # Interface artwork (the topographic backdrop, generated)
 │   └── textures/                     # Not used: City Kit pieces carry their own colormap.png beside the models
 └── artifacts/                        # Planned verification output
     ├── 3d/

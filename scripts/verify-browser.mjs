@@ -579,6 +579,18 @@ const backgroundChecks = {};
   const { page } = await openPage(url);
   const image = await page.evaluate(() => getComputedStyle(document.body).backgroundImage);
   backgroundChecks.columnsNotGlows = !image.includes('radial-gradient') && image.includes('linear-gradient(90deg');
+  // Topographic contours (P9): a fixed layer masked by the generated SVG, behind the app, in the theme's colour.
+  const contours = () =>
+    page.evaluate(() => {
+      const style = getComputedStyle(document.body, '::before');
+      return { mask: style.maskImage || style.webkitMaskImage, colour: style.backgroundColor, position: style.position };
+    });
+  const light = await contours();
+  const svgLoads = await page.evaluate(() => fetch('images/topographic.svg').then((r) => r.ok && r.headers.get('content-type')?.includes('svg')));
+  await page.locator('.theme-toggle').click();
+  const toggled = await contours();
+  await page.locator('.theme-toggle').click();
+  backgroundChecks.topographicContours = light.mask.includes('topographic.svg') && light.position === 'fixed' && svgLoads && toggled.colour !== light.colour;
   await page.close();
 }
 
