@@ -116,15 +116,12 @@ export function createEditor(host: EditorHost) {
   // ---- Parts drawer ----
   const drawer = document.createElement('section');
   drawer.className = 'parts-drawer';
-  drawer.setAttribute('aria-label', 'Parts');
+  drawer.setAttribute('aria-label', 'Components');
   drawer.hidden = true;
   drawer.innerHTML = `
     <header>
-      <h2>Parts</h2>
-      <span class="parts-hint" id="parts-hint">Drag a part onto the map, or press Enter on one and use the arrow keys · <kbd>Space</kbd> or <kbd>R</kbd> turns it · <kbd>Esc</kbd> cancels</span>
-      <button type="button" data-action="rotate" title="Turn the part (Space while placing, or R)">Rotate ⟲</button>
-      <button type="button" data-action="undo" title="Undo (Ctrl/⌘ Z)">Undo</button>
-      <button type="button" data-action="redo" title="Redo (Ctrl/⌘ ⇧ Z)">Redo</button>
+      <h2>Components</h2>
+      <span class="parts-hint" id="parts-hint">Drag a component onto the map<span class="visually-hidden">, or press Enter on one and use the arrow keys; Space or R turns it, Enter drops it, Escape cancels</span></span>
     </header>
     <div class="parts-groups">
       ${GROUPS.map(
@@ -142,7 +139,7 @@ export function createEditor(host: EditorHost) {
   const toggle = document.createElement('button');
   toggle.type = 'button';
   toggle.className = 'parts-toggle';
-  toggle.innerHTML = `<span class="parts-toggle-icons">${icon('wrench')}${icon('hammer')}</span><span>Parts</span>`;
+  toggle.innerHTML = `${icon('toolsCrossed')}<span>Customise</span>`;
   toggle.setAttribute('aria-expanded', 'false');
   toggle.addEventListener('click', () => {
     drawer.hidden = !drawer.hidden;
@@ -678,9 +675,12 @@ export function createEditor(host: EditorHost) {
   const undo = () => step('undo');
   const redo = () => step('redo');
 
+  /** Undo and redo buttons, when the tray has them (undo and redo also work from the keyboard). */
   function syncButtons() {
-    drawer.querySelector<HTMLButtonElement>('[data-action="undo"]')!.disabled = !history.canUndo() || !host.canEdit();
-    drawer.querySelector<HTMLButtonElement>('[data-action="redo"]')!.disabled = !history.canRedo() || !host.canEdit();
+    const undoButton = drawer.querySelector<HTMLButtonElement>('[data-action="undo"]');
+    const redoButton = drawer.querySelector<HTMLButtonElement>('[data-action="redo"]');
+    if (undoButton) undoButton.disabled = !history.canUndo() || !host.canEdit();
+    if (redoButton) redoButton.disabled = !history.canRedo() || !host.canEdit();
   }
 
   let wasPlacing = false;
@@ -713,7 +713,7 @@ export function createEditor(host: EditorHost) {
       lockedShown = locked;
       for (const button of drawer.querySelectorAll<HTMLButtonElement>('.part')) button.disabled = locked;
       drawer.classList.toggle('locked', locked);
-      toggle.title = locked ? 'Pause to edit the map' : 'Parts';
+      toggle.title = locked ? 'Pause to edit the map' : 'Customise the map';
       if (locked) {
         cancelDrag();
         select(null);

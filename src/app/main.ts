@@ -58,7 +58,6 @@ app.innerHTML = `
       <span id="map-help" class="visually-hidden">Drag to turn the view: left and right orbit, up and down tilt. Hold Space and drag to pan, scroll to zoom. With the map focused, the arrow keys turn the view.</span>
       <button type="button" data-action="zoom-in" disabled aria-label="Zoom in" title="Zoom in">${icon('plus')}</button>
       <button type="button" data-action="zoom-out" disabled aria-label="Zoom out" title="Zoom out">${icon('minus')}</button>
-      <button type="button" data-action="reset-view" disabled class="primary">Reset View</button>
       <button type="button" data-action="theme" class="theme-toggle"></button>
     </div>
     <div class="bottom-stack"></div>
@@ -291,11 +290,21 @@ cameraControls.addEventListener('click', (e) => {
   if (!observer) return;
   if (action === 'zoom-in') observer.zoom(ZOOM_STEP);
   if (action === 'zoom-out') observer.zoom(1 / ZOOM_STEP);
-  if (action === 'reset-view') observer.resetView();
 });
+
+/** Reset View: one icon button, in the dock (camera back to the start; the run and layout are untouched). */
+const resetViewButton = document.createElement('button');
+resetViewButton.type = 'button';
+resetViewButton.className = 'icon-button reset-view';
+resetViewButton.setAttribute('aria-label', 'Reset view');
+resetViewButton.title = 'Reset view';
+resetViewButton.disabled = true;
+resetViewButton.innerHTML = icon('frameCorners');
+resetViewButton.addEventListener('click', () => observer?.resetView());
 
 function setCameraControlsEnabled(enabled: boolean) {
   for (const button of cameraControls.querySelectorAll('button:not(.theme-toggle)')) (button as HTMLButtonElement).disabled = !enabled;
+  resetViewButton.disabled = !enabled;
 }
 
 let tooltip: ReturnType<typeof createVehicleTooltip> | null = null;
@@ -477,6 +486,7 @@ const editor = createEditor({
   apply: (scene, fromHistory) => applyEdit(scene, fromHistory).then(() => undefined),
   canEdit: () => run.state !== 'running',
 });
+dock.addSection(resetViewButton);
 dock.addSection(editor.toggle);
 rightPanel = editor.tray;
 

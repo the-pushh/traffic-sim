@@ -38,8 +38,10 @@ await settle();
 
 const canvas = await page.locator('canvas').boundingBox();
 const controls = await page.locator('.camera-controls').boundingBox();
-// Compare only the 3D scene, left of the camera controls, so control animations don't count as view changes.
-const sceneClip = { x: canvas.x, y: canvas.y, width: controls.x - canvas.x - 8, height: canvas.height };
+// Compare only the 3D scene: left of the camera controls and above the bottom panels (the dock holds
+// Reset View since P16), so a control's hover or focus doesn't count as a view change.
+const panelsTop = (await page.locator('.bottom-stack').boundingBox()).y;
+const sceneClip = { x: canvas.x, y: canvas.y, width: controls.x - canvas.x - 8, height: panelsTop - canvas.y - 8 };
 
 /** Saves a full-page screenshot and returns the scene-only pixels for comparison. */
 const shot = async (name) => {
@@ -342,7 +344,7 @@ if (isDevServer) {
   await page3.reload();
   await page3.waitForSelector('.status', { state: 'hidden', timeout: 30000 });
   const pieces = () => page3.evaluate(() => window.__trafficDebug.scene().pieces.length);
-  await page3.getByRole('button', { name: 'Parts' }).click();
+  await page3.getByRole('button', { name: 'Customise' }).click();
   editorChecks.drawerGroupsParts = (await page3.locator('.parts-group').count()) === 6 && (await page3.locator('.parts-drawer').isVisible());
   /** Drag a part from the drawer to a board point; returns what the preview showed just before release. */
   const dragPart = async (part, x, z, { release = true, escape = false } = {}) => {
@@ -430,10 +432,10 @@ if (isDevServer) {
   editorChecks.invalidReason = invalid.label;
   await dragPart('straight', 2.6, 8.6, { escape: true });
   editorChecks.escapeCancels = (await pieces()) === startCount + 1;
-  await page3.getByRole('button', { name: 'Undo' }).click();
+  await page3.keyboard.press('Control+z'); // undo (the tray has no Undo button since the owner's header change)
   await page3.waitForTimeout(400);
   editorChecks.undoRestores = (await pieces()) === startCount;
-  await page3.getByRole('button', { name: 'Redo' }).click();
+  await page3.keyboard.press('Control+Shift+z'); // redo
   await page3.waitForTimeout(400);
   editorChecks.redoReapplies = (await pieces()) === startCount + 1;
   // Keyboard placement: Enter on a part aims it at the middle; arrows move it; Enter drops.
@@ -448,7 +450,7 @@ if (isDevServer) {
   await page3.waitForTimeout(500);
   const keyPlaced = await page3.evaluate(() => window.__trafficDebug.scene().pieces.at(-1));
   editorChecks.keyboardPlacement = keyPreview?.valid === true && (await pieces()) === beforeKeys + 1 && JSON.stringify(keyPreview.placement) === JSON.stringify(keyPlaced);
-  await page3.getByRole('button', { name: 'Undo' }).click();
+  await page3.keyboard.press('Control+z'); // undo (the tray has no Undo button since the owner's header change)
   await page3.waitForTimeout(400);
   // Clicking a piece selects it: the inspector shows it and can remove it.
   const stub = await page3.evaluate(() => window.__trafficDebug.screenOf(1.5, 8.5));
@@ -589,12 +591,24 @@ const dockChecks = {};
       has('[data-action="restart"]', 'restart') &&
       has('.duration', 'clock') &&
       has('.dock-traffic', 'gauge') &&
-      has('.parts-toggle', 'wrench', 'hammer') &&
+      has('.parts-toggle', 'toolsCrossed') &&
       has('[data-action="zoom-in"]', 'plus') &&
       [...document.querySelectorAll('svg.icon')].every((svg) => svg.getAttribute('aria-hidden') === 'true')
     );
   });
-  dockChecks.labelsUnchanged = (await page.getByRole('button', { name: 'Parts' }).count()) === 1 && (await page.getByRole('button', { name: 'Restart run' }).count()) === 1;
+  dockChecks.labelsUnchanged = (await page.getByRole('button', { name: 'Customise' }).count()) === 1 && (await page.getByRole('button', { name: 'Restart run' }).count()) === 1;
+  // P16: one Reset View, an icon in the dock; the camera panel is a slim strip of three icon buttons.
+  dockChecks.resetViewOnceInDock = await page.evaluate(() => {
+    const resets = [...document.querySelectorAll('button')].filter((b) => (b.getAttribute('aria-label') ?? b.textContent ?? '').trim().toLowerCase() === 'reset view');
+    const panel = [...document.querySelectorAll('.camera-controls button')];
+    return (
+      resets.length === 1 &&
+      !!resets[0].closest('.dock') &&
+      !!resets[0].querySelector('svg.icon-frameCorners') &&
+      panel.length === 3 &&
+      panel.every((b) => b.querySelector('svg.icon') && !b.textContent?.trim())
+    );
+  });
   await page.locator('.dock').screenshot({ path: `${outDir}/30-dock-icons.png` });
   await page.close();
 }
@@ -605,7 +619,7 @@ for (const [width, height] of [[1440, 900], [1280, 800]]) {
   const page = await browser.newPage({ viewport: { width, height } });
   await page.goto(url);
   await page.waitForSelector('.status', { state: 'hidden', timeout: 60000 });
-  await page.getByRole('button', { name: 'Parts' }).click();
+  await page.getByRole('button', { name: 'Customise' }).click();
   const pictured = await page
     .waitForFunction(() => [...document.querySelectorAll('.part-picture')].every((t) => t.style.backgroundImage.startsWith('url("data:image/png')), null, { timeout: 20000 })
     .then(() => true, () => false);
@@ -619,6 +633,7 @@ for (const [width, height] of [[1440, 900], [1280, 800]]) {
       everyPartPictured: tiles.length > 0 && tiles.every((t) => getComputedStyle(t).backgroundImage.startsWith('url("data:image/png')),
       bottomRight: innerWidth - tray.right < 40 && tray.left > innerWidth / 2,
       clearOfDock: !overlaps(tray, dock),
+      belowCameraPanel: tray.top >= document.querySelector('.camera-controls').getBoundingClientRect().bottom,
       // The whole board stays in view beside the tray (its corners, on the dev server where they can be located).
       boardClear: !dev || [[0, 0], [16, 0], [0, 16], [16, 16]].every(([x, z]) => {
         const p = window.__trafficDebug.screenOf(x, z);
@@ -837,7 +852,7 @@ if (isDevServer) {
   await page.waitForSelector('.status', { state: 'hidden', timeout: 30000 });
   scenarioChecks.onBlankBoard = (await page.locator('.scene-name').textContent())?.trim() === 'Blank board';
   const sceneryBefore = await page.evaluate(() => window.__trafficDebug.scenery().items);
-  await page.getByRole('button', { name: 'Parts' }).click();
+  await page.getByRole('button', { name: 'Customise' }).click();
   /** Drag a part from the drawer to tile (x, z); answers whether the preview said valid just before release. */
   const drop = async (part, x, z) => {
     const tile = page.locator(`[data-part="${part}"]`);

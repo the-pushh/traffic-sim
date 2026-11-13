@@ -29,7 +29,7 @@ Then open <http://localhost:5173/> in a desktop browser.
 | Right-drag on the scene | Orbit and tilt |
 | Scroll wheel or two-finger trackpad scroll over the scene | Zoom |
 | **+** / **−** buttons | Zoom in / out |
-| **Reset View** | Return to the starting overhead view |
+| **Reset view** (frame-corners icon in the dock) | Return to the starting view |
 
 ### Running the simulation
 
