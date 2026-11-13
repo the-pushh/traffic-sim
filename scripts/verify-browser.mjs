@@ -484,6 +484,43 @@ if (isDevServer) {
   await page3.waitForTimeout(600);
   editorChecks.signalTimingChanges = (await page3.evaluate(() => window.__trafficDebug.scene().controls[0].timing.green)) === 20;
   await page3.screenshot({ path: `${outDir}/24-editor-signal.png` });
+  // A road dropped against the side of a two-way straight joins it as a T-junction (P10); undo restores it.
+  {
+    const target = await page3.evaluate(() => {
+      const pieces = window.__trafficDebug.scene().pieces;
+      const taken = (x, z) => x < 1 || z < 1 || x > 15 || z > 15 || pieces.some((p) => Math.abs(p.at[0] - x) < 1 && Math.abs(p.at[1] - z) < 1);
+      for (const [index, p] of pieces.entries()) {
+        if (p.piece !== 'straight' || p.flow || (p.level ?? 0) !== 0) continue;
+        const across = p.rotation % 180 === 0 ? [[0, -1], [0, 1]] : [[-1, 0], [1, 0]];
+        for (const [dx, dz] of across) if (!taken(p.at[0] + dx, p.at[1] + dz)) return { index, to: [p.at[0] + dx, p.at[1] + dz], turn: p.rotation % 180 === 0 };
+      }
+      return null;
+    });
+    let joined = false;
+    if (target) {
+      const tile = page3.locator('[data-part="straight"]');
+      await tile.scrollIntoViewIfNeeded();
+      const box = await tile.boundingBox();
+      await page3.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+      await page3.mouse.down();
+      const to = await page3.evaluate(([x, z]) => window.__trafficDebug.screenOf(x, z), target.to);
+      for (let i = 1; i <= 8; i++) await page3.mouse.move(box.x + ((to.x - box.x) * i) / 8, box.y + ((to.y - box.y) * i) / 8);
+      if (target.turn) await page3.keyboard.press('r');
+      await page3.waitForTimeout(300);
+      await page3.mouse.move(to.x + 1, to.y);
+      await page3.waitForTimeout(300);
+      const said = (await page3.locator('.placement-reason').textContent()) ?? '';
+      await page3.mouse.up();
+      await page3.waitForTimeout(800);
+      const becomes = await page3.evaluate((i) => window.__trafficDebug.scene().pieces[i].piece, target.index);
+      await page3.keyboard.press('Control+z');
+      await page3.waitForTimeout(800);
+      const undone = await page3.evaluate((i) => window.__trafficDebug.scene().pieces[i].piece, target.index);
+      if (target.turn) for (let i = 0; i < 3; i++) await page3.keyboard.press('r'); // back to the default turn
+      joined = said.includes('Makes a T-junction') && becomes === 't-junction' && undone === 'straight';
+    }
+    editorChecks.perpendicularRoadJoinsAsTJunction = joined;
+  }
   // A stop sign dropped on a side street's approach to the first junction.
   const stopsBefore = await page3.evaluate(() => window.__trafficDebug.scene().controls.filter((c) => c.type === 'stop').length);
   await page3.evaluate(() => window.__trafficDebug.select(null));
