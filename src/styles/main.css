@@ -1260,3 +1260,74 @@ body.placing canvas {
   height: 18px;
   margin: 0 auto;
 }
+
+/* "Replace with": a pill-shaped select, flat like the buttons, whose open list is a matching rounded box. */
+.inspector select {
+  min-height: 28px;
+  max-width: 60%;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--button-border);
+  border-radius: var(--radius-pill);
+  background: var(--button-fill);
+  color: var(--color-text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.inspector select:hover:not(:disabled) {
+  background: var(--button-fill-hover);
+}
+
+/* Where the browser lets the open list be styled (customizable select), it's a rounded glass box. */
+@supports (appearance: base-select) {
+  .inspector select,
+  .inspector select::picker(select) {
+    appearance: base-select;
+  }
+
+  .inspector select {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+  }
+
+  .inspector select::picker-icon {
+    color: var(--color-text-muted);
+    transition: rotate 150ms ease;
+  }
+
+  .inspector select:open::picker-icon {
+    rotate: 180deg;
+  }
+
+  .inspector select::picker(select) {
+    margin-top: var(--space-1);
+    padding: var(--space-1);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-lg);
+    background: var(--glass-bg-strong);
+    color: var(--color-text);
+    box-shadow: var(--glass-highlight), var(--shadow-floating);
+    -webkit-backdrop-filter: var(--glass-blur);
+    backdrop-filter: var(--glass-blur);
+  }
+
+  .inspector select option {
+    padding: var(--space-1) var(--space-2);
+    border-radius: var(--radius);
+    font-size: var(--font-meta);
+  }
+
+  .inspector select option:hover,
+  .inspector select option:focus-visible {
+    background: var(--button-fill-hover);
+  }
+
+  .inspector select option:checked {
+    background: color-mix(in srgb, var(--color-accent) 50%, transparent);
+  }
+
+  .inspector select option::checkmark {
+    display: none;
+  }
+}
