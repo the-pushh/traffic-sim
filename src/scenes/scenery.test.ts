@@ -51,9 +51,9 @@ describe('scenery around the roads', () => {
     expect(sceneryFor(edited).some((s) => Math.floor(s.at[0]) === 2 && Math.floor(s.at[1]) === 2)).toBe(false);
   });
 
-  it.each(PRESETS.map((p) => [p.name, p] as const))('leaves room on %s for the signs and the open-road markers beside the roads', (_, scene) => {
+  it.each(PRESETS.map((p) => [p.name, p] as const))('leaves room on %s for the signs beside the roads and just beyond open road ends', (_, scene) => {
     const graph = buildLaneGraph(scene.pieces);
-    // Where the map stands a sign (beside an approach) and the "+" marker past an open road end, in tiles.
+    // Where the map stands a sign (beside an approach), and the spot just past an open road end, in tiles.
     const signs = scene.controls.map((c) => {
       const { centre, facing } = portPose(scene.pieces[c.piece], c.port);
       const right = rightOf([-facing[0], -facing[1]]);

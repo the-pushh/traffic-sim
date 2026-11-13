@@ -116,7 +116,7 @@ describe('placement rules (shared by preview and drop)', () => {
     expect(placePart(oneWay, { part: 'straight', pointer: [2.6, 7.4], rotation: 90 }).joins).toBeUndefined();
   });
 
-  it('never snaps a ramp or bridge below the ground to sit beside a road; only a ramp’s foot joins one', () => {
+  it('never snaps a ramp or bridge below the ground to sit beside a road, and neither joins it', () => {
     for (const [part, rotation] of [['bridge', 0], ['bridge', 180], ['ramp', 270], ['ramp-steep', 90]] as const) {
       const result = placePart(road, { part, pointer: [2.6, 7.4], rotation });
       expect(result.placement!.level ?? 0, `${part} at ${rotation}°`).toBeGreaterThanOrEqual(0);

@@ -39,7 +39,7 @@ const FILL = 0.45;
 const SECOND = 0.3;
 /** Scenery keeps this far inside its tile beyond its own reach, so it never touches a neighbouring road. */
 const EDGE_GAP = 0.03;
-/** Where the map may stand things beside a road end, in tiles from the end's centre: a sign either side, a "+" marker beyond. */
+/** Room kept beside a road end, in tiles from the end's centre: for a sign either side, and just beyond an open end (where a road may be continued). */
 const SIGN_OFFSET = 0.55;
 const MARKER_OFFSET = 0.35;
 /** Scenery keeps this far (beyond its own reach) from those spots, tiles. */
@@ -47,7 +47,7 @@ const SPOT_CLEARANCE = 0.25;
 
 /**
  * Trees, bushes, grass, rocks and flowers on the tiles no road covers, clear of the spots
- * beside road ends where signs and open-end markers stand. Each tile's scenery depends only
+ * beside road ends where signs stand and roads may be continued. Each tile's scenery depends only
  * on the scene's id, that tile and the roads next to it, and stays inside the tile, so the
  * same scene always looks the same and an edit only changes the tiles around it.
  */
@@ -97,7 +97,7 @@ function pickKind(r: number): SceneryKind {
 
 /**
  * Beside every road end: where a sign would stand (either side of the approach) and where an
- * open end's "+" marker goes (just beyond it), whether or not one is there now, so adding a
+ * open end continues (just beyond it), whether or not anything is there now, so adding a
  * sign never moves a tree.
  */
 function roadsideSpots(scene: SceneDefinition): [number, number][] {
