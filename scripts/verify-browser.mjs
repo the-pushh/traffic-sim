@@ -659,6 +659,21 @@ const dockChecks = {};
       [...document.querySelectorAll('svg.icon')].every((svg) => svg.getAttribute('aria-hidden') === 'true')
     );
   });
+  // P24: every visible button is flat (no shadow, no gradient) with a 50%-opacity fill and a 1px border.
+  await page.mouse.move(5, 5); // nothing hovered (a hovered button shows a stronger fill)
+  await page.waitForTimeout(400); // let the hover fill fade back
+  dockChecks.flatButtons = await page.evaluate(() =>
+    [...document.querySelectorAll('.dock button, .scene-pill button, .camera-controls button')]
+      .filter((b) => b.offsetParent && !b.closest('.duration'))
+      .filter((b) => {
+        const style = getComputedStyle(b);
+        const alpha = Number((style.backgroundColor.match(/[\d.]+(?=\)$)/) ?? ['1'])[0]);
+        return !(style.boxShadow === 'none' && style.backgroundImage === 'none' && style.borderTopWidth === '1px' && Math.abs(alpha - 0.5) < 0.06);
+      })
+      .map((b) => `${b.getAttribute('aria-label') || b.textContent.trim()}: ${getComputedStyle(b).backgroundColor} ${getComputedStyle(b).boxShadow}`),
+  );
+  if (dockChecks.flatButtons.length) console.error('Not flat:', dockChecks.flatButtons);
+  dockChecks.flatButtons = dockChecks.flatButtons.length === 0;
   dockChecks.labelsUnchanged = (await page.getByRole('button', { name: 'Customise' }).count()) === 1 && (await page.getByRole('button', { name: 'Restart run' }).count()) === 1;
   // No Reset View button (removed from the dock at the owner's request); the camera panel is a slim strip of three icon buttons.
   dockChecks.noResetViewButton = await page.evaluate(() => {

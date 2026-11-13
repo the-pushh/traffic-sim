@@ -455,3 +455,9 @@ Owner agreed the spec and the T1–T13 ticket breakdown and authorised implement
 - **Owner:** "make the scene pill of fixed width, so the size of pill should be the same with any title".
 - The scene name has a fixed width of 11.5em, which fits the longest preset name ("Market Roundabout"), and is centred between the arrows. A longer (future) name is cut with an ellipsis, with the full name in its tooltip.
 - Save and Reset still appear beside the name when a scene has edits, so the pill widens then. Without them it's the same width for every scene.
+
+## Flat buttons (P24, #82) — 2026-11-14
+
+- **Owner:** "make all of the buttons flat, with light border and opacity 50 with colors". This supersedes the ridge from #72.
+- Every button is flat: its colour at 50% opacity (grey for secondary buttons, the accent for primary ones), a 1px light border (`--button-border`, light in both themes), and no gradient or shadow. Hover deepens the fill to 70%.
+- Primary labels and icons use the text colour, because white on a half-transparent accent isn't readable.
