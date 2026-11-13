@@ -4,17 +4,16 @@ import pause from '@phosphor-icons/core/assets/fill/pause-fill.svg?raw';
 import restart from '@phosphor-icons/core/assets/bold/arrow-counter-clockwise-bold.svg?raw';
 import clock from '@phosphor-icons/core/assets/bold/clock-bold.svg?raw';
 import gauge from '@phosphor-icons/core/assets/bold/gauge-bold.svg?raw';
-import wrench from '@phosphor-icons/core/assets/bold/wrench-bold.svg?raw';
-import hammer from '@phosphor-icons/core/assets/bold/hammer-bold.svg?raw';
 import plus from '@phosphor-icons/core/assets/bold/plus-bold.svg?raw';
 import minus from '@phosphor-icons/core/assets/bold/minus-bold.svg?raw';
 import moon from '@phosphor-icons/core/assets/bold/moon-bold.svg?raw';
 import sun from '@phosphor-icons/core/assets/bold/sun-bold.svg?raw';
 import frameCorners from '@phosphor-icons/core/assets/bold/frame-corners-bold.svg?raw';
-// Phosphor's regular wrench and mirrored hammer (MIT), crossed into one icon for Customise.
+// Phosphor's regular wrench and mirrored hammer (MIT), crossed into one icon for Customise (lighter than the
+// bold set on purpose: the crossed tools stay legible at 22 px).
 import toolsCrossed from './icons-custom/tools-crossed.svg?raw';
 
-const SOURCES = { play, pause, restart, clock, gauge, wrench, hammer, plus, minus, moon, sun, frameCorners, toolsCrossed };
+const SOURCES = { play, pause, restart, clock, gauge, plus, minus, moon, sun, frameCorners, toolsCrossed };
 
 export type IconName = keyof typeof SOURCES;
 

@@ -633,6 +633,7 @@ for (const [width, height] of [[1440, 900], [1280, 800]]) {
       everyPartPictured: tiles.length > 0 && tiles.every((t) => getComputedStyle(t).backgroundImage.startsWith('url("data:image/png')),
       bottomRight: innerWidth - tray.right < 40 && tray.left > innerWidth / 2,
       clearOfDock: !overlaps(tray, dock),
+      belowCameraPanel: tray.top >= document.querySelector('.camera-controls').getBoundingClientRect().bottom,
       // The whole board stays in view beside the tray (its corners, on the dev server where they can be located).
       boardClear: !dev || [[0, 0], [16, 0], [0, 16], [16, 16]].every(([x, z]) => {
         const p = window.__trafficDebug.screenOf(x, z);

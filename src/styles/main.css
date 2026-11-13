@@ -296,7 +296,6 @@ button.primary {
   gap: var(--space-2);
 }
 
-
 .camera-controls button[data-action^='zoom'] .icon,
 .theme-toggle .icon {
   margin: 0 auto;

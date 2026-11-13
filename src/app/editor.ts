@@ -121,7 +121,7 @@ export function createEditor(host: EditorHost) {
   drawer.innerHTML = `
     <header>
       <h2>Components</h2>
-      <span class="parts-hint" id="parts-hint">Drag a component onto the map</span>
+      <span class="parts-hint" id="parts-hint">Drag a component onto the map<span class="visually-hidden">, or press Enter on one and use the arrow keys; Space or R turns it, Enter drops it, Escape cancels</span></span>
     </header>
     <div class="parts-groups">
       ${GROUPS.map(
