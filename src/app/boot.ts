@@ -1,4 +1,5 @@
 import '../styles/main.css';
+import { startCornerRounding } from './corners';
 import { runningOnHandheld } from './device';
 
 // A light or dark choice saved in this browser applies everywhere, the message page included.
@@ -14,6 +15,9 @@ try {
  * (the 3D app and its models aren't even loaded); laptops and desktops get the app. If a
  * window is resized across that line, the page reloads into the other one.
  */
+// Rounded surfaces measure their own shorter side (shared corner rounding).
+startCornerRounding();
+
 const handheld = runningOnHandheld();
 if (handheld) {
   const app = document.querySelector<HTMLElement>('#app')!;

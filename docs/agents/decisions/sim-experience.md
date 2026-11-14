@@ -469,6 +469,15 @@ Owner agreed the spec and the T1–T13 ticket breakdown and authorised implement
 - Every button is flat: its colour at 50% opacity (grey for secondary buttons, the accent for primary ones), a 1px light border (`--button-border`, light in both themes), and no gradient or shadow. Hover deepens the fill to 70%.
 - Primary labels and icons use the text colour, because white on a half-transparent accent isn't readable.
 
+## Shared corner rounding — 2026-11-14
+
+- **Owner:** standardise corner rounding across buttons, inputs, cards and panels.
+- **Rule:** one `--corner-ratio` (0.20). A rounded rectangle's radius is `calc(var(--short-side) * var(--corner-ratio))`, where `--short-side` is its shorter border-box side. Controls use their size token (`--control-height`, now 44px). Cards, the parts tray, its tiles, the tooltip, the tip and the dialogs are measured by `src/app/corners.ts` (ResizeObserver, border box; elements added later are picked up too). A hidden element keeps its last value.
+- **Pills** (buttons, the dock, the scene pill, the camera panel, the duration track) stay `9999px`. **Nested:** the Replace-with picker's options use `max(0px, calc(var(--outer-radius) - var(--inset)))`. The picker list is a pseudo-element that can't be measured, so it uses an estimated 96px short side.
+- `corner-shape: squircle` applies to rounded rectangles where the browser supports it; pills stay circular.
+- **Controls:** 44px minimum height (close ×, arrows, camera buttons, rotate). Inputs have a plain surface and a darker border. Borders stay 1px in every state and darken slightly on hover. Keyboard focus is a separate 2px outline at a 2px offset.
+- **Kept from #85 (owner's later explicit request):** buttons stay flat with the light `--button-border`, so there is no inset top highlight and no soft neutral button border.
+
 ## Customise icon: a single wrench (2026-11-14)
 
 - The owner switched the Customise button's icon from the crossed wrench-and-hammer to Phosphor's single bold wrench, and confirmed it. The custom crossed-tools SVG is removed.
