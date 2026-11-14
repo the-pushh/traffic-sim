@@ -276,6 +276,15 @@ runChecks.resultsShowPreviousRun = await runPage.evaluate(() => {
   return !card.hidden && (card.textContent ?? '').includes('Previous run');
 });
 // Same scene twice: every headline says how it moved since the previous run.
+// P27: Show details makes the results card taller, not rounder.
+{
+  const radius = () => runPage.evaluate(() => getComputedStyle(document.querySelector('.results-card')).borderTopLeftRadius);
+  const before = await radius();
+  await runPage.locator('.results-details-toggle').click();
+  await runPage.waitForTimeout(200);
+  runChecks.resultsCornersKeptAsDetailsOpen = before === (await radius());
+  await runPage.locator('.results-details-toggle').click();
+}
 runChecks.resultsHeadlinesCompare =
   (await runPage.locator('.results-headlines .change').count()) === 4 &&
   ((await runPage.locator('.results-caption').textContent()) ?? '').includes('compared with the previous run');
@@ -698,21 +707,50 @@ const dockChecks = {};
       [...document.querySelectorAll('svg.icon')].every((svg) => svg.getAttribute('aria-hidden') === 'true')
     );
   });
-  // P24: every visible button is flat (no shadow, no gradient) with a 50%-opacity fill and a 1px border.
+  // P27: slim buttons everywhere: white faces with dark labels, 34px pills and circles (Play 48px in its
+  // ring), and at least 44px of clickable area round each one.
   await page.mouse.move(5, 5); // nothing hovered (a hovered button shows a stronger fill)
   await page.waitForTimeout(400); // let the hover fill fade back
-  dockChecks.flatButtons = await page.evaluate(() =>
+  dockChecks.slimButtons = await page.evaluate(() =>
     [...document.querySelectorAll('.dock button, .scene-pill button, .camera-controls button')]
-      .filter((b) => b.offsetParent && !b.closest('.dock')) // the HUD's buttons share its glass (P25): checked below
+      .filter((b) => b.offsetParent && !b.classList.contains('primary') && b.getAttribute('aria-expanded') !== 'true' && b.getAttribute('aria-checked') !== 'true')
       .filter((b) => {
         const style = getComputedStyle(b);
-        const alpha = Number((style.backgroundColor.match(/[\d.]+(?=\)$)/) ?? ['1'])[0]);
-        return !(style.boxShadow === 'none' && style.backgroundImage === 'none' && style.borderTopWidth === '1px' && Math.abs(alpha - 0.5) < 0.06);
+        const box = b.getBoundingClientRect();
+        const play = b.classList.contains('play-button');
+        const round = !play && (b.classList.contains('icon-button') || !!b.closest('.camera-controls') || b.classList.contains('pill-arrow'));
+        // A click 4px outside the face still lands on the button (in a stack, the edge between
+        // two buttons goes to one of them, so only the outer sides are checked there).
+        const stacked = !!b.closest('.camera-controls');
+        const outside = stacked ? [[box.left - 4, box.top + box.height / 2]] : [[box.left + box.width / 2, box.top - 4], [box.left + box.width / 2, box.bottom + 4]];
+        const hits = outside.every(([x, y]) => document.elementFromPoint(x, y)?.closest('button') === b);
+        const face = play || style.backgroundColor === 'rgb(255, 255, 255)';
+        const size = play ? Math.round(box.height) === 48 : Math.round(box.height) === 34 && (!round || Math.round(box.width) === 34);
+        return !(face && size && hits && style.boxShadow === 'none');
       })
-      .map((b) => `${b.getAttribute('aria-label') || b.textContent.trim()}: ${getComputedStyle(b).backgroundColor} ${getComputedStyle(b).boxShadow}`),
+      .map((b) => `${b.getAttribute('aria-label') || b.textContent.trim()}: ${getComputedStyle(b).backgroundColor} ${Math.round(b.getBoundingClientRect().width)}x${Math.round(b.getBoundingClientRect().height)}`),
   );
-  if (dockChecks.flatButtons.length) console.error('Not flat:', dockChecks.flatButtons);
-  dockChecks.flatButtons = dockChecks.flatButtons.length === 0;
+  if (dockChecks.slimButtons.length) console.error('Not slim:', dockChecks.slimButtons);
+  dockChecks.slimButtons = dockChecks.slimButtons.length === 0;
+  // Traffic load: the label sits right on its slider (it floated 6px+ above it before).
+  dockChecks.trafficLoadLabelOnSlider = await page.evaluate(() => {
+    const label = document.querySelector('.intensity .dock-label').getBoundingClientRect();
+    const slider = document.querySelector('.intensity input').getBoundingClientRect();
+    return slider.top - label.bottom >= 0 && slider.top - label.bottom <= 2;
+  });
+  // Results against the previous run: better is green, worse is red.
+  dockChecks.betterGreenWorseRed = await page.evaluate(() => {
+    const list = document.createElement('dl');
+    list.className = 'results-headlines';
+    list.innerHTML = '<span class="change better">▲ 3</span><span class="change worse">▼ 2</span>';
+    document.body.append(list);
+    const [better, worse] = [...list.children].map((c) => getComputedStyle(c));
+    const green = (c) => { const [r, g, b] = c.match(/\d+/g).map(Number); return g > r + 40 && g > b + 20; };
+    const red = (c) => { const [r, g, b] = c.match(/\d+/g).map(Number); return r > g + 60 && r > b + 30; };
+    const ok = green(better.backgroundColor) && red(worse.color);
+    list.remove();
+    return ok;
+  });
   // Nothing marked hidden is drawn: the on-piece rotate button stayed visible off the left edge before.
   dockChecks.hiddenMeansHidden = await page.evaluate(() =>
     [...document.querySelectorAll('[hidden]')].every((el) => getComputedStyle(el).display === 'none'),
@@ -742,9 +780,7 @@ const dockChecks = {};
       dock.backdropFilter.includes('blur') &&
       dock.backgroundColor === pill.backgroundColor && // the scene picker gets the same glass
       dock.backdropFilter === pill.backdropFilter &&
-      buttons.every((b) => b.boxShadow === 'none' && b.borderTopColor === 'rgba(0, 0, 0, 0)') &&
-      // Clear at rest on the shared glass (Duration keeps a faint fill: it's a dropdown).
-      [...document.querySelectorAll('.dock button:not(.duration-trigger)')].every((b) => getComputedStyle(b).backgroundColor === 'rgba(0, 0, 0, 0)') &&
+      buttons.every((b) => b.boxShadow === 'none') &&
       // One control height; Play is that plus its ring.
       new Set([...document.querySelectorAll('.dock button:not(.play-button)')].map((b) => getComputedStyle(b).height)).size === 1
     );
@@ -862,7 +898,11 @@ if (isDevServer) {
     const collapsed = JSON.stringify(highlights) === JSON.stringify(['Driver', 'Habits', 'Speed', 'Doing', 'Heading for']) && (await body.isHidden()) && (await toggle.getAttribute('aria-expanded')) === 'false';
     await page.screenshot({ path: `${outDir}/38-vehicle-card-highlights.png` });
     await toggle.click();
+    const radius = () => page.evaluate(() => getComputedStyle(document.querySelector('.vehicle-card')).borderTopLeftRadius);
+    const radiusBefore = await radius();
     const expanded = (await body.isVisible()) && (await toggle.getAttribute('aria-expanded')) === 'true' && (await toggle.textContent()) === 'Hide details';
+    // P27: the card grows taller but keeps its corners.
+    vehicleCardChecks.cornersKeptAsDetailsOpen = radiusBefore === (await radius());
     // From the keyboard: Enter hides them again, and opens them once more.
     await toggle.focus();
     await page.keyboard.press('Enter');
