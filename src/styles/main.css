@@ -339,7 +339,8 @@ button.primary {
 }
 
 .camera-controls button[data-action^='zoom'] .icon,
-.theme-toggle .icon {
+.theme-toggle .icon,
+.camera-controls .sound-toggle .icon {
   margin: 0 auto;
 }
 
@@ -1590,7 +1591,6 @@ input[type='text']:hover:not(:disabled) {
  * round the selected piece, a Remove tool, and replacements previewed in place. Blue is what
  * stays or is chosen, red what goes; words and shapes say the same thing as the colours.
  */
-.sound-toggle,
 .tool-toggle {
   display: inline-flex;
   align-items: center;
@@ -1601,7 +1601,7 @@ input[type='text']:hover:not(:disabled) {
   white-space: nowrap;
 }
 
-.dock .sound-toggle[aria-checked='true'] {
+.camera-controls .sound-toggle[aria-checked='true'] {
   --fill: var(--hud-selected);
   color: var(--color-accent-strong);
 }

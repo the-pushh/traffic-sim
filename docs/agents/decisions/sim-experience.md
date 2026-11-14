@@ -521,3 +521,9 @@ Owner agreed the spec and the T1–T13 ticket breakdown and authorised implement
 - **Synthesised sounds** (`webAudio.ts`, no files): place is two short notes a fifth apart, rotate a 35 ms tick, remove a falling 260→150 Hz tap. The ambience is looped brown noise, low-passed at about 420 Hz with a slow drift, at 0.07 gain, fading in over 1.2 s and out over 0.8 s. It plays while the run is Running and any vehicle moves faster than 0.3 m/s.
 - **Customise pauses** a running run (rather than showing locked parts), so traffic stays still while the layout changes.
 - **Sound switch:** in the HUD after Customise, as `role="switch"` named "Sound", reading "Sound on" or "Sound off" with a speaker icon. It's blue when on.
+
+## Sound below the dark mode button — 2026-11-14
+
+- **Owner:** "move the sound below the dark mode button". The Sound switch moves out of the bottom HUD into the camera panel, directly below the light/dark button. The HUD is back to Play ring · countdown · Reset | Duration | Traffic load | Customise.
+- It matches the panel as an icon-only button: a speaker when on (blue selected state) and a crossed speaker when off (muted). Its visible "Sound on/off" text is dropped, but the state stays understandable without sound through the icon, the colour and the tooltip ("Turn sound on/off"). Screen readers get a `switch` named "Sound".
+- Loading disables only the zoom buttons. The theme and Sound buttons always work.

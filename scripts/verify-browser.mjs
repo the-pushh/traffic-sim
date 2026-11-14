@@ -722,15 +722,17 @@ const dockChecks = {};
   dockChecks.noResetViewButton = await page.evaluate(() => {
     const resets = [...document.querySelectorAll('button')].filter((b) => (b.getAttribute('aria-label') ?? b.textContent ?? '').trim().toLowerCase() === 'reset view');
     const panel = [...document.querySelectorAll('.camera-controls button')];
-    return resets.length === 0 && panel.length === 3 && panel.every((b) => b.querySelector('svg.icon') && !b.textContent?.trim());
+    // Since the owner moved Sound here (2026-11-14): zoom in, zoom out, light/dark, then Sound directly below it.
+    const theme = document.querySelector('.camera-controls .theme-toggle');
+    return resets.length === 0 && panel.length === 4 && panel.every((b) => b.querySelector('svg.icon') && !b.textContent?.trim()) && theme.nextElementSibling?.classList.contains('sound-toggle') && panel[3].getBoundingClientRect().top >= theme.getBoundingClientRect().bottom;
   });
   await page.locator('.dock').screenshot({ path: `${outDir}/30-dock-icons.png` });
   // P25: one glass toolbar, laid out like tldraw's: Play ring · countdown · Reset | Duration | Traffic load | Customise.
   dockChecks.hudOrder = await page.evaluate(() => {
-    const xs = ['[data-action="play-pause"]', '.countdown', '[data-action="restart"]', '.duration-trigger', '.intensity', '.parts-toggle', '.sound-toggle'].map(
+    const xs = ['[data-action="play-pause"]', '.countdown', '[data-action="restart"]', '.duration-trigger', '.intensity', '.parts-toggle'].map(
       (sel) => document.querySelector(`.dock ${sel}`)?.getBoundingClientRect().x ?? NaN,
     );
-    return xs.every((x, i) => i === 0 || x > xs[i - 1]) && document.querySelectorAll('.dock .dock-divider').length === 4; // and the Sound switch (P26)
+    return xs.every((x, i) => i === 0 || x > xs[i - 1]) && document.querySelectorAll('.dock .dock-divider').length === 3 && !document.querySelector('.dock .sound-toggle');
   });
   dockChecks.hudSharedGlass = await page.evaluate(() => {
     const dock = getComputedStyle(document.querySelector('.dock'));
@@ -1018,9 +1020,9 @@ if (isDevServer) {
   const pieces = () => debug(() => window.__trafficDebug.scene().pieces);
   const screenOf = (x, z) => debug(([x, z]) => window.__trafficDebug.screenOf(x, z), [x, z]);
   const soundSwitch = page.getByRole('switch', { name: 'Sound' });
-  toyChecks.mutedOnFirstVisit = (await soundSwitch.getAttribute('aria-checked')) === 'false' && ((await soundSwitch.textContent()) ?? '').includes('Sound off');
+  toyChecks.mutedOnFirstVisit = (await soundSwitch.getAttribute('aria-checked')) === 'false' && (await soundSwitch.getAttribute('title')) === 'Turn sound on';
   await soundSwitch.click();
-  toyChecks.switchSaysOn = (await soundSwitch.getAttribute('aria-checked')) === 'true' && ((await soundSwitch.textContent()) ?? '').includes('Sound on');
+  toyChecks.switchSaysOn = (await soundSwitch.getAttribute('aria-checked')) === 'true' && (await soundSwitch.getAttribute('title')) === 'Turn sound off';
   await page.getByRole('button', { name: 'Customise' }).click();
   await wholeBoardInView(page);
   const start = (await pieces()).length;
