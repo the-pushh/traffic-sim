@@ -468,3 +468,7 @@ Owner agreed the spec and the T1–T13 ticket breakdown and authorised implement
 - **Owner:** "make all of the buttons flat, with light border and opacity 50 with colors". This supersedes the ridge from #72.
 - Every button is flat: its colour at 50% opacity (grey for secondary buttons, the accent for primary ones), a 1px light border (`--button-border`, light in both themes), and no gradient or shadow. Hover deepens the fill to 70%.
 - Primary labels and icons use the text colour, because white on a half-transparent accent isn't readable.
+
+## Customise icon: a single wrench (2026-11-14)
+
+- The owner switched the Customise button's icon from the crossed wrench-and-hammer to Phosphor's single bold wrench, and confirmed it. The custom crossed-tools SVG is removed.

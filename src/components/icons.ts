@@ -9,11 +9,9 @@ import minus from '@phosphor-icons/core/assets/bold/minus-bold.svg?raw';
 import moon from '@phosphor-icons/core/assets/bold/moon-bold.svg?raw';
 import sun from '@phosphor-icons/core/assets/bold/sun-bold.svg?raw';
 import rotate from '@phosphor-icons/core/assets/bold/arrow-clockwise-bold.svg?raw';
-// Phosphor's regular wrench and mirrored hammer (MIT), crossed into one icon for Customise (lighter than the
-// bold set on purpose: the crossed tools stay legible at 22 px).
-import toolsCrossed from './icons-custom/tools-crossed.svg?raw';
+import wrench from '@phosphor-icons/core/assets/bold/wrench-bold.svg?raw';
 
-const SOURCES = { play, pause, restart, clock, gauge, plus, minus, moon, sun, rotate, toolsCrossed };
+const SOURCES = { play, pause, restart, clock, gauge, plus, minus, moon, sun, rotate, wrench };
 
 export type IconName = keyof typeof SOURCES;
 

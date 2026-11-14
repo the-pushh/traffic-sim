@@ -139,7 +139,7 @@ export function createEditor(host: EditorHost) {
   const toggle = document.createElement('button');
   toggle.type = 'button';
   toggle.className = 'parts-toggle';
-  toggle.innerHTML = `${icon('toolsCrossed')}<span>Customise</span>`;
+  toggle.innerHTML = `${icon('wrench')}<span>Customise</span>`;
   toggle.setAttribute('aria-expanded', 'false');
   toggle.addEventListener('click', () => {
     drawer.hidden = !drawer.hidden;

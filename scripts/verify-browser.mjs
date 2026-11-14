@@ -672,7 +672,7 @@ const dockChecks = {};
       has('[data-action="restart"]', 'restart') &&
       has('.duration', 'clock') &&
       has('.dock-traffic', 'gauge') &&
-      has('.parts-toggle', 'toolsCrossed') &&
+      has('.parts-toggle', 'wrench') &&
       has('[data-action="zoom-in"]', 'plus') &&
       [...document.querySelectorAll('svg.icon')].every((svg) => svg.getAttribute('aria-hidden') === 'true')
     );
