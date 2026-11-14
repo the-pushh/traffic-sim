@@ -26,11 +26,16 @@
   --glass-border: rgb(255 255 255 / 0.7);
   --glass-highlight: inset 0 1px 0 rgb(255 255 255 / 0.85);
   --glass-blur: blur(22px) saturate(180%);
-  /* Flat buttons (owner): colour at 50% opacity, a light 1px border, no shadow. */
-  --button-fill: rgb(200 200 206 / 0.5);
-  --button-fill-hover: rgb(200 200 206 / 0.7);
-  --button-border: rgb(255 255 255 / 0.85);
-  --button-border-hover: color-mix(in srgb, var(--button-border), var(--color-text) 18%);
+  /* Buttons (owner, P27): white faces with dark text on the glass panels, a hairline edge, no shadow. */
+  --button-fill: #ffffff;
+  --button-fill-hover: #f2efe6;
+  --button-border: rgb(20 17 21 / 0.1);
+  --button-border-hover: rgb(20 17 21 / 0.22);
+  /* Chosen (a menu open, a tool on, a part in hand): the blue accent. */
+  --button-selected: color-mix(in srgb, var(--blue) 12%, #ffffff);
+  /* Up and better in the results: green, as worse is red. */
+  --color-better: #1e8a4c;
+  --color-on-better: #ffffff;
   /* Inputs need a border that shows against the panel. */
   --input-border: color-mix(in srgb, var(--color-text) 28%, transparent);
   --input-border-hover: color-mix(in srgb, var(--color-text) 45%, transparent);
@@ -57,8 +62,10 @@
   --corner-ratio: 0.2;
   /* The parts tray: three part tiles to a row. */
   --tray-width: 320px;
-  /* Comfortable to click and tap. */
-  --control-height: 44px;
+  /* Slim faces (P27): controls show 34px; every button still takes clicks over 44px (see the hit area). */
+  --control-height: 34px;
+  --hit-size: 44px;
+  --icon-size: 16px;
   --font-body: 14px;
   --font-meta: 12px;
   --font-title: 20px;
@@ -83,9 +90,14 @@
     --glass-bg-strong: rgb(30 25 32 / 0.7);
     --glass-border: rgb(247 243 227 / 0.16);
     --glass-highlight: inset 0 1px 0 rgb(247 243 227 / 0.12);
-    --button-fill: rgb(120 116 126 / 0.5);
-    --button-fill-hover: rgb(120 116 126 / 0.7);
-    --button-border: rgb(255 255 255 / 0.22);
+    --button-fill: rgb(255 255 255 / 0.1);
+    --button-fill-hover: rgb(255 255 255 / 0.17);
+    --button-border: rgb(255 255 255 / 0.14);
+    --button-border-hover: rgb(255 255 255 / 0.3);
+    --button-selected: color-mix(in srgb, #6b95ff 30%, transparent);
+    --color-better: #5fd28f;
+  --color-on-better: var(--ink);
+    --color-on-better: var(--ink);
     --backdrop-contour: rgb(247 243 227 / 0.07);
     --hud-glass: rgb(40 33 36 / 0.8);
     --hud-border: rgb(247 243 227 / 0.16);
@@ -110,9 +122,13 @@
   --glass-bg-strong: rgb(30 25 32 / 0.7);
   --glass-border: rgb(247 243 227 / 0.16);
   --glass-highlight: inset 0 1px 0 rgb(247 243 227 / 0.12);
-  --button-fill: rgb(120 116 126 / 0.5);
-  --button-fill-hover: rgb(120 116 126 / 0.7);
-  --button-border: rgb(255 255 255 / 0.22);
+  --button-fill: rgb(255 255 255 / 0.1);
+  --button-fill-hover: rgb(255 255 255 / 0.17);
+  --button-border: rgb(255 255 255 / 0.14);
+  --button-border-hover: rgb(255 255 255 / 0.3);
+  --button-selected: color-mix(in srgb, #6b95ff 30%, transparent);
+  --color-better: #5fd28f;
+  --color-on-better: var(--ink);
   --backdrop-contour: rgb(247 243 227 / 0.07);
   --hud-glass: rgb(40 33 36 / 0.8);
   --hud-border: rgb(247 243 227 / 0.16);
@@ -1829,4 +1845,243 @@ body.placing.stamping canvas {
   border-radius: var(--radius-pill);
   color: var(--color-accent-strong);
   font: inherit;
+}
+
+/*
+ * Slim buttons (owner, P27): one style for every panel (HUD, scene picker, camera controls,
+ * Components, road editor). Pills are 34px with roomier sides; icon-only controls are 34px
+ * circles with 16px icons; Play/Pause stays larger in its ring. Faces are white (light theme)
+ * with dark text; blue marks what's chosen and focused, red what removes. Each button takes
+ * clicks over at least 44px, so the slimmer faces are no harder to hit.
+ */
+button {
+  position: relative;
+  height: var(--control-height);
+  min-height: var(--control-height);
+  padding: 0 var(--space-4);
+  border-color: var(--button-border);
+  color: var(--color-text);
+  line-height: 1;
+}
+
+/* The clickable area: 5px beyond the face all round (44px for a 34px control). The offset is from
+   inside the 1px border, hence the extra pixel. */
+button::after {
+  content: '';
+  position: absolute;
+  inset: calc((var(--control-height) - var(--hit-size)) / 2 - 1px);
+}
+
+button .icon {
+  width: var(--icon-size);
+  height: var(--icon-size);
+}
+
+/* Icon-only controls: perfect circles, the icon in the middle. */
+.icon-button,
+.camera-controls button,
+.pill-arrow,
+.piece-rotate,
+.replace-close,
+.tip-close,
+.results-close,
+.inspector header button,
+.vehicle-card-close {
+  display: grid;
+  place-items: center;
+  width: var(--control-height);
+  min-width: var(--control-height);
+  height: var(--control-height);
+  padding: 0;
+  border-radius: 50%;
+}
+
+.icon-button .icon,
+.camera-controls button .icon,
+.piece-rotate .icon {
+  width: var(--icon-size);
+  height: var(--icon-size);
+}
+
+.camera-controls {
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-1);
+}
+
+/* Labelled pills: icon and words centred, a little more room either side. */
+.duration-trigger,
+.sound-toggle,
+.tool-toggle,
+.parts-toggle,
+.pill-action,
+.inspector-actions button,
+.edit-toast button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 var(--space-4);
+}
+
+/* In the HUD the controls are white faces on the glass too (not clear), all one height. */
+.dock button {
+  --fill: var(--button-fill);
+  height: var(--control-height);
+  border-color: var(--button-border);
+}
+
+.dock button:hover:not(:disabled) {
+  --fill: var(--button-fill-hover);
+  border-color: var(--button-border-hover);
+}
+
+.dock .duration-trigger,
+.dock .duration-trigger:hover:not(:disabled) {
+  --fill: var(--button-fill);
+}
+
+.dock .duration-trigger:hover:not(:disabled) {
+  --fill: var(--button-fill-hover);
+}
+
+/* Reset: a quieter circle (the muted icon), the same white face. */
+.dock .icon-button.quiet {
+  color: var(--color-text-muted);
+}
+
+/* Play/Pause stays the primary control: a 48px circle in its progress ring, the blue disc inside. */
+.dock .play-button,
+.dock .play-button:hover:not(:disabled) {
+  --fill: transparent;
+  height: 100%;
+  border-color: transparent;
+}
+
+.play-button::before {
+  background: var(--button-fill);
+  box-shadow: inset 0 0 0 1px var(--button-border);
+}
+
+.play-button:hover::before {
+  background: var(--button-selected);
+}
+
+.play-icon .icon {
+  width: 18px;
+  height: 18px;
+}
+
+/* Chosen: the blue accent (face tint, edge and label), so it reads at a glance. */
+.dock .parts-toggle[aria-expanded='true'],
+.dock .duration-trigger[aria-expanded='true'],
+.dock .duration-trigger[aria-expanded='true']:hover:not(:disabled),
+.dock .sound-toggle[aria-checked='true'],
+.dock .sound-toggle[aria-checked='true']:hover:not(:disabled),
+.inspector-actions button[aria-pressed='true'],
+.parts-group .part[aria-pressed='true'],
+button[aria-pressed='true'] {
+  --fill: var(--button-selected);
+  border-color: var(--color-accent);
+  box-shadow: none;
+  color: var(--color-accent-strong);
+}
+
+/* The main action of a panel (Save, Replace, Apply timing, Retry): solid blue, white words. */
+button.primary,
+button.primary:hover:not(:disabled) {
+  --fill: var(--color-accent-strong);
+  border-color: transparent;
+  color: var(--color-on-accent);
+}
+
+button.primary:hover:not(:disabled) {
+  --fill: color-mix(in srgb, var(--color-accent-strong) 88%, black);
+}
+
+/* Removing: red words and icons on the white face; the Remove tool turns red when on. */
+.inspector-actions button.danger,
+.tool-toggle {
+  color: var(--color-text);
+}
+
+.inspector-actions button.danger,
+.tool-toggle .icon {
+  color: var(--color-error);
+}
+
+.tool-toggle[aria-pressed='true'] {
+  --fill: color-mix(in srgb, var(--color-error) 12%, var(--button-fill));
+  border-color: var(--color-error);
+  color: var(--color-error);
+}
+
+.edit-toast button {
+  --fill: var(--button-fill);
+  border-color: var(--button-border);
+  color: var(--color-accent-strong);
+  font-weight: 600;
+}
+
+/* The handle's knob: a white circle with the blue turn icon (it belongs to the selection). */
+.piece-rotate {
+  background: var(--button-fill);
+  border-color: var(--button-border);
+  color: var(--color-accent-strong);
+}
+
+/* Components tiles: white faces too, the picture and name centred. */
+.parts-group .part {
+  --fill: var(--button-fill);
+  border-color: var(--button-border);
+}
+
+.parts-group .part:hover:not(:disabled) {
+  --fill: var(--button-fill-hover);
+}
+
+/* Traffic load: the label sits right on its slider. */
+.intensity {
+  gap: 0;
+}
+
+.intensity .dock-label {
+  line-height: 1.2;
+}
+
+.intensity input {
+  height: 16px;
+  margin: 0;
+}
+
+/* Cards that grow (results, the vehicle card, the inspector) keep their corners as they grow. */
+.results-card {
+  --short-side: 200px;
+}
+
+.inspector {
+  --short-side: 200px;
+}
+
+/* Results against the previous run: better in green (filled), worse in red (outlined). */
+.results-headlines .change.better {
+  color: var(--color-on-better);
+  background: var(--color-better);
+}
+
+/* The selected road's toolbar: Rotate · Replace… · Remove on one even row. */
+.inspector {
+  width: 288px;
+}
+
+.inspector-actions {
+  display: grid;
+  grid-auto-columns: minmax(0, 1fr);
+  grid-auto-flow: column;
+  gap: var(--space-1);
+}
+
+.inspector-actions button {
+  min-width: 0;
+  padding: 0 var(--space-2);
 }

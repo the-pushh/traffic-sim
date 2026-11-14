@@ -5,7 +5,9 @@
  */
 
 /** Surfaces sized by their content or the layout (controls use their size token instead). */
-const MEASURED = ['.first-visit-tip', '.vehicle-tooltip', '.results-card', '.leave-dialog', '.parts-drawer', '.parts-group .part', '.inspector', '.placement-reason', '.duration-menu'].join(',');
+const MEASURED = ['.first-visit-tip', '.vehicle-tooltip', '.leave-dialog', '.parts-drawer', '.parts-group .part', '.placement-reason', '.duration-menu'].join(',');
+// Not measured: cards that grow when opened (results, inspector, vehicle card) keep a fixed `--short-side`
+// in main.css, so their corners don't change as details open (owner, P27).
 
 /** The shorter side of a border box, px; null when it has no size (hidden), so the last value stays. */
 export function shortSide(width: number, height: number): number | null {
