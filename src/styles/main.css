@@ -119,6 +119,11 @@ body {
   font: var(--font-body) / 1.4 system-ui, -apple-system, 'Segoe UI', sans-serif;
 }
 
+/* Hidden means hidden: no display rule (a button's grid, a panel's flex) may show it again. */
+[hidden] {
+  display: none !important;
+}
+
 #app {
   position: relative;
   z-index: 1; /* over the topographic backdrop */

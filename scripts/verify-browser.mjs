@@ -692,6 +692,10 @@ const dockChecks = {};
   );
   if (dockChecks.flatButtons.length) console.error('Not flat:', dockChecks.flatButtons);
   dockChecks.flatButtons = dockChecks.flatButtons.length === 0;
+  // Nothing marked hidden is drawn: the on-piece rotate button stayed visible off the left edge before.
+  dockChecks.hiddenMeansHidden = await page.evaluate(() =>
+    [...document.querySelectorAll('[hidden]')].every((el) => getComputedStyle(el).display === 'none'),
+  );
   dockChecks.labelsUnchanged = (await page.getByRole('button', { name: 'Customise' }).count()) === 1 && (await page.getByRole('button', { name: 'Restart run' }).count()) === 1;
   // No Reset View button (removed from the dock at the owner's request); the camera panel is a slim strip of three icon buttons.
   dockChecks.noResetViewButton = await page.evaluate(() => {
