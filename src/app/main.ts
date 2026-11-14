@@ -1,5 +1,6 @@
-import { BufferAttribute, BufferGeometry, DoubleSide, Group, Mesh, MeshBasicMaterial, type Object3D, PCFSoftShadowMap, PerspectiveCamera, RingGeometry, Timer, WebGLRenderer } from 'three';
+import { BufferAttribute, BufferGeometry, Color, DoubleSide, Group, Mesh, MeshBasicMaterial, type Object3D, PCFSoftShadowMap, PerspectiveCamera, Timer, WebGLRenderer } from 'three';
 import { routeChevrons } from '../three/scene/routeChevrons';
+import { glowDisc } from '../three/scene/glowDisc';
 import type { LaneGraph } from '../simulation/network/buildLaneGraph';
 import type { TrafficSimulation } from '../simulation/traffic/trafficSimulation';
 import { boardToWorld } from '../scenes/board';
@@ -178,10 +179,23 @@ routeLine.name = 'inspected-route';
 routeLine.visible = false;
 let routePath: Mesh | null = null;
 let drawnRoute = '';
-/** A ring at the vehicle, where its route starts. */
-const routeStart = new Mesh(new RingGeometry(0.9, 1.3, 32), new MeshBasicMaterial({ color: ROUTE_COLOUR, side: DoubleSide, ...onRoad }));
-routeStart.rotation.x = -Math.PI / 2;
+/** A soft glow under the vehicle, where its route starts: the route colour, fading out from the centre. */
+const GLOW_RADIUS = 2.6; // world units: reaching well past the car, so the fade shows round it
+const GLOW_PEAK = 0.85;
+const routeStart = new Mesh(glowGeometry(), new MeshBasicMaterial({ vertexColors: true, side: DoubleSide, ...onRoad }));
+routeStart.name = 'vehicle-glow';
 routeLine.add(routeStart);
+function glowGeometry() {
+  const { positions, alphas, indices } = glowDisc(GLOW_RADIUS, GLOW_PEAK);
+  const { r, g, b } = new Color(ROUTE_COLOUR);
+  const colours = new Float32Array(alphas.length * 4);
+  alphas.forEach((alpha, i) => colours.set([r, g, b, alpha], i * 4));
+  const geometry = new BufferGeometry();
+  geometry.setAttribute('position', new BufferAttribute(positions, 3));
+  geometry.setAttribute('color', new BufferAttribute(colours, 4)); // RGBA: three fades by the vertex alpha
+  geometry.setIndex(indices);
+  return geometry;
+}
 const vehicleCard = createVehicleCard(viewport, () => inspectVehicle(null));
 /** Pictures of the vehicle models for the card, drawn once each from the loaded models. */
 const VEHICLE_PICTURE_SIZE = 120;
@@ -249,7 +263,7 @@ function syncVehicleCard(simulation: TrafficSimulation, now: number) {
   routePath = new Mesh(geometry, routeMaterial);
   routePath.name = 'route-chevrons';
   routeLine.add(routePath);
-  // The ring sits round the vehicle's centre (where the map draws it), not its front bumper.
+  // The glow sits round the vehicle's centre (where the map draws it), not its front bumper.
   routeStart.position.set(...boardToWorld([details.centre[0], details.centre[1] + ROUTE_LIFT, details.centre[2]]));
   routeLine.visible = true;
   requestRender();
