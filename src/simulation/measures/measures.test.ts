@@ -42,18 +42,16 @@ describe('measures', () => {
     expect(queues.peak).toEqual([4, 0]);
   });
 
-  it('averages travel time over finished trips only, with that sample count, and reports the counts as they are', () => {
+  it("averages each finished trip's delay (time lost against the same route on empty roads), with that sample count, and reports the counts as they are", () => {
     const s = new TrafficSimulation(graph, { seed: 2, controls, demand: { tripsPerMinute: 12, entries: { B: 1 } } });
     const queues = new QueueTracker(controls.length);
     run(s, 60, () => queues.sample(s.queueLengths()));
     const results = summariseRun(s, queues, describeApproaches(pieces, graph, controls));
     const { due, entered, finished, blocked } = s.counts;
-    expect(results).toMatchObject({ due, entered, finished, blocked, travelTimeSamples: finished });
+    expect(results).toMatchObject({ due, entered, finished, blocked, delaySamples: finished });
     expect(finished).toBeGreaterThan(3);
-    const expectedAverage = s.travelTimes.reduce((a, b) => a + b, 0) / s.travelTimes.length;
-    expect(results.averageTravelTime).toBeCloseTo(expectedAverage, 6);
-    // Everyone waited through the red light, so the average is well above the ~10 s free-flow crossing.
-    expect(results.averageTravelTime!).toBeGreaterThan(15);
+    // The first cars waited through most of the 30 s red light: that wait is delay.
+    expect(results.averageDelay!).toBeGreaterThan(8);
     expect(results.peakQueues).toEqual([
       { approach: 'Crossing 1 · eastbound', peak: queues.peak[0] },
       { approach: 'Crossing 1 · westbound', peak: 0 },
@@ -61,10 +59,35 @@ describe('measures', () => {
     expect(queues.peak[0]).toBeGreaterThan(2);
   });
 
-  it('has no average travel time until a trip finishes', () => {
+  it('counts no delay for a trip nothing held up, however long its route', () => {
+    // The same 16-tile road with no controls and light traffic: every trip drives straight through.
+    const s = new TrafficSimulation(graph, { seed: 4, demand: { tripsPerMinute: 3, entries: { B: 1 } } });
+    run(s, 60);
+    const results = summariseRun(s, new QueueTracker(0), []);
+    expect(results.delaySamples).toBeGreaterThan(0);
+    // Each trip took a while (a 16-tile road)…
+    expect(Math.min(...s.travelTimes)).toBeGreaterThan(5);
+    // …but lost almost none of it.
+    expect(results.averageDelay!).toBeLessThan(1.5);
+  });
+
+  it("measures delay against each trip's own route, so a trip that's slower even on empty roads isn't counted as held up", () => {
+    // The same road at half the speed limit: every trip takes about twice as long, and none is held up.
+    const fast = new TrafficSimulation(graph, { seed: 5, demand: { tripsPerMinute: 3, entries: { B: 1 } } });
+    const slow = new TrafficSimulation(graph, { seed: 5, speedLimits: graph.lanes.map(() => 7), demand: { tripsPerMinute: 3, entries: { B: 1 } } });
+    run(fast, 60);
+    run(slow, 60);
+    const mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length;
+    expect(mean(slow.travelTimes)).toBeGreaterThan(mean(fast.travelTimes) * 1.5);
+    const delay = (s: TrafficSimulation) => summariseRun(s, new QueueTracker(0), []).averageDelay!;
+    expect(delay(slow)).toBeLessThan(1.5);
+    expect(delay(fast)).toBeLessThan(1.5);
+  });
+
+  it('has no average delay until a trip finishes', () => {
     const s = new TrafficSimulation(graph, { seed: 3, controls });
     const results = summariseRun(s, new QueueTracker(controls.length), describeApproaches(pieces, graph, controls));
-    expect(results.averageTravelTime).toBeNull();
-    expect(results.travelTimeSamples).toBe(0);
+    expect(results.averageDelay).toBeNull();
+    expect(results.delaySamples).toBe(0);
   });
 });
