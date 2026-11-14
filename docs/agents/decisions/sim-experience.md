@@ -481,3 +481,10 @@ Owner agreed the spec and the T1–T13 ticket breakdown and authorised implement
 ## Customise icon: a single wrench (2026-11-14)
 
 - The owner switched the Customise button's icon from the crossed wrench-and-hammer to Phosphor's single bold wrench, and confirmed it. The custom crossed-tools SVG is removed.
+
+## Route as chevrons (owner subtask, #95) — 2026-11-14
+
+- **Owner:** "instead of a straight line for the path of the vehicle make it a line of chevrons, thick chevrons, and make its opacity 60%".
+- The inspected vehicle's remaining route is a row of flat chevrons (`routeChevrons`, unit-tested), replacing the ribbon (`routeRibbon`, removed). Each one points the way the vehicle goes. They are 1.1 world units wide (almost a lane), 0.9 long, with 0.42-thick arms, and their centres are 1.5 apart. The first is half a gap from the vehicle's front.
+- They keep the P13 rules: flat on the road surface, tilted with the ramp they're on, depth-tested so vehicles and trees in front hide them, no depth write. The material is pink at **60% opacity**. Chevrons don't overlap, so the opacity is even. The start ring at the vehicle is unchanged.
+- The `route()` dev hook now finds the route mesh by name (`route-chevrons`). Before, it picked the start ring, which is also an indexed mesh, so the old check read the ring's material.
