@@ -86,6 +86,19 @@ Owner's nine points: Pause doesn't work; Phosphor icons; a simpler results card;
 | [#102](https://github.com/the-pushh/traffic-sim/issues/102) | P26 — Building-toy editor: click to place, rotation ring, Remove tool, replace preview, sound | P10, P24, P25 | in review | Click a part then click the map (stays in hand; Esc puts it down); a blue rotation ring on the selected road previews quarter turns with kept/broken connection markers (Esc cancels, release commits); Replace… lists what fits first and previews in place until confirmed; a Remove tool with red hover outline; "Road removed · Undo". Customise pauses a running run. Sound switch in the HUD (muted first visit, remembered): click/tick/tap once per committed edit, one traffic ambience while vehicles move. TDD: `connections` (4), `rotateHandle` (3), `replacements` (3), `soundBoard` (5). Browser `toyChecks` (27). Self-reviewed (worker fork; no review agents). |
 | [#106](https://github.com/the-pushh/traffic-sim/issues/106) | Owner: Sound below the dark mode button | P26 | done | Sound moved from the bottom HUD into the camera panel, directly below light/dark, as an icon switch (blue speaker on, grey crossed speaker off; tooltip and `switch` role). HUD back to Play ring · countdown · Reset \| Duration \| Traffic load \| Customise. Loading disables only the zoom buttons. Browser: panel order, no Sound in the dock, the sound checks; light and dark inspected. 338 tests. Self-reviewed. Merged in #107. |
 
+## Submission check — 2026-11-14 12:20–13:00 IST
+
+- **Commit verified:** `c886b9e` on `main`, with the README fix on top. The public URL serves a bundle byte-identical to a local `npm run build` of this commit: `index-BdPu_UDS.js`, `index-D8Obzuw_.css`, `main-DQlQLQiM.js`.
+- **Checks:** `npm test`: 42 files and 338 tests passed, with 1 file (1 test) skipped (the opt-in `perf:sim` test). `npm run build`: passes, with the known chunk-size warning.
+- **Live, fresh Chrome profile, real time:**
+  - Main Street · High · 60 s: 6 of 51 trips finished, 22 s delay per trip, longest queue 8 (Junction 1 · southbound), 0 blocked.
+  - After replacing Junction 1's southbound signal with a Give way sign, same load and duration: 4 of 51, 23 s, 7 (Junction 3 · westbound), 0. The numbers match the local runs exactly.
+  - Flyover Bottleneck · Medium · 60 s: 18 of 27 finished, with vehicles seen on the bridge deck over the surface road.
+  - Local 60 s run with the debug hooks: 21 vehicles went through the 2→1 narrowing and 20 crossed the bridge deck (0.5 tiles up), all 20 via the narrowing.
+  - No page or console errors.
+- **README:** rewritten. The old version described the hidden Signal test scene, "Intensity", "Restart run", Reset View and "traffic arrives in T3". It now has the live link, run commands, a walkthrough mapped to the brief, current controls and the known limitations.
+- **Held:** #105 (slim white buttons, green/red badges) is open with green checks. It was held so production stays the verified build; the owner can merge it after submission.
+
 ## Flags from task 1
 
 - **Transcript missing.** The owner's request says to use a supplied transcript, but none was attached. Worked from `START_HERE.md` and `design.md`.
