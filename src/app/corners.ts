@@ -5,7 +5,7 @@
  */
 
 /** Surfaces sized by their content or the layout (controls use their size token instead). */
-const MEASURED = ['.first-visit-tip', '.vehicle-tooltip', '.results-card', '.leave-dialog', '.parts-drawer', '.parts-group .part', '.inspector', '.placement-reason'].join(',');
+const MEASURED = ['.first-visit-tip', '.vehicle-tooltip', '.results-card', '.leave-dialog', '.parts-drawer', '.parts-group .part', '.inspector', '.placement-reason', '.duration-menu'].join(',');
 
 /** The shorter side of a border box, px; null when it has no size (hidden), so the last value stays. */
 export function shortSide(width: number, height: number): number | null {
