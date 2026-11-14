@@ -367,7 +367,7 @@ cameraControls.addEventListener('click', (e) => {
 });
 
 function setCameraControlsEnabled(enabled: boolean) {
-  for (const button of cameraControls.querySelectorAll('button:not(.theme-toggle)')) (button as HTMLButtonElement).disabled = !enabled;
+  for (const button of cameraControls.querySelectorAll<HTMLButtonElement>('button[data-action^="zoom"]')) button.disabled = !enabled;
 }
 
 let tooltip: ReturnType<typeof createVehicleTooltip> | null = null;
@@ -559,7 +559,8 @@ const editor = createEditor({
   sound: (kind) => sound.play(kind),
 });
 dock.addSection(editor.toggle);
-dock.addSection(createSoundToggle(sound));
+// Sound sits in the camera panel, under the light/dark button (owner, 2026-11-14).
+cameraControls.append(createSoundToggle(sound));
 rightPanel = editor.tray;
 
 start();

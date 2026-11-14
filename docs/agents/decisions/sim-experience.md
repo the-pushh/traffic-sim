@@ -522,6 +522,12 @@ Owner agreed the spec and the T1–T13 ticket breakdown and authorised implement
 - **Customise pauses** a running run (rather than showing locked parts), so traffic stays still while the layout changes.
 - **Sound switch:** in the HUD after Customise, as `role="switch"` named "Sound", reading "Sound on" or "Sound off" with a speaker icon. It's blue when on.
 
+## Sound below the dark mode button — 2026-11-14
+
+- **Owner:** "move the sound below the dark mode button". The Sound switch moves out of the bottom HUD into the camera panel, directly below the light/dark button. The HUD is back to Play ring · countdown · Reset | Duration | Traffic load | Customise.
+- It matches the panel as an icon-only button: a speaker when on (blue selected state) and a crossed speaker when off (muted). Its visible "Sound on/off" text is dropped, but the state stays understandable without sound through the icon, the colour and the tooltip ("Turn sound on/off"). Screen readers get a `switch` named "Sound".
+- Loading disables only the zoom buttons. The theme and Sound buttons always work.
+
 ## Slim buttons, steady card corners, green for better (P27) — 2026-11-14
 
 - **Owner:** slim, balanced buttons across the app; white faces with dark text on the glass panels; blue for selection and focus, red for removing; one style for the HUD, scene picker, camera controls, Components and the road editor. This supersedes P24's 50% grey fill and P25's clear HUD buttons.

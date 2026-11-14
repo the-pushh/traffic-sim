@@ -355,7 +355,8 @@ button.primary {
 }
 
 .camera-controls button[data-action^='zoom'] .icon,
-.theme-toggle .icon {
+.theme-toggle .icon,
+.camera-controls .sound-toggle .icon {
   margin: 0 auto;
 }
 
@@ -1606,7 +1607,6 @@ input[type='text']:hover:not(:disabled) {
  * round the selected piece, a Remove tool, and replacements previewed in place. Blue is what
  * stays or is chosen, red what goes; words and shapes say the same thing as the colours.
  */
-.sound-toggle,
 .tool-toggle {
   display: inline-flex;
   align-items: center;
@@ -1617,7 +1617,7 @@ input[type='text']:hover:not(:disabled) {
   white-space: nowrap;
 }
 
-.dock .sound-toggle[aria-checked='true'] {
+.camera-controls .sound-toggle[aria-checked='true'] {
   --fill: var(--hud-selected);
   color: var(--color-accent-strong);
 }
@@ -1911,7 +1911,6 @@ button .icon {
 
 /* Labelled pills: icon and words centred, a little more room either side. */
 .duration-trigger,
-.sound-toggle,
 .tool-toggle,
 .parts-toggle,
 .pill-action,
@@ -1976,8 +1975,8 @@ button .icon {
 .dock .parts-toggle[aria-expanded='true'],
 .dock .duration-trigger[aria-expanded='true'],
 .dock .duration-trigger[aria-expanded='true']:hover:not(:disabled),
-.dock .sound-toggle[aria-checked='true'],
-.dock .sound-toggle[aria-checked='true']:hover:not(:disabled),
+.camera-controls .sound-toggle[aria-checked='true'],
+.camera-controls .sound-toggle[aria-checked='true']:hover:not(:disabled),
 .inspector-actions button[aria-pressed='true'],
 .parts-group .part[aria-pressed='true'],
 button[aria-pressed='true'] {
