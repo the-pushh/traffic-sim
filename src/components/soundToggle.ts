@@ -1,7 +1,11 @@
 import type { SoundBoard } from '../audio/soundBoard';
 import { icon } from './icons';
 
-/** The HUD's Sound switch: it reads "Sound on" or "Sound off", with a matching icon (a switch to screen readers). */
+/**
+ * The Sound switch in the camera panel, under the light/dark button: an icon button like the
+ * rest of the panel (a speaker, crossed out when off), a switch to screen readers, and a tooltip
+ * that says what a click does.
+ */
 export function createSoundToggle(sound: SoundBoard) {
   const button = document.createElement('button');
   button.type = 'button';
@@ -9,7 +13,7 @@ export function createSoundToggle(sound: SoundBoard) {
   button.setAttribute('role', 'switch');
   button.setAttribute('aria-label', 'Sound');
   const show = () => {
-    button.innerHTML = `${icon(sound.enabled ? 'soundOn' : 'soundOff')}<span>Sound ${sound.enabled ? 'on' : 'off'}</span>`;
+    button.innerHTML = icon(sound.enabled ? 'soundOn' : 'soundOff');
     button.setAttribute('aria-checked', String(sound.enabled));
     button.title = sound.enabled ? 'Turn sound off' : 'Turn sound on';
   };
