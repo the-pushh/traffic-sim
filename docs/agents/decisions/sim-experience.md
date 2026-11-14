@@ -521,3 +521,13 @@ Owner agreed the spec and the T1–T13 ticket breakdown and authorised implement
 - **Synthesised sounds** (`webAudio.ts`, no files): place is two short notes a fifth apart, rotate a 35 ms tick, remove a falling 260→150 Hz tap. The ambience is looped brown noise, low-passed at about 420 Hz with a slow drift, at 0.07 gain, fading in over 1.2 s and out over 0.8 s. It plays while the run is Running and any vehicle moves faster than 0.3 m/s.
 - **Customise pauses** a running run (rather than showing locked parts), so traffic stays still while the layout changes.
 - **Sound switch:** in the HUD after Customise, as `role="switch"` named "Sound", reading "Sound on" or "Sound off" with a speaker icon. It's blue when on.
+
+## Slim buttons, steady card corners, green for better (P27) — 2026-11-14
+
+- **Owner:** slim, balanced buttons across the app; white faces with dark text on the glass panels; blue for selection and focus, red for removing; one style for the HUD, scene picker, camera controls, Components and the road editor. This supersedes P24's 50% grey fill and P25's clear HUD buttons.
+- **Sizes:** `--control-height` is now 34px. Pills have 16px sides, circles are 34px with 16px icons, and Play/Pause stays 48px in its ring. Every button takes clicks over 44px (`--hit-size`) through an invisible `::after` 5px beyond the face (6px from inside the border), so the slimmer faces are just as easy to hit. In the stacked camera strip, the edge between two buttons goes to one of them.
+- **Colour:** light theme uses white faces with a hairline ink edge, no shadow, and a cream-grey hover. Chosen controls (Duration open, Customise open, Sound on, a part in hand) get a light blue face, blue edge and blue label. A panel's main action is solid deep blue with white words. Remove words and icons are red, and the Remove tool turns red when on. Dark theme uses translucent light faces (white would glare on the dark glass).
+- **Selected-road toolbar:** Rotate · Replace… · Remove sit on one even row in a 288px inspector.
+- **Traffic load:** the label sits directly on its slider (no gap, a 16px slider box).
+- **Cards that grow keep their corners:** the results card and the inspector/vehicle card use a fixed 200px `--short-side` (40px corners) instead of being measured, so Show details makes them taller, not rounder.
+- **Results arrows:** a better result is a green filled badge and a worse one a red outlined badge (shape still backs up colour). Colour follows better/worse, not the arrow's direction: more trips finished (▲) is green, but more delay (▲) is worse and stays red.
