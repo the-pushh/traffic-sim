@@ -879,6 +879,9 @@ if (isDevServer) {
     vehicleCardChecks.routeOnTheRoadUnderVehicles = route.shown && route.depthTested && !route.writesDepth;
     vehicleCardChecks.routeIsChevronsAt60 = route.chevrons > 1 && Math.abs(route.opacity - 0.6) < 1e-6;
     await page.screenshot({ path: `${outDir}/38c-route-chevrons.png` });
+    // The selected vehicle has a soft glow under it that fades to nothing at its edge, not an outlined ring.
+    vehicleCardChecks.glowUnderVehicle = route.glow.shown && route.glow.centre > 0.5 && route.glow.rim === 0 && !route.glow.outlined;
+    await page.screenshot({ path: `${outDir}/39-vehicle-glow.png`, clip: { x: Math.max(0, car.x - 200), y: Math.max(0, car.y - 150), width: 400, height: 300 } });
     const position = () => page.locator('.vehicle-card dt', { hasText: 'Position' }).locator('xpath=following-sibling::dd[1]').textContent();
     const before = await position();
     await page.waitForTimeout(1200);

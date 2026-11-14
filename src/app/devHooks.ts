@@ -44,12 +44,17 @@ export function exposeTrafficDebug({ canvas, camera, traffic, view, graph, simul
       const group = view.getObjectByName('inspected-route');
       const chevrons = group?.getObjectByName('route-chevrons') as Mesh | undefined;
       const material = chevrons?.material as MeshBasicMaterial | undefined;
+      // The glow under the vehicle: a disc whose vertex alpha fades from its centre to nothing at the rim.
+      const glow = group?.getObjectByName('vehicle-glow') as Mesh | undefined;
+      const colour = glow?.geometry.getAttribute('color');
+      const alphas = colour && colour.itemSize === 4 ? Array.from({ length: colour.count }, (_, i) => colour.getW(i)) : [];
       return {
         shown: !!group?.visible && !!chevrons,
         depthTested: material?.depthTest === true,
         writesDepth: material?.depthWrite === true,
         opacity: material?.opacity,
         chevrons: chevrons ? chevrons.geometry.getAttribute('position').count / 6 : 0,
+        glow: { shown: !!group?.visible && !!glow?.visible, centre: alphas[0] ?? 0, rim: alphas.at(-1) ?? 1, outlined: !!group?.children.some((c) => (c as Mesh).geometry?.type === 'RingGeometry') },
       };
     },
     /** Scenery drawn: how many trees, bushes, rocks and so on, and how many draw calls they take. */

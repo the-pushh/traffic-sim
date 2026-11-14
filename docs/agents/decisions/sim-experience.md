@@ -367,7 +367,7 @@ Owner agreed the spec and the T1–T13 ticket breakdown and authorised implement
 - **Route line:** the inspected vehicle's route is painted on the road, not drawn over everything.
   - It's a flat ribbon mesh (`routeRibbon`, unit-tested), 0.45 world units wide (about a third of a lane), 0.025 tiles up, just on the road surface where vehicles stand. It climbs ramps with the lanes, and corners are mitred. (Thick lines in world units would face the camera and sink half into the road.)
   - It's depth-tested without writing depth and drawn after the cars, so vehicles, signs and trees in front hide it. A polygon offset keeps it from flickering into the road.
-  - The ring at the vehicle sits under it in the same way.
+  - The ring at the vehicle sits under it in the same way (a fading glow since 2026-11-14).
 - **Background:** the coloured vertical columns (P4) are removed. The page is the plain background colour, with the topographic contours (P9) as the only pattern.
 
 ## Drag to turn the camera; no joystick (P14, #59) — 2026-11-13
@@ -449,6 +449,7 @@ Owner agreed the spec and the T1–T13 ticket breakdown and authorised implement
 ## Route ring at the vehicle's centre — 2026-11-14
 
 - **Owner:** "the circle on the target of the vehicle is on the front of the vehicle but it should be in the center of the vehicle". The ring now sits at the vehicle's centre, half its length behind the front bumper, where the map draws it. `vehicleCentre` (`src/simulation/traffic/vehicleCentre.ts`) is shared by the traffic layer and the card's details (`centre`, unit-tested). The route itself still runs on from the front.
+- **A glow, not a ring (owner, 2026-11-14):** "instead of the circle outlined in for the car make it a circular fading glow". The outlined ring is replaced by a flat disc in the route pink, 2.6 world units in radius, whose opacity fades smoothly from 0.85 at the centre to nothing at the rim (`glowDisc`, `src/three/scene/glowDisc.ts`, unit-tested; RGBA vertex colours). It's still centred on the vehicle and drawn on the road like the route (depth-tested, no depth write), so the car and anything in front cover it. The radius reaches well past the car so the fade shows round it; at the old ring's size it was hidden under the car.
 
 ## Scene pill of a fixed width (P23, #80) — 2026-11-14
 
