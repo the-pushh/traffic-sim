@@ -872,10 +872,13 @@ if (isDevServer) {
     vehicleCardChecks.modelPicture = await page
       .waitForFunction(() => (document.querySelector('.vehicle-picture')?.style.backgroundImage ?? '').startsWith('url("data:image/png'), null, { timeout: 4000 })
       .then(() => true, () => false);
-    // Its route (P13): a flat ribbon on the road that vehicles in front hide (depth-tested, not drawn over everything).
+    // Its route (P13): flat on the road, hidden by vehicles in front (depth-tested, not drawn over everything);
+    // drawn as a row of thick chevrons at 60% opacity (owner subtask).
     await page.waitForTimeout(300); // the card's first refresh draws the route
     const route = await page.evaluate(() => window.__trafficDebug.route());
     vehicleCardChecks.routeOnTheRoadUnderVehicles = route.shown && route.depthTested && !route.writesDepth;
+    vehicleCardChecks.routeIsChevronsAt60 = route.chevrons > 1 && Math.abs(route.opacity - 0.6) < 1e-6;
+    await page.screenshot({ path: `${outDir}/38c-route-chevrons.png` });
     const position = () => page.locator('.vehicle-card dt', { hasText: 'Position' }).locator('xpath=following-sibling::dd[1]').textContent();
     const before = await position();
     await page.waitForTimeout(1200);

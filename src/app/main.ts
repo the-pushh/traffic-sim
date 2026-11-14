@@ -1,5 +1,5 @@
 import { BufferAttribute, BufferGeometry, DoubleSide, Group, Mesh, MeshBasicMaterial, type Object3D, PCFSoftShadowMap, PerspectiveCamera, RingGeometry, Timer, WebGLRenderer } from 'three';
-import { routeRibbon } from '../three/scene/routeRibbon';
+import { routeChevrons } from '../three/scene/routeChevrons';
 import type { LaneGraph } from '../simulation/network/buildLaneGraph';
 import type { TrafficSimulation } from '../simulation/traffic/trafficSimulation';
 import { boardToWorld } from '../scenes/board';
@@ -162,15 +162,17 @@ let vehicleAt: ((ndc: { x: number; y: number }) => number | undefined) | null = 
 let inspectedGraph: LaneGraph | null = null;
 let cardRefreshedAt = -Infinity;
 /**
- * The rest of the inspected vehicle's route, painted on the road: a flat ribbon lying on the
- * road surface (`routeRibbon`), depth-tested so vehicles, signs and trees in front hide it, and
+ * The rest of the inspected vehicle's route, painted on the road: a row of thick chevrons at
+ * 60% opacity pointing the way it goes, lying flat on the road surface (`routeChevrons`), depth-tested so vehicles, signs and trees in front hide it, and
  * drawn after them (transparent) without writing depth. A small depth offset keeps it on top of
  * the road surface itself.
  */
 const ROUTE_COLOUR = '#f487b6';
-const ROUTE_WIDTH = 0.45; // world units: about a third of a lane
+/** World units (a lane is about 1.35 wide): bold chevrons nearly a lane wide, with thick arms and short gaps. */
+const ROUTE_CHEVRONS = { spacing: 1.5, length: 0.9, width: 1.1, thickness: 0.42 };
+const ROUTE_OPACITY = 0.6;
 const onRoad = { depthTest: true, depthWrite: false, transparent: true, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 };
-const routeMaterial = new MeshBasicMaterial({ color: ROUTE_COLOUR, side: DoubleSide, ...onRoad });
+const routeMaterial = new MeshBasicMaterial({ color: ROUTE_COLOUR, side: DoubleSide, opacity: ROUTE_OPACITY, ...onRoad });
 const routeLine = new Group();
 routeLine.name = 'inspected-route';
 routeLine.visible = false;
@@ -240,11 +242,12 @@ function syncVehicleCard(simulation: TrafficSimulation, now: number) {
     routeLine.remove(routePath);
     routePath.geometry.dispose();
   }
-  const ribbon = routeRibbon(points, ROUTE_WIDTH);
+  const chevrons = routeChevrons(points, ROUTE_CHEVRONS);
   const geometry = new BufferGeometry();
-  geometry.setAttribute('position', new BufferAttribute(ribbon.positions, 3));
-  geometry.setIndex(ribbon.indices);
+  geometry.setAttribute('position', new BufferAttribute(chevrons.positions, 3));
+  geometry.setIndex(chevrons.indices);
   routePath = new Mesh(geometry, routeMaterial);
+  routePath.name = 'route-chevrons';
   routeLine.add(routePath);
   // The ring sits round the vehicle's centre (where the map draws it), not its front bumper.
   routeStart.position.set(...boardToWorld([details.centre[0], details.centre[1] + ROUTE_LIFT, details.centre[2]]));
