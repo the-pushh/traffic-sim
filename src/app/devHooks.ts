@@ -26,9 +26,11 @@ export interface TrafficDebugSources {
   /** The editor's live placement preview, and selecting as a click would. */
   preview: () => unknown;
   select: (target: { kind: 'piece' | 'control'; index: number } | null) => void;
+  /** Sound: whether it's on, whether the ambience is playing, and every sound played so far. */
+  sound: () => { enabled: boolean; ambience: boolean; log: string[] };
 }
 
-export function exposeTrafficDebug({ canvas, camera, traffic, view, graph, simulation, queues, queueLabelsShown, store, apply, preview, select }: TrafficDebugSources) {
+export function exposeTrafficDebug({ canvas, camera, traffic, view, graph, simulation, queues, queueLabelsShown, store, apply, preview, select, sound }: TrafficDebugSources) {
   if (!import.meta.env.DEV) return;
   (window as unknown as { __trafficDebug: unknown }).__trafficDebug = {
     vehicles: () =>
@@ -77,6 +79,7 @@ export function exposeTrafficDebug({ canvas, camera, traffic, view, graph, simul
     /** What the editor's preview shows while a part is dragged. */
     preview,
     select,
+    sound,
     /** Where a board point (tiles) is on screen, for dragging parts in checks. */
     screenOf: (x: number, z: number, level = 0) => {
       const p = new Vector3(...boardToWorld([x, level, z])).project(camera);

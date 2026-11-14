@@ -1584,3 +1584,249 @@ input[type='text']:hover:not(:disabled) {
     corner-shape: squircle;
   }
 }
+
+/*
+ * The building-toy editor (P26): click a part then click the map to stamp it, a rotation ring
+ * round the selected piece, a Remove tool, and replacements previewed in place. Blue is what
+ * stays or is chosen, red what goes; words and shapes say the same thing as the colours.
+ */
+.sound-toggle,
+.tool-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-pill);
+  font: inherit;
+  white-space: nowrap;
+}
+
+.dock .sound-toggle[aria-checked='true'] {
+  --fill: var(--hud-selected);
+  color: var(--color-accent-strong);
+}
+
+.sound-toggle:not([aria-checked='true']) .icon {
+  color: var(--color-text-muted);
+}
+
+/* The Remove tool sits in the Components header; on, it's red and the cursor says so. */
+.tool-toggle {
+  margin-left: auto;
+  font-size: var(--font-meta);
+}
+
+.tool-toggle[aria-pressed='true'] {
+  --fill: color-mix(in srgb, var(--color-error) 18%, transparent);
+  border-color: color-mix(in srgb, var(--color-error) 60%, transparent);
+  color: var(--color-error);
+}
+
+body.removing .viewport canvas {
+  cursor: not-allowed;
+}
+
+/* A part in hand (clicked, not dragged): its tile stays pressed and the map takes clicks. */
+.parts-group .part[aria-pressed='true'] {
+  --fill: var(--hud-selected);
+  border-color: var(--color-accent);
+  box-shadow: inset 0 0 0 1px var(--color-accent);
+}
+
+body.placing.stamping,
+body.placing.stamping canvas {
+  cursor: copy;
+}
+
+/* Replacements: what fits here, best first, above the drawer's own groups. */
+.parts-replace {
+  margin-bottom: var(--space-3);
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--hud-separator);
+}
+
+.parts-replace header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-1);
+}
+
+.parts-replace h3 {
+  margin: 0;
+  font-size: var(--font-body);
+}
+
+.parts-replace .parts-hint {
+  margin: 0 0 var(--space-2);
+}
+
+.replace-close {
+  width: var(--control-height);
+  height: var(--control-height);
+  padding: 0;
+  border-radius: 50%;
+}
+
+.part-note {
+  font-size: 11px;
+  color: var(--color-text-muted);
+}
+
+.parts-drawer.replacing .parts-groups {
+  opacity: 0.55;
+}
+
+.replace-confirm {
+  margin: var(--space-2) 0 0;
+  padding: var(--space-2);
+  border-radius: calc(var(--control-height) * var(--corner-ratio));
+  background: var(--hud-hover);
+}
+
+.replace-confirm p {
+  margin: 0 0 var(--space-2);
+}
+
+.replace-confirm .ok {
+  color: var(--color-accent-strong);
+}
+
+.replace-confirm .bad {
+  color: var(--color-error);
+}
+
+/* Rotate, Replace…, Remove: they wrap rather than spill out of the panel. */
+.inspector-actions {
+  flex-wrap: wrap;
+}
+
+.inspector-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  white-space: nowrap;
+}
+
+.inspector-actions button.danger {
+  color: var(--color-error);
+}
+
+.inspector-actions button .icon {
+  width: 16px;
+  height: 16px;
+}
+
+/* Over the map: the rotation ring and connection markers. Only the grip takes the pointer. */
+.editor-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 2;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.handle-track {
+  fill: none;
+  stroke: var(--color-accent);
+  stroke-opacity: 0.45;
+  stroke-width: 1.5;
+  stroke-dasharray: 4 5;
+}
+
+.handle-grip {
+  fill: none;
+  stroke: var(--color-accent);
+  stroke-width: 7;
+  stroke-linecap: round;
+  filter: drop-shadow(0 1px 2px rgb(20 17 21 / 0.35));
+}
+
+#handle-arrow path {
+  fill: var(--color-accent);
+}
+
+.handle-hit {
+  fill: none;
+  stroke: transparent;
+  stroke-width: 26;
+  pointer-events: stroke;
+  cursor: grab;
+}
+
+.editor-overlay.turning .handle-hit,
+.editor-overlay.turning ~ .piece-rotate {
+  cursor: grabbing;
+}
+
+.editor-overlay.turning .handle-track {
+  stroke-opacity: 0.8;
+}
+
+/* Kept: a solid blue dot. Broken: a dashed red ring with a cross. New: a blue ring. */
+.connection circle {
+  stroke-width: 2.5;
+}
+
+.connection.kept circle {
+  fill: var(--color-accent);
+  stroke: #fff;
+}
+
+.connection.broken circle {
+  fill: rgb(255 255 255 / 0.85);
+  stroke: var(--color-error);
+  stroke-dasharray: 3 2;
+}
+
+.connection.broken path {
+  stroke: var(--color-error);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+}
+
+.connection.made circle {
+  fill: rgb(255 255 255 / 0.85);
+  stroke: var(--color-accent);
+}
+
+/* The handle's knob: centred on the grip, in the HUD's glass. */
+.piece-rotate {
+  transform: translate(-50%, -50%);
+  background: var(--hud-glass);
+  border-color: var(--hud-border);
+  color: var(--color-accent-strong);
+  box-shadow: var(--shadow-floating);
+  cursor: grab;
+  touch-action: none;
+}
+
+/* "Road removed · Undo", above the scene picker. */
+.edit-toast {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-1) var(--space-1) var(--space-4);
+  border: 1px solid var(--hud-border);
+  border-radius: var(--radius-pill);
+  background: var(--hud-glass);
+  box-shadow: var(--glass-highlight), var(--shadow-floating);
+  -webkit-backdrop-filter: var(--hud-blur);
+  backdrop-filter: var(--hud-blur);
+  font-weight: 600;
+}
+
+.edit-toast .toast-dot {
+  color: var(--color-text-muted);
+}
+
+.edit-toast button {
+  --fill: var(--hud-selected);
+  padding: 0 var(--space-3);
+  border-color: transparent;
+  border-radius: var(--radius-pill);
+  color: var(--color-accent-strong);
+  font: inherit;
+}
