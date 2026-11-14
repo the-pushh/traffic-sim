@@ -477,3 +477,7 @@ Owner agreed the spec and the T1–T13 ticket breakdown and authorised implement
 - `corner-shape: squircle` applies to rounded rectangles where the browser supports it; pills stay circular.
 - **Controls:** 44px minimum height (close ×, arrows, camera buttons, rotate). Inputs have a plain surface and a darker border. Borders stay 1px in every state and darken slightly on hover. Keyboard focus is a separate 2px outline at a 2px offset.
 - **Kept from #85 (owner's later explicit request):** buttons stay flat with the light `--button-border`, so there is no inset top highlight and no soft neutral button border.
+
+## Customise icon: a single wrench (2026-11-14)
+
+- The owner switched the Customise button's icon from the crossed wrench-and-hammer to Phosphor's single bold wrench, and confirmed it. The custom crossed-tools SVG is removed.
