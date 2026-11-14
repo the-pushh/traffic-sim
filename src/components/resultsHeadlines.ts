@@ -2,7 +2,7 @@ import type { LabelledResults } from '../simulation/traffic/trafficSession';
 
 /** How a number moved since the previous run. */
 export interface Change {
-  /** Now minus before, in whole units (travel time is rounded only after subtracting). */
+  /** Now minus before, in whole units (delay is rounded only after subtracting). */
   amount: number;
   verdict: 'better' | 'worse' | 'same';
   /** Printed after the amount: ' s' for times. */
@@ -33,7 +33,7 @@ export const comparable = (a: LabelledResults, b: LabelledResults) => a.scene ==
 
 const MEASURES: Measure[] = [
   { value: (r) => r.finished, higherIsBetter: true, unit: '', was: (r) => String(r.finished) },
-  { value: (r) => r.averageTravelTime, higherIsBetter: false, unit: ' s', was: (r) => seconds(r.averageTravelTime) },
+  { value: (r) => r.averageDelay, higherIsBetter: false, unit: ' s', was: (r) => seconds(r.averageDelay) },
   { value: (r) => longestQueue(r)?.peak ?? null, higherIsBetter: false, unit: '', was: (r) => (longestQueue(r) ? `${longestQueue(r)!.peak} at ${longestQueue(r)!.approach}` : '—') },
   { value: (r) => r.blocked, higherIsBetter: false, unit: '', was: (r) => String(r.blocked) },
 ];
@@ -47,8 +47,8 @@ function compare(measure: Measure, latest: LabelledResults, before: LabelledResu
 }
 
 /**
- * The run in four numbers: trips finished, average travel time, longest queue (and where),
- * blocked trips; each against the previous run when that one is comparable.
+ * The run in four numbers: trips finished, delay per trip (time lost against the same route on
+ * empty roads: travel time alone grows with route length), longest queue (and where), blocked trips; each against the previous run when that one is comparable.
  */
 export function resultsHeadlines(latest: LabelledResults, previous: LabelledResults | null): Headline[] {
   const before = previous && comparable(latest, previous) ? previous : null;
@@ -56,9 +56,9 @@ export function resultsHeadlines(latest: LabelledResults, previous: LabelledResu
   const values = [
     { label: 'Trips finished', value: String(latest.finished), detail: `of ${latest.due} due` },
     {
-      label: 'Average travel time',
-      value: seconds(latest.averageTravelTime),
-      detail: latest.averageTravelTime === null ? 'no trip finished' : `over ${plural(latest.travelTimeSamples, 'trip')}`,
+      label: 'Delay per trip',
+      value: seconds(latest.averageDelay),
+      detail: latest.averageDelay === null ? 'no trip finished' : `over ${plural(latest.delaySamples, 'trip')}`,
     },
     { label: 'Longest queue', value: longest ? String(longest.peak) : '—', detail: longest?.approach ?? 'no junctions' },
     { label: 'Blocked trips', value: String(latest.blocked), detail: `of ${latest.due} due` },

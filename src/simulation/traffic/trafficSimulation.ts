@@ -323,6 +323,12 @@ export class TrafficSimulation {
   readonly arrivals: { at: number; from: string; to: string; type: VehicleTypeId; profile: ProfileId }[] = [];
   /** Seconds each finished trip took from entering the board to leaving it. */
   travelTimes: number[] = [];
+  /**
+   * Seconds each finished trip lost against its driver taking the same route on empty roads
+   * (see `emptyRoadTime`), never below 0.
+   * Unlike travel time, this doesn't grow with the length of the route.
+   */
+  tripDelays: number[] = [];
   private readonly enteredAt = new Map<number, number>();
   /** Rear bumpers by lane, rebuilt each step. */
   private rearsByLane = new Map<number, Rear[]>();
@@ -416,6 +422,7 @@ export class TrafficSimulation {
     next.blocked = previous.blocked;
     next.blockedAt = { ...previous.blockedAt };
     next.travelTimes = [...previous.travelTimes];
+    next.tripDelays = [...previous.tripDelays];
     for (const [id, at] of previous.enteredAt) next.enteredAt.set(id, at);
     next.arrivals.push(...previous.arrivals);
     // Same demand, same streams: take over their state (next arrival times, generators, trips waiting).
@@ -526,6 +533,7 @@ export class TrafficSimulation {
     this.due = this.entered = this.finished = this.blocked = 0;
     this.blockedAt = {};
     this.travelTimes = [];
+    this.tripDelays = [];
     this.enteredAt.clear();
     for (const entry of this.entries) for (const trip of entry.waiting) trip.counted = false;
   }
@@ -693,7 +701,9 @@ export class TrafficSimulation {
     if (this.enteredAt.has(v.id)) {
       if (!v.blocked) {
         this.finished++;
-        this.travelTimes.push(this.time - this.enteredAt.get(v.id)!);
+        const time = this.time - this.enteredAt.get(v.id)!;
+        this.travelTimes.push(time);
+        this.tripDelays.push(Math.max(0, time - this.emptyRoadTime(v)));
       }
       this.enteredAt.delete(v.id);
     }
@@ -1008,6 +1018,18 @@ export class TrafficSimulation {
     const key = `${from}>${to}`;
     if (!this.designedRoutes.has(key)) this.designedRoutes.set(key, this.router.path(this.gateway(from).entryLanes, this.gateway(to).exits, undefined, new Set())?.lanes ?? null);
     return this.designedRoutes.get(key)!;
+  }
+
+  /**
+   * Seconds this driver would take over their whole route with nothing in the way and no
+   * controls to wait at: at the speed they keep to on an open road (the limit, or less for a
+   * slower driver), the curve speed or their vehicle's top speed, whichever is lowest.
+   */
+  private emptyRoadTime(v: VehicleState) {
+    const own = Math.min(v.driver.speedFactor, 1);
+    let total = 0;
+    for (const lane of v.route) total += this.laneLength[lane] / Math.min(this.speedLimit[lane] * own, this.curveSpeed[lane], v.type.maxSpeed);
+    return total;
   }
 
   private lengthOf(route: number[], from: number, to: number) {

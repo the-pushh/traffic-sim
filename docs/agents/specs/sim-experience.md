@@ -77,7 +77,7 @@ Full-window 3D view (cube-diagonal start, 64 × 64 board), no header bar.
 | Measure | Shown as |
 | --- | --- |
 | Trips due / entered / finished | three counts |
-| Average travel time | seconds · number of finished trips |
+| Delay per trip *(replaced average travel time, 2026-11-14)* | seconds lost against the same route on empty roads · number of finished trips |
 | Queue length by approach | vehicles, live and peak · per approach |
 | Blocked trips | count of trips with no path |
 
