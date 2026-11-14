@@ -11,6 +11,9 @@ import { createEditor } from './editor';
 import { demandFollowsEntries } from '../editor/edits';
 import { icon } from '../components/icons';
 import { createDock } from '../components/dock';
+import { createSoundToggle } from '../components/soundToggle';
+import { createSoundBoard } from '../audio/soundBoard';
+import { createWebAudioOutput } from '../audio/webAudio';
 import { createFirstVisitTip } from '../components/firstVisitTip';
 import { createResultsCard } from '../components/resultsCard';
 import { createLeaveDialog } from '../components/leaveDialog';
@@ -110,6 +113,25 @@ async function resetScene() {
   if (await start()) pill.focus('next');
 }
 const dock = createDock(bottomStack, run, { onPlay: () => tip.dismiss() });
+// Sound: off on a first visit, the player's choice remembered (see soundBoard).
+const sound = createSoundBoard(createWebAudioOutput, {
+  get: (key) => {
+    try {
+      return localStorage.getItem(key);
+    } catch {
+      return null;
+    }
+  },
+  set: (key, value) => {
+    try {
+      localStorage.setItem(key, value);
+    } catch {
+      // Blocked storage: the choice lasts this visit only.
+    }
+  },
+});
+/** Speed above which a vehicle counts as moving, for the traffic ambience, m/s. */
+const MOVING_SPEED = 0.3;
 let session: TrafficSession | null = null;
 // Results open at the top centre (owner's choice), clear of the dock.
 const topStack = app.querySelector<HTMLElement>('.top-stack')!;
@@ -422,6 +444,7 @@ async function show(mode: 'open' | 'edit'): Promise<boolean> {
       apply: (edited) => applyEdit(edited),
       preview: () => editor.preview(),
       select: (target) => editor.select(target),
+      sound: () => ({ enabled: sound.enabled, ambience: sound.ambience, log: [...sound.log] }),
     });
     if (opening) {
       observer = ObserverCamera.framing(camera, bounds, { coveredBottom, zoom: START_ZOOM });
@@ -438,6 +461,8 @@ async function show(mode: 'open' | 'edit'): Promise<boolean> {
       const delta = Math.min(timer.getDelta(), 0.1);
       const current = session!;
       current.advance(run.tick(delta * TIME_SCALE));
+      // One ambience layer while traffic runs and something's moving; it fades out on pause, end or reset.
+      sound.setTrafficMoving(run.state === 'running' && current.simulation.allVehicles().some((v) => v.speed > MOVING_SPEED));
       traffic.sync(current.simulation);
       updateSignals(current.simulation.time);
       updateBlocked(current.simulation.blockedAtEntries());
@@ -526,8 +551,15 @@ const editor = createEditor({
   },
   apply: (scene, fromHistory) => applyEdit(scene, fromHistory).then(() => undefined),
   canEdit: () => run.state !== 'running',
+  // Customise pauses a running run: traffic stays still while the layout changes.
+  pause: () => {
+    run.pause();
+    syncRunUi();
+  },
+  sound: (kind) => sound.play(kind),
 });
 dock.addSection(editor.toggle);
+dock.addSection(createSoundToggle(sound));
 rightPanel = editor.tray;
 
 start();

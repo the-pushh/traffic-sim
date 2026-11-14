@@ -225,7 +225,7 @@ runChecks.resultsCardOnEnd = await runPage.evaluate(() => {
 // Headlines first (P3): four big numbers show; the full table waits behind Show details.
 runChecks.resultsHeadlinesFirst = await runPage.evaluate(() => {
   const labels = [...document.querySelectorAll('.results-headlines dt')].map((d) => d.textContent);
-  return JSON.stringify(labels) === JSON.stringify(['Trips finished', 'Delay per trip', 'Longest queue', 'Blocked trips']) && document.querySelector('#results-details').hidden;
+  return JSON.stringify(labels) === JSON.stringify(['Trips finished', 'Average travel time', 'Longest queue', 'Blocked trips']) && document.querySelector('#results-details').hidden;
 });
 await runPage.locator('.top-stack').screenshot({ path: `${outDir}/16-results-first-run.png` });
 const detailsToggle = runPage.locator('.results-details-toggle');
@@ -727,10 +727,10 @@ const dockChecks = {};
   await page.locator('.dock').screenshot({ path: `${outDir}/30-dock-icons.png` });
   // P25: one glass toolbar, laid out like tldraw's: Play ring · countdown · Reset | Duration | Traffic load | Customise.
   dockChecks.hudOrder = await page.evaluate(() => {
-    const xs = ['[data-action="play-pause"]', '.countdown', '[data-action="restart"]', '.duration-trigger', '.intensity', '.parts-toggle'].map(
+    const xs = ['[data-action="play-pause"]', '.countdown', '[data-action="restart"]', '.duration-trigger', '.intensity', '.parts-toggle', '.sound-toggle'].map(
       (sel) => document.querySelector(`.dock ${sel}`)?.getBoundingClientRect().x ?? NaN,
     );
-    return xs.every((x, i) => i === 0 || x > xs[i - 1]) && document.querySelectorAll('.dock .dock-divider').length === 3;
+    return xs.every((x, i) => i === 0 || x > xs[i - 1]) && document.querySelectorAll('.dock .dock-divider').length === 4; // and the Sound switch (P26)
   });
   dockChecks.hudSharedGlass = await page.evaluate(() => {
     const dock = getComputedStyle(document.querySelector('.dock'));
@@ -992,6 +992,223 @@ const pressChecks = {};
   await page.close();
 }
 
+// P26: the building-toy editor and sound. Click-to-place, the rotation ring, replace in place,
+// the Remove tool and undo; each committed edit sounds once, previews and cancels stay quiet,
+// the traffic ambience follows the run, and the Sound switch survives a reload.
+const toyChecks = { recorded: {} };
+if (isDevServer) {
+  const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+  const page = await context.newPage();
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(String(e)));
+  const open = async (scene) => {
+    const target = new URL(url);
+    target.searchParams.set('scene', scene);
+    target.searchParams.set('timeScale', '6');
+    await page.goto(target.toString());
+    await page.waitForSelector('.scene-name');
+    await page.waitForSelector('.status', { state: 'hidden', timeout: 60000 });
+  };
+  await open('blank-board');
+  await page.evaluate(() => localStorage.clear());
+  await open('blank-board');
+  const debug = (fn, arg) => page.evaluate(fn, arg);
+  const sounds = async () => (await debug(() => window.__trafficDebug.sound())).log;
+  const effects = async () => (await sounds()).filter((e) => e.startsWith('effect:'));
+  const pieces = () => debug(() => window.__trafficDebug.scene().pieces);
+  const screenOf = (x, z) => debug(([x, z]) => window.__trafficDebug.screenOf(x, z), [x, z]);
+  const soundSwitch = page.getByRole('switch', { name: 'Sound' });
+  toyChecks.mutedOnFirstVisit = (await soundSwitch.getAttribute('aria-checked')) === 'false' && ((await soundSwitch.textContent()) ?? '').includes('Sound off');
+  await soundSwitch.click();
+  toyChecks.switchSaysOn = (await soundSwitch.getAttribute('aria-checked')) === 'true' && ((await soundSwitch.textContent()) ?? '').includes('Sound on');
+  await page.getByRole('button', { name: 'Customise' }).click();
+  await wholeBoardInView(page);
+  const start = (await pieces()).length;
+
+  // Place: click a part, then click the map; the piece lands exactly where its preview was. Moving the preview is quiet.
+  await page.locator('.parts-groups [data-part="straight"]').click();
+  toyChecks.clickArmsPart = (await page.locator('.parts-groups [data-part="straight"]').getAttribute('aria-pressed')) === 'true';
+  const previews = [];
+  let quietWhileMoving = true;
+  for (const x of [7.5, 8.5, 9.5]) {
+    const at = await screenOf(x, 8.5);
+    const before = (await sounds()).length;
+    await page.mouse.move(at.x - 30, at.y - 20, { steps: 4 });
+    await page.mouse.move(at.x, at.y, { steps: 4 });
+    await page.waitForTimeout(150);
+    quietWhileMoving &&= (await sounds()).length === before;
+    previews.push(await debug(() => JSON.parse(JSON.stringify(window.__trafficDebug.preview()?.placement ?? null))));
+    await page.mouse.click(at.x, at.y);
+    await page.waitForTimeout(500);
+  }
+  const placed = (await pieces()).slice(start);
+  toyChecks.clickPlacesWherePreviewed = placed.length === 3 && placed.every((p, i) => JSON.stringify(p) === JSON.stringify(previews[i]));
+  toyChecks.previewMovesQuietly = quietWhileMoving;
+  toyChecks.placeSoundsOncePerPiece = (await effects()).join() === 'effect:place,effect:place,effect:place';
+  await page.keyboard.press('Escape');
+  toyChecks.escapePutsPartDown = (await debug(() => window.__trafficDebug.preview())) === null && (await page.locator('.parts-groups [data-part][aria-pressed]').count()) === 0;
+  // An invalid drop stays quiet and changes nothing.
+  {
+    const before = { pieces: (await pieces()).length, effects: (await effects()).length };
+    await page.locator('.parts-groups [data-part="roundabout"]').click();
+    const corner = await screenOf(0.6, 15.4);
+    await page.mouse.move(corner.x, corner.y, { steps: 4 });
+    await page.waitForTimeout(150);
+    await page.mouse.click(corner.x, corner.y);
+    await page.waitForTimeout(300);
+    toyChecks.invalidDropQuiet = (await pieces()).length === before.pieces && (await effects()).length === before.effects;
+    await page.keyboard.press('Escape');
+  }
+
+  // Rotate: clicking the middle road shows the ring; dragging previews a turn with its connections; Escape cancels quietly; release commits once.
+  const middle = start + 1;
+  const pickMiddle = async () => {
+    const at = await screenOf(8.5, 8.5);
+    await page.mouse.click(at.x, at.y);
+    await page.waitForTimeout(300);
+  };
+  await pickMiddle();
+  toyChecks.selectionShowsRing = (await page.locator('.piece-rotate').isVisible()) && !!(await page.locator('.handle-grip').getAttribute('d'));
+  const dragRing = async ({ escape = false } = {}) => {
+    const centre = await screenOf(8.5, 8.5);
+    const knob = await page.locator('.piece-rotate').boundingBox();
+    const [kx, ky] = [knob.x + knob.width / 2, knob.y + knob.height / 2];
+    const radius = Math.hypot(kx - centre.x, ky - centre.y);
+    const from = Math.atan2(ky - centre.y, kx - centre.x);
+    await page.mouse.move(kx, ky);
+    await page.mouse.down();
+    for (let i = 1; i <= 12; i++) {
+      const a = from - (i / 12) * (Math.PI / 2);
+      await page.mouse.move(centre.x + radius * Math.cos(a), centre.y + radius * Math.sin(a));
+    }
+    await page.waitForTimeout(250);
+    const during = {
+      label: await page.locator('.placement-reason').textContent(),
+      broken: await page.locator('.connection.broken').count(),
+      rotation: (await pieces())[middle]?.rotation,
+    };
+    if (escape) await page.keyboard.press('Escape');
+    await page.mouse.up();
+    await page.waitForTimeout(500);
+    return during;
+  };
+  const beforeTurn = (await effects()).length;
+  const cancelled = await dragRing({ escape: true });
+  toyChecks.turnPreviewShowsBreaks = cancelled.broken === 2 && (cancelled.label ?? '').includes('2 break') && cancelled.rotation === 0;
+  toyChecks.escapeCancelsTurnQuietly = (await pieces())[middle].rotation === 0 && (await effects()).length === beforeTurn;
+  await pickMiddle();
+  await dragRing();
+  const turned = (await pieces()).at(-1);
+  toyChecks.releaseCommitsTurnWithOneTick = turned.at.join() === '8.5,8.5' && turned.rotation % 180 === 90 && (await effects()).slice(beforeTurn).join() === 'effect:rotate';
+  await page.keyboard.press('Control+z');
+  await page.waitForTimeout(500);
+  toyChecks.undoTurnsItBack = (await pieces()).find((p) => p.at.join() === '8.5,8.5')?.rotation === 0 && (await effects()).slice(beforeTurn).length === 1;
+
+  // Replace: the drawer lists what fits first; a pick is previewed in place (the original stays) with the connections it keeps.
+  await pickMiddle();
+  await page.locator('.inspector:not(.vehicle-card)').getByRole('button', { name: 'Replace…' }).click();
+  await page.waitForTimeout(300);
+  const firstOption = await page.locator('[data-replace]').first().textContent();
+  await page.locator('[data-replace="t-junction"]').click();
+  await page.waitForTimeout(500);
+  const beforeConfirm = { pieces: await pieces(), effects: (await effects()).length };
+  toyChecks.replacePreviewKeepsOriginal =
+    (firstOption ?? '').includes('Keeps all') &&
+    beforeConfirm.pieces.find((p) => p.at.join() === '8.5,8.5')?.piece === 'straight' &&
+    (await page.locator('.connection.kept').count()) === 2 &&
+    ((await page.locator('.replace-confirm').textContent()) ?? '').includes('2 stay connected');
+  await page.locator('.inspector:not(.vehicle-card)').getByRole('button', { name: 'Replace', exact: true }).click();
+  await page.waitForTimeout(600);
+  toyChecks.replaceConfirmsOnce =
+    (await pieces()).find((p) => p.at.join() === '8.5,8.5')?.piece === 't-junction' &&
+    (await pieces()).length === beforeConfirm.pieces.length &&
+    (await effects()).slice(beforeConfirm.effects).join() === 'effect:place';
+
+  // Remove from the inspector: a tap, the toast, and Undo from the toast.
+  await pickMiddle();
+  const beforeRemove = { count: (await pieces()).length, effects: (await effects()).length };
+  await page.locator('.inspector:not(.vehicle-card)').getByRole('button', { name: 'Remove' }).click();
+  await page.waitForTimeout(600);
+  toyChecks.removeShowsToastAndTaps =
+    (await pieces()).length === beforeRemove.count - 1 &&
+    ((await page.locator('.edit-toast').textContent()) ?? '').replace(/\s+/g, ' ').includes('Road removed · Undo') &&
+    (await effects()).slice(beforeRemove.effects).join() === 'effect:remove';
+  await page.locator('.edit-toast').getByRole('button', { name: 'Undo' }).click();
+  await page.waitForTimeout(600);
+  toyChecks.toastUndoRestores = (await pieces()).length === beforeRemove.count && (await page.locator('.edit-toast').isHidden());
+
+  // The Remove tool: hovering outlines what a click removes; two clicks remove two roads, each its own undoable edit.
+  await page.locator('[data-action="remove-tool"]').click();
+  const toolOn = (await page.locator('[data-action="remove-tool"]').getAttribute('aria-pressed')) === 'true';
+  const west = await screenOf(7.5, 8.5);
+  await page.mouse.move(west.x, west.y, { steps: 4 });
+  await page.waitForTimeout(200);
+  const hoverSays = await page.locator('.placement-reason').textContent();
+  const beforeTool = { count: (await pieces()).length, effects: (await effects()).length };
+  await page.screenshot({ path: `${outDir}/35-remove-tool-hover.png` });
+  await page.mouse.click(west.x, west.y);
+  await page.waitForTimeout(600);
+  const east = await screenOf(9.5, 8.5);
+  await page.mouse.move(east.x, east.y, { steps: 4 });
+  await page.mouse.click(east.x, east.y);
+  await page.waitForTimeout(600);
+  toyChecks.removeToolClearsInSuccession =
+    toolOn && (hoverSays ?? '').includes('Click to remove') && (await pieces()).length === beforeTool.count - 2 && (await effects()).slice(beforeTool.effects).join() === 'effect:remove,effect:remove';
+  await page.keyboard.press('Control+z');
+  await page.waitForTimeout(500);
+  toyChecks.eachRemovalIsOneUndo = (await pieces()).length === beforeTool.count - 1;
+  await page.keyboard.press('Escape');
+  toyChecks.escapeLeavesRemoveTool = (await page.locator('[data-action="remove-tool"]').getAttribute('aria-pressed')) === 'false';
+
+  // Main Street: the preference survived the reload; the ambience follows the run, the switch silences it at once.
+  await open('main-street');
+  toyChecks.preferenceSurvivesReload = (await soundSwitch.getAttribute('aria-checked')) === 'true';
+  const ambience = () => debug(() => window.__trafficDebug.sound().ambience);
+  const ambienceIs = (on) => page.waitForFunction((on) => window.__trafficDebug.sound().ambience === on, on, { timeout: 8000 }).then(() => true, () => false);
+  toyChecks.quietBeforePlay = (await ambience()) === false;
+  await page.getByRole('button', { name: 'Play' }).click();
+  const inWhileRunning = await ambienceIs(true);
+  await page.getByRole('button', { name: 'Pause' }).click();
+  const outOnPause = await ambienceIs(false);
+  await page.getByRole('button', { name: 'Play' }).click();
+  const inAgain = await ambienceIs(true);
+  await soundSwitch.click();
+  const silencedAtOnce = (await ambience()) === false && (await sounds()).at(-1) === 'silence';
+  await soundSwitch.click();
+  const backOnMidRun = await ambienceIs(true);
+  await page.getByRole('button', { name: 'Reset run' }).click();
+  const outOnReset = await ambienceIs(false);
+  const log = await sounds();
+  toyChecks.ambienceFollowsRun = inWhileRunning && outOnPause && inAgain && outOnReset;
+  toyChecks.switchSilencesAndRestores = silencedAtOnce && backOnMidRun;
+  // Never two fade-ins without a fade-out or silence between: one layer, not a pile-up.
+  toyChecks.oneAmbienceLayer = log
+    .filter((e) => e.startsWith('ambience') || e === 'silence')
+    .map((e) => (e === 'ambience:in' ? 'in' : 'out'))
+    .every((e, i, all) => i === 0 || !(e === 'in' && all[i - 1] === 'in'));
+  toyChecks.recorded.ambienceLog = log.filter((e) => !e.startsWith('effect'));
+  // Customise during a run pauses it: traffic stays still while the layout changes.
+  await page.getByRole('button', { name: 'Play' }).click();
+  await page.waitForTimeout(500);
+  await page.getByRole('button', { name: 'Customise' }).click();
+  toyChecks.customisePausesTraffic = (await page.locator('.dock').getAttribute('data-state')) === 'paused' && (await ambienceIs(false));
+  // The selected road with its rotation ring, in the scene.
+  {
+    const road = await debug(() => window.__trafficDebug.scene().pieces.findIndex((p) => p.piece === 'straight' && p.at[0] === 5.5 && p.at[1] === 7.5));
+    const at = await screenOf(5.5, 7.5);
+    await page.mouse.click(at.x, at.y);
+    await page.waitForTimeout(400);
+    toyChecks.recorded.selectedRoad = road;
+    toyChecks.ringOnSelectedRoad = await page.locator('.piece-rotate').isVisible();
+    await page.mouse.move(5, 450);
+    await page.waitForTimeout(200);
+    await page.screenshot({ path: `${outDir}/34-selected-road-rotation-ring.png` });
+  }
+  toyChecks.noPageErrors = errors.length === 0;
+  toyChecks.recorded.errors = errors.slice(0, 3);
+  await context.close();
+}
+
 // Every preset runs: cycle the pill and play each one for a moment (also against the deployed app).
 const presetRunChecks = {};
 {
@@ -1219,6 +1436,7 @@ const result = {
   editorChecks,
   vehicleCardChecks,
   dockChecks,
+  toyChecks,
   trayChecks,
   handheldChecks,
   backgroundChecks,
@@ -1253,6 +1471,7 @@ const ok =
   Object.values(runChecks).every(Boolean) &&
   passed(vehicleCardChecks) &&
   passed(dockChecks) &&
+  passed(toyChecks) &&
   passed(trayChecks) &&
   passed(handheldChecks) &&
   passed(backgroundChecks) &&

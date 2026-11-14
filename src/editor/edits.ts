@@ -48,7 +48,12 @@ export function movePiece(scene: SceneDefinition, index: number, request: { poin
 /** Turn a piece a quarter turn anticlockwise where it stands. */
 export function rotatePiece(scene: SceneDefinition, index: number): PlacementResult {
   const old = scene.pieces[index];
-  return replaceWith(scene, index, { rotation: (((old.rotation + 90) % 360) as QuarterTurn), snap: false });
+  return turnPiece(scene, index, (((old.rotation + 90) % 360) as QuarterTurn));
+}
+
+/** Turn a piece to `rotation` where it stands (the rotation handle's preview and commit). */
+export function turnPiece(scene: SceneDefinition, index: number, rotation: QuarterTurn): PlacementResult {
+  return replaceWith(scene, index, { rotation, snap: false });
 }
 
 /** Swap a piece for another part in the same spot (e.g. a T-junction for a crossroads). */

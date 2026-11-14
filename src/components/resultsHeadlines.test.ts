@@ -10,8 +10,8 @@ const run = (over: Partial<LabelledResults> = {}): LabelledResults => ({
   entered: 11,
   finished: 6,
   blocked: 1,
-  averageDelay: 21.4,
-  delaySamples: 6,
+  averageTravelTime: 21.4,
+  travelTimeSamples: 6,
   peakQueues: [
     { approach: 'Junction 1 · westbound', peak: 3 },
     { approach: 'Junction 2 · southbound', peak: 7 },
@@ -21,11 +21,11 @@ const run = (over: Partial<LabelledResults> = {}): LabelledResults => ({
 });
 
 describe('results headlines', () => {
-  it('sums a run up in four numbers: trips finished, delay per trip, longest queue and where, blocked trips', () => {
+  it('sums a run up in four numbers: trips finished, average travel time, longest queue and where, blocked trips', () => {
     const headlines = resultsHeadlines(run(), null);
     expect(headlines.map((h) => [h.label, h.value, h.detail])).toEqual([
       ['Trips finished', '6', 'of 12 due'],
-      ['Delay per trip', '21 s', 'over 6 trips'],
+      ['Average travel time', '21 s', 'over 6 trips'],
       ['Longest queue', '7', 'Junction 2 · southbound'],
       ['Blocked trips', '1', 'of 12 due'],
     ]);
@@ -33,7 +33,7 @@ describe('results headlines', () => {
   });
 
   it('shows each number against the previous run of the same scene, and whether it got better or worse', () => {
-    const before = run({ finished: 4, averageDelay: 25.2, blocked: 1, peakQueues: [{ approach: 'Junction 1 · westbound', peak: 5 }] });
+    const before = run({ finished: 4, averageTravelTime: 25.2, blocked: 1, peakQueues: [{ approach: 'Junction 1 · westbound', peak: 5 }] });
     const changes = resultsHeadlines(run(), before).map((h) => h.change);
     expect(changes).toEqual([
       { amount: 2, verdict: 'better', unit: '', was: '4' }, // 6 finished, was 4
@@ -49,15 +49,15 @@ describe('results headlines', () => {
     }
   });
 
-  it('measures the delay change unrounded, in seconds, and says where the longest queue was before', () => {
-    const before = run({ averageDelay: 21.2, peakQueues: [{ approach: 'Junction 1 · westbound', peak: 5 }] });
-    const [, time, queue] = resultsHeadlines(run({ averageDelay: 21.6 }), before);
+  it('measures the travel time change unrounded, in seconds, and says where the longest queue was before', () => {
+    const before = run({ averageTravelTime: 21.2, peakQueues: [{ approach: 'Junction 1 · westbound', peak: 5 }] });
+    const [, time, queue] = resultsHeadlines(run({ averageTravelTime: 21.6 }), before);
     expect(time.change).toEqual({ amount: 0, verdict: 'same', unit: ' s', was: '21 s' }); // 0.4 s apart: no change worth an arrow
     expect(queue.change).toMatchObject({ amount: 2, verdict: 'worse', was: '5 at Junction 1 · westbound' });
   });
 
   it('compares nothing when the previous run had no finished trips to time', () => {
-    const untimed = resultsHeadlines(run(), run({ averageDelay: null, delaySamples: 0 }));
+    const untimed = resultsHeadlines(run(), run({ averageTravelTime: null, travelTimeSamples: 0 }));
     expect(untimed[1].change).toBeNull();
     expect(untimed[0].change).toMatchObject({ amount: 0, verdict: 'same' });
   });

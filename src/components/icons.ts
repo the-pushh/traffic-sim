@@ -12,8 +12,12 @@ import rotate from '@phosphor-icons/core/assets/bold/arrow-clockwise-bold.svg?ra
 import wrench from '@phosphor-icons/core/assets/bold/wrench-bold.svg?raw';
 import caret from '@phosphor-icons/core/assets/bold/caret-down-bold.svg?raw';
 import check from '@phosphor-icons/core/assets/bold/check-bold.svg?raw';
+import soundOn from '@phosphor-icons/core/assets/bold/speaker-simple-high-bold.svg?raw';
+import soundOff from '@phosphor-icons/core/assets/bold/speaker-simple-slash-bold.svg?raw';
+import trash from '@phosphor-icons/core/assets/bold/trash-bold.svg?raw';
+import eraser from '@phosphor-icons/core/assets/bold/eraser-bold.svg?raw';
 
-const SOURCES = { play, pause, restart, clock, gauge, plus, minus, moon, sun, rotate, wrench, caret, check };
+const SOURCES = { play, pause, restart, clock, gauge, plus, minus, moon, sun, rotate, wrench, caret, check, soundOn, soundOff, trash, eraser };
 
 export type IconName = keyof typeof SOURCES;
 

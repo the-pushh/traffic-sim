@@ -3,7 +3,11 @@ import { boardToWorld, TILE_SIZE } from '../scenes/board';
 import { BOARD_TILES, type ControlPlacement, type QuarterTurn, type SceneDefinition, type SignalTiming } from '../simulation/network/scene';
 import { PIECES } from '../simulation/network/pieces';
 import { DEFAULT_SIGNAL_TIMING } from '../simulation/traffic/signals';
-import { EditHistory, moveControl, movePiece, removeControl, removePiece, replaceControl, replacePiece, rotatePiece, setSignalTiming } from '../editor/edits';
+import type { Effect } from '../audio/soundBoard';
+import { type BoardPoint, connectionChange } from '../editor/connections';
+import { EditHistory, moveControl, movePiece, removeControl, removePiece, replaceControl, replacePiece, rotatePiece, setSignalTiming, turnPiece } from '../editor/edits';
+import { replacementsFor } from '../editor/replacements';
+import { turnedRotation } from '../editor/rotateHandle';
 import { PARTS, partById, type PartGroup, type PartId } from '../editor/parts';
 import { placePart, type PlacementResult } from '../editor/placement';
 import { placementKeyAction, type PlacingMode } from '../editor/placementKeys';
@@ -37,6 +41,10 @@ export interface EditorHost {
   apply(scene: SceneDefinition, fromHistory?: boolean): Promise<void>;
   /** Editing is allowed in Ready, Paused and Ended, not while traffic is running. */
   canEdit(): boolean;
+  /** Pause a running run (opening Customise does, so traffic stays still while the layout changes). */
+  pause(): void;
+  /** A successful edit's sound: placed, turned or removed (quiet when sound is off). */
+  sound(kind: Effect): void;
 }
 
 type Target = { kind: 'piece' | 'control'; index: number };
@@ -44,7 +52,17 @@ type Target = { kind: 'piece' | 'control'; index: number };
 const GHOST_OPACITY = 0.5;
 const VALID_COLOUR = '#3772ff';
 const INVALID_COLOUR = '#d64545';
-const SELECTED_COLOUR = '#f487b6';
+/** The selection, the rotation handle and kept connections share the HUD's blue accent. */
+const SELECTED_COLOUR = '#3772ff';
+const REMOVE_COLOUR = '#d64545';
+/** How long "Road removed · Undo" stays up, ms. */
+const TOAST_MS = 6000;
+/** The rotation handle's ring: this far beyond the piece's footprint, tiles; its grip spans this much of it, radians. */
+const HANDLE_GAP = 0.3;
+const GRIP_SPAN = (110 * Math.PI) / 180;
+/** The ring is at least this wide on screen (px from the piece's centre), so it can be grabbed when zoomed out. */
+const HANDLE_MIN_PX = 64;
+const SVG_NS = 'http://www.w3.org/2000/svg';
 const GROUPS: PartGroup[] = ['Roads', 'Curves', 'Junctions', 'Ends', 'Flyovers', 'Controls'];
 /** A press on the map becomes a drag (moving the selection) after this many pixels. */
 const DRAG_THRESHOLD = 6;
@@ -121,8 +139,10 @@ export function createEditor(host: EditorHost) {
   drawer.innerHTML = `
     <header>
       <h2>Components</h2>
-      <span class="parts-hint" id="parts-hint">Drag a component onto the map<span class="visually-hidden">, or press Enter on one and use the arrow keys; Space or R turns it, Enter drops it, Escape cancels</span></span>
+      <button type="button" class="tool-toggle" data-action="remove-tool" aria-pressed="false" title="Remove roads and signs one click at a time (Esc to stop)">${icon('eraser')}<span>Remove</span></button>
+      <span class="parts-hint" id="parts-hint">Drag a component onto the map, or click it and then click the map<span class="visually-hidden">; or press Enter on one and use the arrow keys; Space or R turns it, Enter drops it, Escape cancels</span></span>
     </header>
+    <section class="parts-replace" aria-label="Replacements" hidden></section>
     <div class="parts-groups">
       ${GROUPS.map(
         (group) => `<div class="parts-group" role="group" aria-label="${group}"><h3>${group}</h3>${PARTS.filter((p) => p.group === group)
@@ -142,7 +162,14 @@ export function createEditor(host: EditorHost) {
   toggle.innerHTML = `${icon('wrench')}<span>Customise</span>`;
   toggle.setAttribute('aria-expanded', 'false');
   toggle.addEventListener('click', () => {
+    // Customise pauses a running run: traffic stays still while the layout changes.
+    if (drawer.hidden && !host.canEdit()) host.pause();
     drawer.hidden = !drawer.hidden;
+    if (drawer.hidden) {
+      setRemoveTool(false);
+      closeReplace();
+      cancelDrag();
+    }
     toggle.setAttribute('aria-expanded', String(!drawer.hidden));
     if (!drawer.hidden) {
       placeTray();
@@ -302,7 +329,11 @@ export function createEditor(host: EditorHost) {
     screen: { x: number; y: number } | null;
     latest: PlacementResult | null;
     ghost: { model: Object3D; materials: MeshBasicMaterial[] } | null;
+    /** Clicked rather than dragged: each click on the map places one, until Escape or another tool. */
+    armed: boolean;
   } | null = null;
+  /** A press on the map while a part is armed: a click places it, a drag turns the view. */
+  let armedPress: { x: number; y: number } | null = null;
 
   function compute() {
     if (!drag?.pointer) return null;
@@ -319,7 +350,8 @@ export function createEditor(host: EditorHost) {
       model.visible = false;
       highlight.visible = false;
       drag.latest = null;
-      showLabel('Drop it on the map', false);
+      if (drag.armed) showLabel('Click the map to place it · Esc to stop', true);
+      else showLabel('Drop it on the map', false);
       return;
     }
     const result = (drag.latest = compute());
@@ -343,6 +375,16 @@ export function createEditor(host: EditorHost) {
     if (result.snappedTo) highlight.position.set(...boardToWorld(result.snappedTo)).add(new Vector3(0, 0.05, 0));
     // Valid and invalid differ by outline and words as well as colour.
     showLabel(result.valid ? (result.joins ? `✓ Makes ${JUNCTION_NAMES[result.joins.at(-1)!.to] ?? 'a junction'}` : result.snappedTo ? '✓ Connects here' : '✓ Place here') : `✕ ${result.reason}`, result.valid);
+  }
+
+  /** The label beside the pointer (or a point on the viewport): ✓ in blue, ✕ in red with a dashed edge. */
+  function showLabelAt(text: string, valid: boolean, at: { x: number; y: number }) {
+    reasonLabel.hidden = false;
+    reasonLabel.className = `placement-reason ${valid ? 'valid' : 'invalid'}`;
+    reasonLabel.textContent = text;
+    // Clear of the pointer and the handle's knob under it.
+    reasonLabel.style.left = `${at.x + 30}px`;
+    reasonLabel.style.top = `${at.y + 26}px`;
   }
 
   function showLabel(text: string, valid: boolean) {
@@ -373,7 +415,9 @@ export function createEditor(host: EditorHost) {
   async function beginDrag(part: PartId, moving: Target | null, start: { pointer: [number, number] | null; screen: { x: number; y: number } | null; overMap: boolean }) {
     if (!host.canEdit()) return;
     cancelDrag();
-    const mine: NonNullable<typeof drag> = { part, moving, pointer: start.pointer, overMap: start.overMap, screen: start.screen, latest: null, ghost: null };
+    setRemoveTool(false);
+    closeReplace();
+    const mine: NonNullable<typeof drag> = { part, moving, pointer: start.pointer, overMap: start.overMap, screen: start.screen, latest: null, ghost: null, armed: false };
     drag = mine;
     spaceTip.start();
     const ghost = await makeGhost(part);
@@ -398,9 +442,30 @@ export function createEditor(host: EditorHost) {
     joinGhosts.clear();
     reasonLabel.hidden = true;
     ghostRoot.parent?.remove(ghostRoot);
-    document.body.classList.remove('placing');
+    document.body.classList.remove('placing', 'stamping');
+    for (const tile of drawer.querySelectorAll('.part[aria-pressed]')) tile.removeAttribute('aria-pressed');
     if (drag) spaceTip.finish();
     drag = null;
+    armedPress = null;
+  }
+
+  /** The part was clicked, not dragged: keep it in hand so each click on the map places one (Townscaper-style). */
+  function arm() {
+    if (!drag) return;
+    drag.armed = true;
+    document.body.classList.add('stamping');
+    drawer.querySelector(`.parts-groups [data-part="${drag.part}"]`)?.setAttribute('aria-pressed', 'true');
+    update();
+  }
+
+  /** Place the armed part where its preview is; an invalid spot stays quiet (the label says why). */
+  async function placeArmed() {
+    const result = drag?.overMap ? drag.latest : null;
+    if (!result?.valid || !result.scene) return;
+    await commit(result.scene);
+    host.sound('place');
+    // The part stays in hand; its preview now reads the new map.
+    update();
   }
 
   /** Drop exactly what the preview shows now; an invalid preview, or none, changes nothing. */
@@ -411,6 +476,7 @@ export function createEditor(host: EditorHost) {
     cancelDrag();
     if (!result?.valid || !result.scene) return;
     await commit(result.scene);
+    host.sound('place');
     // A new or moved piece is selected, so its rotate button shows on it straight away.
     if (!moving && result.placement) select({ kind: 'piece', index: result.scene.pieces.length - 1 });
     if (moving?.kind === 'piece') select({ kind: 'piece', index: result.scene.pieces.length - 1 });
@@ -421,6 +487,8 @@ export function createEditor(host: EditorHost) {
     const part = (event.target as HTMLElement).closest<HTMLElement>('[data-part]')?.dataset.part as PartId | undefined;
     if (!part) return;
     event.preventDefault();
+    // Clicking the part in hand again puts it down.
+    if (drag?.armed && drag.part === part) return cancelDrag();
     // Let the pointer's later events go to whatever is under it (touch and pen capture by default).
     (event.target as Element).releasePointerCapture?.(event.pointerId);
     void beginDrag(part, null, { pointer: null, screen: { x: event.clientX, y: event.clientY }, overMap: false });
@@ -435,6 +503,8 @@ export function createEditor(host: EditorHost) {
   drawer.addEventListener('click', (event) => {
     const action = (event.target as HTMLElement).closest<HTMLElement>('[data-action]')?.dataset.action;
     if (action === 'rotate') rotate();
+    if (action === 'remove-tool') setRemoveTool(!removeTool);
+    if (action === 'replace-cancel') closeReplace();
     if (action === 'undo') void undo();
     if (action === 'redo') void redo();
   });
@@ -451,8 +521,12 @@ export function createEditor(host: EditorHost) {
     if (drag.overMap) drag.pointer = boardPoint(event.clientX, event.clientY);
     update();
   });
-  window.addEventListener('pointerup', () => {
-    if (drag?.screen) void drop();
+  window.addEventListener('pointerup', (event) => {
+    if (!drag?.screen || drag.armed) return;
+    // Pressed and let go on the part itself, never over the map: a click, so it's armed for clicking onto the map.
+    const onTile = (event.target as HTMLElement | null)?.closest?.<HTMLElement>('.parts-groups [data-part]')?.dataset.part === drag.part;
+    if (onTile && drag.pointer === null && !drag.moving) return arm();
+    void drop();
   });
   // Placement keys go first (capture phase): while a part is being placed, Space turns it
   // instead of panning the map, and Enter drops it rather than pressing a focused button.
@@ -460,6 +534,18 @@ export function createEditor(host: EditorHost) {
     'keydown',
     (event) => {
       if ((event.target as HTMLElement)?.closest?.('input, textarea, select, [contenteditable]')) return;
+      // Escape backs out of a turn in progress, a replacement being chosen, or the Remove tool, quietly.
+      if (event.key === 'Escape' && !drag && (turning || replacing || removeTool)) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        if (turning) {
+          turning.cancelled = true;
+          clearEditPreview();
+          reasonLabel.hidden = true;
+        } else if (replacing) closeReplace();
+        else setRemoveTool(false);
+        return;
+      }
       const mode: PlacingMode = !drag ? 'idle' : drag.screen ? 'dragging' : 'keyboard';
       const action = placementKeyAction(event, mode);
       // With nothing being placed, R just sets the turn for the next part; the key carries on as usual.
@@ -498,10 +584,15 @@ export function createEditor(host: EditorHost) {
   /** A press on the map; `moved` once it went past the drag threshold at any point (then it's not a click). */
   let pressed: { x: number; y: number; hit: Target | null; moved: boolean } | null = null;
   host.canvas.addEventListener('pointerdown', (event) => {
+    if (drag?.armed && event.button === 0 && !('spaceHeld' in host.canvas.dataset)) armedPress = { x: event.clientX, y: event.clientY };
     if (drag || event.button !== 0 || 'spaceHeld' in host.canvas.dataset) return;
     pressed = { x: event.clientX, y: event.clientY, hit: pick(event), moved: false };
   });
   host.canvas.addEventListener('pointermove', (event) => {
+    if (removeTool && !pressed) {
+      const area = host.viewport.getBoundingClientRect();
+      showRemoveHover(pick(event), { x: event.clientX - area.left, y: event.clientY - area.top });
+    }
     if (!pressed || drag) return;
     const far = Math.hypot(event.clientX - pressed.x, event.clientY - pressed.y) > DRAG_THRESHOLD;
     if (far) pressed.moved = true;
@@ -515,9 +606,20 @@ export function createEditor(host: EditorHost) {
     void beginDrag(part, hit, { pointer: boardPoint(event.clientX, event.clientY), screen: { x: event.clientX, y: event.clientY }, overMap: true });
   });
   host.canvas.addEventListener('pointerup', (event) => {
+    if (armedPress) {
+      const click = Math.hypot(event.clientX - armedPress.x, event.clientY - armedPress.y) <= DRAG_THRESHOLD;
+      armedPress = null;
+      if (click && drag?.armed) void placeArmed();
+      return;
+    }
     if (!pressed || drag) return;
     // A press that moved (at any point) turned the camera: it isn't a click, so the selection stays.
     const moved = pressed.moved || Math.hypot(event.clientX - pressed.x, event.clientY - pressed.y) > DRAG_THRESHOLD;
+    if (removeTool) {
+      if (!moved && pressed.hit) void removeTarget(pressed.hit);
+      pressed = null;
+      return;
+    }
     // A vehicle under the click takes the card (the road inspector closes); otherwise select as usual.
     if (!moved) select(host.inspectVehicleAt?.(event) ? null : pressed.hit);
     pressed = null;
@@ -546,6 +648,7 @@ export function createEditor(host: EditorHost) {
 
   function select(target: Target | null) {
     selected = target && host.canEdit() ? target : null;
+    if (replacing && (selected?.kind !== 'piece' || selected.index !== replacing.index)) closeReplace();
     renderInspector();
     showOutline();
   }
@@ -584,15 +687,15 @@ export function createEditor(host: EditorHost) {
     if (selected.kind === 'piece') {
       const piece = scene.pieces[selected.index];
       const part = PARTS.find((p) => p.id === piece.piece);
-      const swaps = PARTS.filter((p) => p.kind === 'piece' && p.group === part?.group && p.id !== piece.piece);
       inspector.innerHTML = `
         ${header(part?.label ?? piece.piece)}
-        <p class="inspector-hint">Drag it on the map to move it.</p>
+        <p class="inspector-hint">Drag it to move it; drag the ring round it to turn it.</p>
         <div class="inspector-actions">
-          <button type="button" data-action="rotate-piece">Rotate ⟲</button>
-          <button type="button" data-action="remove">Remove</button>
+          <button type="button" data-action="rotate-piece">${icon('rotate')}Rotate</button>
+          <button type="button" data-action="replace-open" aria-pressed="${!!replacing}">Replace…</button>
+          <button type="button" class="danger" data-action="remove">${icon('trash')}Remove</button>
         </div>
-        ${swaps.length ? `<label>Replace with <select data-action="replace"><option value="">—</option>${swaps.map((p) => `<option value="${p.id}">${p.label}</option>`).join('')}</select></label>` : ''}
+        ${replacing ? replaceConfirm() : ''}
         <p class="inspector-error" role="alert" hidden></p>`;
     } else {
       const control = scene.controls[selected.index];
@@ -611,6 +714,18 @@ export function createEditor(host: EditorHost) {
     }
   }
 
+  /** While replacing: what the previewed part would do, with Replace and Cancel (the original stays until Replace). */
+  function replaceConfirm() {
+    const preview = editPreview?.kind === 'replace' ? editPreview : null;
+    if (!preview) return `<p class="replace-confirm inspector-hint">Pick a replacement in Components to preview it here.</p>`;
+    const label = partById(preview.part).label;
+    const verdict = preview.result.valid ? describeChange(preview.change) : `Can’t go here: ${preview.result.reason}`;
+    return `<div class="replace-confirm" role="group" aria-label="Replace">
+        <p>Replace with <strong>${label}</strong>?<br><span class="${preview.result.valid ? 'ok' : 'bad'}">${verdict}</span></p>
+        <div class="inspector-actions"><button type="button" class="primary" data-action="replace-confirm" ${preview.result.valid ? '' : 'disabled'}>Replace</button><button type="button" data-action="replace-cancel">Cancel</button></div>
+      </div>`;
+  }
+
   function showError(message: string) {
     const error = inspector.querySelector<HTMLElement>('.inspector-error');
     if (!error) return;
@@ -624,6 +739,12 @@ export function createEditor(host: EditorHost) {
     if (action === 'deselect') select(null);
     if (action === 'remove') void removeSelected();
     if (action === 'rotate-piece' && selected.kind === 'piece') rotateAt(selected.index);
+    if (action === 'replace-open' && selected.kind === 'piece') {
+      if (replacing) closeReplace();
+      else openReplace(selected.index);
+    }
+    if (action === 'replace-confirm') void confirmReplace();
+    if (action === 'replace-cancel') closeReplace();
     if (action === 'apply-timing' && selected.kind === 'control') {
       const value = (key: string) => Number(inspector.querySelector<HTMLInputElement>(`[data-timing="${key}"]`)!.value);
       const timing = { green: value('green'), amber: value('amber'), red: value('red'), offset: value('offset') };
@@ -648,60 +769,406 @@ export function createEditor(host: EditorHost) {
 
   async function removeSelected() {
     if (!selected || !host.canEdit()) return;
-    const scene = host.scene();
-    const edited = selected.kind === 'piece' ? removePiece(scene, selected.index) : removeControl(scene, selected.index);
+    const target = selected;
     select(null);
-    await commit(edited);
+    await removeTarget(target);
   }
 
   // ---- Applying, undo and redo ----
   /** Turn a placed piece a quarter (as the inspector's Rotate does) and keep it selected. */
   function rotateAt(index: number) {
     const result = rotatePiece(host.scene(), index);
-    if (result.valid && result.scene) void commit(result.scene).then(() => select({ kind: 'piece', index: result.scene!.pieces.length - 1 }));
+    if (result.valid && result.scene)
+      void commit(result.scene).then(() => {
+        host.sound('rotate');
+        select({ kind: 'piece', index: result.scene!.pieces.length - 1 });
+      });
     else showError(result.reason ?? 'Can’t rotate it here');
   }
 
-  // ---- A rotate button on the piece itself: over the selected piece, or the one under the pointer ----
+  // ---- Previews of an edit to a placed piece (turning or replacing it): a ghost where it would go, and its connections ----
+  type EditPreview = { kind: 'turn' | 'replace'; index: number; part: PartId; result: PlacementResult; change: ReturnType<typeof connectionChange> | null };
+  let editPreview: EditPreview | null = null;
+  const editPreviewRoot = new Group();
+  editPreviewRoot.name = 'editor-edit-preview';
+  let editGhost: { part: PartId; model: Object3D; materials: MeshBasicMaterial[] } | null = null;
+  let editGhostLoading: PartId | null = null;
+  /** Something the map draws (a ghost or outline) changed: draw on the next frame. */
+  let dirty = false;
+
+  /** The connections an edit keeps, breaks or makes, worked out even for an invalid one (to show what it would break). */
+  function previewChange(scene: SceneDefinition, index: number, result: PlacementResult) {
+    const after = result.scene ?? (result.placement ? { ...removePiece(scene, index), pieces: [...removePiece(scene, index).pieces, result.placement] } : null);
+    return after ? connectionChange(scene, index, after, after.pieces.length - 1) : null;
+  }
+
+  function showEditPreview(preview: EditPreview) {
+    editPreview = preview;
+    if (editGhost?.part !== preview.part && editGhostLoading !== preview.part) {
+      editGhostLoading = preview.part;
+      void makeGhost(preview.part).then((ghost) => {
+        if (editGhostLoading !== preview.part) return ghost.materials.forEach((m) => m.dispose());
+        editGhostLoading = null;
+        if (editGhost) {
+          editPreviewRoot.remove(editGhost.model);
+          editGhost.materials.forEach((m) => m.dispose());
+        }
+        editGhost = { part: preview.part, ...ghost };
+        editPreviewRoot.add(ghost.model);
+        placeEditGhost();
+      });
+    }
+    placeEditGhost();
+  }
+
+  function placeEditGhost() {
+    dirty = true;
+    if (!editGhost) return;
+    const p = editPreview?.result.placement;
+    editGhost.model.visible = !!p && editGhost.part === editPreview!.part;
+    if (!p) return;
+    editGhost.model.position.set(...boardToWorld([p.at[0], p.level ?? 0, p.at[1]]));
+    editGhost.model.rotation.y = (p.rotation * Math.PI) / 180;
+    for (const m of editGhost.materials) m.color.set(editPreview!.result.valid ? VALID_COLOUR : INVALID_COLOUR);
+  }
+
+  function clearEditPreview() {
+    if (!editPreview) return;
+    editPreview = null;
+    editGhostLoading = null;
+    if (editGhost) editGhost.model.visible = false;
+    dirty = true;
+  }
+
+  /** "2 stay connected · 1 breaks": what an edit does to a piece's connections, in words (colour and shape show it too). */
+  function describeChange(change: EditPreview['change']) {
+    if (!change) return '';
+    const parts = [
+      change.kept.length && `${change.kept.length} stay${change.kept.length === 1 ? 's' : ''} connected`,
+      change.broken.length && `${change.broken.length} break${change.broken.length === 1 ? 's' : ''}`,
+      change.made.length && `${change.made.length} new`,
+    ].filter(Boolean);
+    return parts.length ? parts.join(' · ') : 'No connections';
+  }
+
+  // ---- What's drawn over the map: the rotation handle round the selected piece, and connection markers ----
+  const overlay = document.createElementNS(SVG_NS, 'svg');
+  overlay.classList.add('editor-overlay');
+  overlay.innerHTML = `
+    <defs><marker id="handle-arrow" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse"><path d="M1 1 L9 5 L1 9 z" /></marker></defs>
+    <path class="handle-track" />
+    <path class="handle-grip" marker-start="url(#handle-arrow)" marker-end="url(#handle-arrow)" />
+    <path class="handle-hit" />
+    <g class="connection-markers"></g>`;
+  host.viewport.append(overlay);
+  const track = overlay.querySelector<SVGPathElement>('.handle-track')!;
+  const grip = overlay.querySelector<SVGPathElement>('.handle-grip')!;
+  const hit = overlay.querySelector<SVGPathElement>('.handle-hit')!;
+  const markerLayer = overlay.querySelector<SVGGElement>('.connection-markers')!;
+  // The knob on the handle: drag it (or the grip) to turn the piece, or click it for a quarter turn.
   const pieceRotate = document.createElement('button');
   pieceRotate.type = 'button';
   pieceRotate.className = 'icon-button piece-rotate';
   pieceRotate.setAttribute('aria-label', 'Rotate this piece');
-  pieceRotate.title = 'Rotate (R)';
+  pieceRotate.title = 'Drag round to turn it · click for a quarter turn (R)';
   pieceRotate.innerHTML = icon('rotate');
   pieceRotate.hidden = true;
   host.viewport.append(pieceRotate);
-  /** The piece under the pointer, kept a moment after the pointer leaves it so the button can be reached. */
-  let hovered: { index: number; until: number } | null = null;
-  const HOVER_GRACE_MS = 700;
-  host.canvas.addEventListener('pointermove', (event) => {
-    if (drag || pressed || !host.canEdit()) return;
-    const hit = pick(event);
-    if (hit?.kind === 'piece') hovered = { index: hit.index, until: Infinity };
-    else if (hovered?.until === Infinity) hovered.until = performance.now() + HOVER_GRACE_MS;
-  });
-  pieceRotate.addEventListener('pointerenter', () => hovered && (hovered.until = Infinity));
-  pieceRotate.addEventListener('pointerleave', () => hovered && (hovered.until = performance.now() + HOVER_GRACE_MS));
-  pieceRotate.addEventListener('click', () => {
-    const index = selected?.kind === 'piece' ? selected.index : hovered?.index;
-    if (index !== undefined) rotateAt(index);
-  });
-  /** Keep the button just above its piece on screen (the camera may move), or hide it. */
-  function placeRotateButton() {
-    if (hovered && hovered.until < performance.now()) hovered = null;
-    const index = drag || !host.canEdit() ? undefined : selected?.kind === 'piece' ? selected.index : hovered?.index;
-    const piece = index === undefined ? undefined : host.scene().pieces[index];
-    if (!piece) {
-      pieceRotate.hidden = true;
-      return;
-    }
-    const p = new Vector3(...boardToWorld([piece.at[0], piece.level ?? 0, piece.at[1]])).project(host.camera);
+
+  /** A board point (x, level, z in tiles) on screen, relative to the viewport. */
+  function onScreen([x, level, z]: BoardPoint) {
+    const p = new Vector3(...boardToWorld([x, level, z])).project(host.camera);
     const rect = host.canvas.getBoundingClientRect();
     const area = host.viewport.getBoundingClientRect();
-    pieceRotate.style.left = `${rect.left - area.left + ((p.x + 1) / 2) * rect.width}px`;
-    pieceRotate.style.top = `${rect.top - area.top + ((1 - p.y) / 2) * rect.height}px`;
-    pieceRotate.hidden = false;
+    return { x: rect.left - area.left + ((p.x + 1) / 2) * rect.width, y: rect.top - area.top + ((1 - p.y) / 2) * rect.height };
   }
+
+  /** The piece being turned with the handle: where the drag started, and the turn it shows now. */
+  let turning: {
+    index: number;
+    start: QuarterTurn;
+    rotation: QuarterTurn;
+    from: [number, number];
+    screen: { x: number; y: number };
+    /** The angle swept so far (radians, anticlockwise), so the grip follows the pointer. */
+    swept: number;
+    moved: boolean;
+    cancelled: boolean;
+  } | null = null;
+
+  /** Keep the handle round the selected piece on screen (the camera may move), or hide it. */
+  function drawHandle() {
+    const index = selected?.kind === 'piece' && !drag && !removeTool && !replacing && host.canEdit() ? selected.index : undefined;
+    const piece = index === undefined ? undefined : host.scene().pieces[index];
+    if (!piece) {
+      for (const path of [track, grip, hit]) path.removeAttribute('d');
+      pieceRotate.hidden = true;
+      overlay.classList.remove('turning');
+      return;
+    }
+    const { min, max } = PIECES[piece.piece].footprint;
+    let radius = Math.max(...min.map(Math.abs), ...max.map(Math.abs)) + HANDLE_GAP;
+    const level = piece.level ?? 0;
+    // Angles anticlockwise seen from above (x east, z south), as the piece's rotation turns.
+    const at = (angle: number) => onScreen([piece.at[0] + radius * Math.cos(angle), level, piece.at[1] - radius * Math.sin(angle)]);
+    const samples = Array.from({ length: 72 }, (_, i) => (i / 72) * Math.PI * 2);
+    const centre = onScreen([piece.at[0], level, piece.at[1]]);
+    // Zoomed out, grow the ring so its narrowest side is still easy to grab.
+    const narrowest = Math.min(...samples.map((a) => at(a)).map((p) => Math.hypot(p.x - centre.x, p.y - centre.y)));
+    if (narrowest < HANDLE_MIN_PX * 0.6) radius *= (HANDLE_MIN_PX * 0.6) / Math.max(narrowest, 1);
+    const ring = samples.map(at);
+    track.setAttribute('d', `M${ring.map((p) => `${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' L')} Z`);
+    // The grip faces the viewer (the ring's lowest point on screen) and follows a turn in progress.
+    const front = samples[ring.reduce((best, p, i) => (p.y > ring[best].y ? i : best), 0)];
+    const middle = front + (turning?.swept ?? 0);
+    const arc = Array.from({ length: 17 }, (_, i) => at(middle - GRIP_SPAN / 2 + (i / 16) * GRIP_SPAN));
+    const d = `M${arc.map((p) => `${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' L')}`;
+    grip.setAttribute('d', d);
+    hit.setAttribute('d', d);
+    const knob = at(middle);
+    pieceRotate.style.left = `${knob.x}px`;
+    pieceRotate.style.top = `${knob.y}px`;
+    pieceRotate.hidden = false;
+    overlay.classList.toggle('turning', !!turning?.moved);
+  }
+
+  /** Markers on the road ends an edit would keep (blue dot), break (red ring with a cross) or newly make (blue ring). */
+  function drawMarkers() {
+    const change = editPreview?.change;
+    const key = change ? JSON.stringify(change) : '';
+    const points = change
+      ? [...change.kept.map((p) => ({ p, kind: 'kept' })), ...change.broken.map((p) => ({ p, kind: 'broken' })), ...change.made.map((p) => ({ p, kind: 'made' }))]
+      : [];
+    markerLayer.dataset.key = key;
+    markerLayer.innerHTML = points
+      .map(({ p, kind }) => {
+        const { x, y } = onScreen(p);
+        const cross = kind === 'broken' ? `<path d="M${x - 4} ${y - 4} L${x + 4} ${y + 4} M${x + 4} ${y - 4} L${x - 4} ${y + 4}" />` : '';
+        return `<g class="connection ${kind}"><circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="8" />${cross}</g>`;
+      })
+      .join('');
+  }
+
+  function beginTurn(event: PointerEvent) {
+    if (event.button !== 0 || selected?.kind !== 'piece' || !host.canEdit()) return;
+    const from = boardPoint(event.clientX, event.clientY);
+    if (!from) return;
+    event.preventDefault();
+    event.stopPropagation();
+    (event.currentTarget as Element).setPointerCapture?.(event.pointerId);
+    const piece = host.scene().pieces[selected.index];
+    turning = { index: selected.index, start: piece.rotation, rotation: piece.rotation, from, screen: { x: event.clientX, y: event.clientY }, swept: 0, moved: false, cancelled: false };
+  }
+  pieceRotate.addEventListener('pointerdown', beginTurn);
+  hit.addEventListener('pointerdown', beginTurn);
+  // The knob's own click is handled on release (a click is a quarter turn), not here; keyboard presses still click it.
+  pieceRotate.addEventListener('click', (event) => {
+    if (event.detail !== 0) return;
+    if (selected?.kind === 'piece') rotateAt(selected.index);
+  });
+  window.addEventListener('pointermove', (event) => {
+    const t = turning;
+    if (!t || t.cancelled) return;
+    if (!t.moved && Math.hypot(event.clientX - t.screen.x, event.clientY - t.screen.y) <= DRAG_THRESHOLD) return;
+    t.moved = true;
+    const to = boardPoint(event.clientX, event.clientY);
+    const scene = host.scene();
+    const piece = scene.pieces[t.index];
+    if (!to || !piece) return;
+    const angle = ([x, z]: [number, number]) => Math.atan2(-(z - piece.at[1]), x - piece.at[0]);
+    t.swept = Math.atan2(Math.sin(angle(to) - angle(t.from)), Math.cos(angle(to) - angle(t.from)));
+    const rotation = turnedRotation(t.start, piece.at, t.from, to);
+    // Beside the knob (which rides the ring), not on it.
+    const labelAt = { x: parseFloat(pieceRotate.style.left) + 6, y: parseFloat(pieceRotate.style.top) - 4 };
+    if (rotation === t.start) {
+      t.rotation = rotation;
+      clearEditPreview();
+      return showLabelAt('Turn further, or let go to leave it', true, labelAt);
+    }
+    if (rotation !== t.rotation || !editPreview) {
+      t.rotation = rotation;
+      const result = turnPiece(scene, t.index, rotation);
+      showEditPreview({ kind: 'turn', index: t.index, part: piece.piece as PartId, result, change: previewChange(scene, t.index, result) });
+    }
+    const preview = editPreview!;
+    const turn = ((rotation - t.start + 360) % 360) as number;
+    const words = turn === 180 ? 'Half turn' : turn === 90 ? 'Quarter turn left' : 'Quarter turn right';
+    showLabelAt(preview.result.valid ? `✓ ${words} · ${describeChange(preview.change)}` : `✕ ${preview.result.reason} · ${describeChange(preview.change)}`, preview.result.valid, labelAt);
+  });
+  window.addEventListener('pointerup', () => {
+    const t = turning;
+    if (!t) return;
+    turning = null;
+    const preview = editPreview;
+    clearEditPreview();
+    reasonLabel.hidden = true;
+    if (t.cancelled) return;
+    // A press that didn't travel is a click: a quarter turn, as the knob always did.
+    if (!t.moved) return rotateAt(t.index);
+    // Only a valid turn to somewhere new is kept; otherwise it springs back, quietly.
+    if (!preview?.result.valid || !preview.result.scene || t.rotation === t.start) return;
+    const scene = preview.result.scene;
+    void commit(scene).then(() => {
+      host.sound('rotate');
+      select({ kind: 'piece', index: scene.pieces.length - 1 });
+    });
+  });
+
+  // ---- Remove tool: click roads and signs one after another to clear them ----
+  let removeTool = false;
+  let removeHover: Target | null = null;
+  const removeOutline = new Box3Helper(new Box3(), new Color(REMOVE_COLOUR));
+  removeOutline.name = 'editor-remove-highlight';
+  removeOutline.renderOrder = 3;
+  (removeOutline.material as Material).depthTest = false;
+  const removeToggle = drawer.querySelector<HTMLButtonElement>('[data-action="remove-tool"]')!;
+
+  function setRemoveTool(on: boolean) {
+    if (on === removeTool) return;
+    removeTool = on;
+    removeToggle.setAttribute('aria-pressed', String(on));
+    document.body.classList.toggle('removing', on);
+    if (on) {
+      cancelDrag();
+      closeReplace();
+      select(null);
+    }
+    showRemoveHover(null);
+  }
+
+  /** Outline in red what a click would remove, and say so beside the pointer. */
+  function showRemoveHover(target: Target | null, at?: { x: number; y: number }) {
+    const key = (t: Target | null) => (t ? `${t.kind}:${t.index}` : '');
+    if (key(target) !== key(removeHover)) {
+      removeHover = target;
+      removeOutline.parent?.remove(removeOutline);
+      const view = host.view();
+      const object = target && view && sceneObject(view, target);
+      if (object) {
+        removeOutline.box.setFromObject(object).expandByScalar(0.15);
+        view!.add(removeOutline);
+      }
+      dirty = true;
+    }
+    if (!removeTool) return;
+    const scene = host.scene();
+    const name = target ? (target.kind === 'piece' ? partById(scene.pieces[target.index].piece as PartId)?.label : partById(scene.controls[target.index].type).label) : null;
+    if (at) showLabelAt(name ? `Click to remove · ${name}` : 'Remove: click a road or sign · Esc to stop', false, at);
+  }
+
+  function sceneObject(view: Scene, target: Target) {
+    const group = view.getObjectByName(target.kind === 'piece' ? 'road-pieces' : 'traffic-controls');
+    return group?.children.find((o) => o.userData[target.kind === 'piece' ? 'pieceIndex' : 'controlIndex'] === target.index);
+  }
+
+  // ---- "Road removed · Undo" ----
+  const toast = document.createElement('div');
+  toast.className = 'edit-toast';
+  toast.setAttribute('role', 'status');
+  toast.hidden = true;
+  host.dock.parentElement?.prepend(toast);
+  let toastTimer = 0;
+  function showToast(text: string) {
+    toast.innerHTML = `<span></span> <span class="toast-dot" aria-hidden="true">·</span> <button type="button" data-action="toast-undo">Undo</button>`;
+    toast.querySelector('span')!.textContent = text;
+    toast.hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = window.setTimeout(() => (toast.hidden = true), TOAST_MS);
+  }
+  toast.addEventListener('click', (event) => {
+    if (!(event.target as HTMLElement).closest('[data-action="toast-undo"]')) return;
+    toast.hidden = true;
+    void undo();
+  });
+
+  /** Remove a piece or sign as one undoable edit, with its tap and the toast. */
+  async function removeTarget(target: Target) {
+    if (!host.canEdit()) return;
+    const scene = host.scene();
+    const exists = target.kind === 'piece' ? scene.pieces[target.index] : scene.controls[target.index];
+    if (!exists) return;
+    const name = target.kind === 'piece' ? 'Road' : partById(scene.controls[target.index].type).label;
+    const edited = target.kind === 'piece' ? removePiece(scene, target.index) : removeControl(scene, target.index);
+    showRemoveHover(null);
+    await commit(edited);
+    host.sound('remove');
+    showToast(`${name} removed`);
+  }
+
+  // ---- Replace: the drawer offers what fits here first; a pick is previewed in place until confirmed ----
+  let replacing: { index: number } | null = null;
+  const replaceSection = drawer.querySelector<HTMLElement>('.parts-replace')!;
+
+  function openReplace(index: number) {
+    if (!host.canEdit()) return;
+    cancelDrag();
+    setRemoveTool(false);
+    clearEditPreview();
+    replacing = { index };
+    const scene = host.scene();
+    const name = partById(scene.pieces[index].piece as PartId)?.label ?? scene.pieces[index].piece;
+    const options = replacementsFor(scene, index).filter((o) => o.fits);
+    replaceSection.innerHTML = `
+      <header><h3>Replace ${name}</h3><button type="button" class="replace-close" data-action="replace-cancel" aria-label="Stop replacing">×</button></header>
+      <p class="parts-hint">Fits here, best first. Pick one to preview it in place.</p>
+      <div class="parts-group replace-options" role="group" aria-label="Fits here">${options
+        .map(
+          (o) =>
+            `<button type="button" class="part" data-replace="${o.part}"><span class="part-picture" aria-hidden="true"></span><span class="part-label">${partById(o.part).label}</span><span class="part-note">${o.broken ? `${o.broken} break${o.broken === 1 ? 's' : ''}` : o.kept ? 'Keeps all' : 'Nothing attached'}</span></button>`,
+        )
+        .join('')}</div>`;
+    // The same pictures as the drawer's own tiles (once they're drawn).
+    for (const tile of replaceSection.querySelectorAll<HTMLElement>('[data-replace]')) {
+      const picture = drawer.querySelector<HTMLElement>(`.parts-groups [data-part="${tile.dataset.replace}"] .part-picture`)?.style.backgroundImage;
+      if (picture) tile.querySelector<HTMLElement>('.part-picture')!.style.backgroundImage = picture;
+    }
+    replaceSection.hidden = false;
+    drawer.classList.add('replacing');
+    if (drawer.hidden) {
+      drawer.hidden = false;
+      toggle.setAttribute('aria-expanded', 'true');
+      placeTray();
+      showPictures();
+      host.trayToggled();
+    }
+    drawer.querySelector('.parts-groups')?.scrollTo({ top: 0 });
+    replaceSection.querySelector<HTMLElement>('[data-replace]')?.focus();
+    renderInspector();
+  }
+
+  function previewReplacement(part: PartId) {
+    if (!replacing) return;
+    const scene = host.scene();
+    const result = replacePiece(scene, replacing.index, part);
+    showEditPreview({ kind: 'replace', index: replacing.index, part, result, change: previewChange(scene, replacing.index, result) });
+    for (const tile of replaceSection.querySelectorAll<HTMLElement>('[data-replace]')) tile.setAttribute('aria-pressed', String(tile.dataset.replace === part));
+    renderInspector();
+  }
+
+  function closeReplace() {
+    if (!replacing) return;
+    replacing = null;
+    replaceSection.hidden = true;
+    replaceSection.innerHTML = '';
+    drawer.classList.remove('replacing');
+    clearEditPreview();
+    renderInspector();
+  }
+
+  async function confirmReplace() {
+    const preview = editPreview;
+    if (preview?.kind !== 'replace' || !preview.result.valid || !preview.result.scene) return;
+    const scene = preview.result.scene;
+    closeReplace();
+    await commit(scene);
+    host.sound('place');
+    select({ kind: 'piece', index: scene.pieces.length - 1 });
+  }
+
+  replaceSection.addEventListener('click', (event) => {
+    const tile = (event.target as HTMLElement).closest<HTMLElement>('[data-replace]');
+    if (tile) previewReplacement(tile.dataset.replace as PartId);
+  });
 
   async function commit(scene: SceneDefinition) {
     await host.apply(scene);
@@ -750,11 +1217,23 @@ export function createEditor(host: EditorHost) {
     /** Call every frame: locks the parts while traffic runs, and keeps the outline and preview on the current view. */
     /** Call every frame; true when the editor changed what the map shows (a part being placed, the outline). */
     sync(): boolean {
-      placeRotateButton();
+      drawHandle();
+      drawMarkers();
+      // Edit previews live on the current view (a new one is built after every edit).
+      if (editPreview && editPreviewRoot.parent !== host.view()) {
+        editPreviewRoot.parent?.remove(editPreviewRoot);
+        host.view()?.add(editPreviewRoot);
+        dirty = true;
+      }
       const placing = drag !== null;
-      const changed = showOutline() || placing || wasPlacing;
+      const changed = showOutline() || placing || wasPlacing || dirty;
+      dirty = false;
       wasPlacing = placing; // one more frame after placing ends, to clear the preview
-      if (drag?.ghost && !ghostRoot.parent) host.view()?.add(ghostRoot);
+      // A new view after an edit (placing armed parts one after another): the preview moves onto it.
+      if (drag?.ghost && ghostRoot.parent !== host.view()) {
+        ghostRoot.parent?.remove(ghostRoot);
+        host.view()?.add(ghostRoot);
+      }
       const locked = !host.canEdit();
       if (locked === lockedShown) return changed;
       lockedShown = locked;
@@ -763,6 +1242,9 @@ export function createEditor(host: EditorHost) {
       toggle.title = locked ? 'Pause to edit the map' : 'Customise the map';
       if (locked) {
         cancelDrag();
+        setRemoveTool(false);
+        closeReplace();
+        if (turning) turning.cancelled = true;
         select(null);
       }
       syncButtons();

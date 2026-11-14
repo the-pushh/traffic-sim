@@ -20,14 +20,10 @@ export interface RunResults {
   entered: number;
   finished: number;
   blocked: number;
-  /**
-   * Mean seconds a finished trip lost against driving its own route on empty roads (waiting
-   * at lights, in queues, behind slower cars); null when none finished. Travel time itself
-   * isn't comparable: every trip's route is a different length.
-   */
-  averageDelay: number | null;
+  /** Mean seconds from entering the board to leaving it, over finished trips; null when none finished. */
+  averageTravelTime: number | null;
   /** How many finished trips the average is taken over. */
-  delaySamples: number;
+  travelTimeSamples: number;
   /** The longest queue at each approach during the run, vehicles. */
   peakQueues: { approach: string; peak: number }[];
 }
@@ -113,14 +109,14 @@ export class QueueTracker {
 /** The run's measures so far. */
 export function summariseRun(simulation: TrafficSimulation, queues: QueueTracker, approaches: Approach[]): RunResults {
   const { due, entered, finished, blocked } = simulation.counts;
-  const delays = simulation.tripDelays;
+  const times = simulation.travelTimes;
   return {
     due,
     entered,
     finished,
     blocked,
-    averageDelay: delays.length ? delays.reduce((a, b) => a + b, 0) / delays.length : null,
-    delaySamples: delays.length,
+    averageTravelTime: times.length ? times.reduce((a, b) => a + b, 0) / times.length : null,
+    travelTimeSamples: times.length,
     peakQueues: approaches.map((a, i) => ({ approach: a.name, peak: queues.peak[i] ?? 0 })),
   };
 }
