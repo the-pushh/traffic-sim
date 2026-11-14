@@ -225,7 +225,7 @@ runChecks.resultsCardOnEnd = await runPage.evaluate(() => {
 // Headlines first (P3): four big numbers show; the full table waits behind Show details.
 runChecks.resultsHeadlinesFirst = await runPage.evaluate(() => {
   const labels = [...document.querySelectorAll('.results-headlines dt')].map((d) => d.textContent);
-  return JSON.stringify(labels) === JSON.stringify(['Trips finished', 'Average travel time', 'Longest queue', 'Blocked trips']) && document.querySelector('#results-details').hidden;
+  return JSON.stringify(labels) === JSON.stringify(['Trips finished', 'Delay per trip', 'Longest queue', 'Blocked trips']) && document.querySelector('#results-details').hidden;
 });
 await runPage.locator('.top-stack').screenshot({ path: `${outDir}/16-results-first-run.png` });
 const detailsToggle = runPage.locator('.results-details-toggle');

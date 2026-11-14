@@ -12,8 +12,8 @@ function label(r: LabelledResults) {
   return `${r.scene} · ${INTENSITY_LABELS[r.intensity]} · ${r.duration} s`;
 }
 
-function travelTime(r: LabelledResults) {
-  return r.averageTravelTime === null ? '—' : `${Math.round(r.averageTravelTime)} s <span class="sample">· ${r.travelTimeSamples} ${r.travelTimeSamples === 1 ? 'trip' : 'trips'}</span>`;
+function delay(r: LabelledResults) {
+  return r.averageDelay === null ? '—' : `${Math.round(r.averageDelay)} s <span class="sample">· ${r.delaySamples} ${r.delaySamples === 1 ? 'trip' : 'trips'}</span>`;
 }
 
 const CHANGE_WORDS = { better: 'Better', worse: 'Worse', same: 'Same' } as const;
@@ -127,7 +127,7 @@ export function createResultsCard(container: HTMLElement, results: () => Labelle
           <thead><tr><td></td>${runs.map((r, i) => `<th scope="col"><span class="run-name">${i === 0 ? 'This run' : 'Previous run'}</span><span class="run-label">${escapeHtml(label(r))}</span></th>`).join('')}</tr></thead>
           <tbody>
             <tr><th scope="row">Trips due · entered · finished</th>${cells((r) => `${r.due} · ${r.entered} · ${r.finished}`)}</tr>
-            <tr><th scope="row">Average travel time</th>${cells(travelTime)}</tr>
+            <tr><th scope="row">Delay per trip <span class="sample">· time lost vs. the same route on empty roads</span></th>${cells(delay)}</tr>
             <tr><th scope="row">Blocked trips</th>${cells((r) => `${r.blocked} <span class="sample">of ${r.due} due</span>`)}</tr>
             <tr class="group"><th scope="rowgroup" colspan="${runs.length + 1}">Peak queue, vehicles <span class="sample">· ${latest.peakQueues.length} approaches</span></th></tr>
             ${approaches}

@@ -500,6 +500,14 @@ Owner agreed the spec and the T1–T13 ticket breakdown and authorised implement
 - They keep the P13 rules: flat on the road surface, tilted with the ramp they're on, depth-tested so vehicles and trees in front hide them, no depth write. The material is pink at **60% opacity**. Chevrons don't overlap, so the opacity is even. The start ring at the vehicle is unchanged.
 - The `route()` dev hook now finds the route mesh by name (`route-chevrons`). Before, it picked the start ring, which is also an indexed mesh, so the old check read the ring's material.
 
+
+## Delay per trip replaces average travel time — 2026-11-14
+
+- **Owner:** "average travel time is not a good metric, because the distance of every vehicle path is different."
+- **Measure:** each finished trip's **delay** is its travel time minus the time the same driver would take over the same route on empty roads, never below 0. The empty-road time is the route's lane lengths at the lowest of three speeds: the speed limit × the driver's own speed factor (capped at 1, so a slower driver isn't counted as delayed, and a speeder isn't credited), the curve speed, and the vehicle's top speed. Waiting at lights and signs, queues, and following slower cars all count as delay. Accelerating from the entry adds about a second.
+- **Shown:** the second headline is **Delay per trip** ("over N trips"). The details table row adds "time lost vs. the same route on empty roads". It is compared between runs as before: lower is better, subtracted before rounding.
+- `TrafficSimulation.tripDelays` sits alongside `travelTimes`; `RunResults.averageDelay` and `delaySamples` replace `averageTravelTime` and `travelTimeSamples`.
+
 ## Building-toy editor and sound (P26, #102) — 2026-11-14
 
 - **Owner:** make the road editor feel like a building toy, with Townscaper as the reference for quick placing and removing and BrickLink Studio for turning a selected piece on the map. Match the HUD's cream glass and blue accent. Add soft edit sounds, a traffic ambience and a Sound on/off switch.
