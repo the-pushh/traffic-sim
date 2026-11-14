@@ -27,7 +27,13 @@ async function toMainStreetAt30s(p) {
     await p.waitForSelector('.status', { state: 'hidden', timeout: 60000 });
   }
   if ((await p.locator('.scene-name').textContent())?.trim() !== 'Main Street') throw new Error('Couldn’t reach Main Street with the scene arrows');
-  await p.getByRole('button', { name: '30 s' }).click();
+  await chooseDuration(p, 30);
+}
+
+/** Pick a run length from the HUD's Duration menu (P25), as a player would. */
+async function chooseDuration(p, seconds) {
+  await p.getByRole('button', { name: /^Duration:/ }).click();
+  await p.getByRole('option', { name: `${seconds} s` }).click();
 }
 
 /** The app starts zoomed in (P20); checks that drag to points across the board zoom out until it's all in view. */
@@ -69,7 +75,8 @@ await settle();
 // P20: a fresh visit opens on Flyover Bottleneck with a 60 s run.
 const opensOnDefaults =
   (await page.locator('.scene-name').textContent())?.trim() === 'Flyover Bottleneck' &&
-  (await page.getByRole('button', { name: '60 s' }).getAttribute('aria-pressed')) === 'true';
+  (await page.getByRole('button', { name: 'Duration: 60 s' }).count()) === 1 &&
+  (await page.locator('.countdown').textContent()) === '1:00 run';
 const canvas = await page.locator('canvas').boundingBox();
 const controls = await page.locator('.camera-controls').boundingBox();
 // Compare only the 3D scene: left of the camera controls and above the bottom panels (the dock holds
@@ -153,16 +160,18 @@ await runPage.goto(runUrl.href);
 await runPage.waitForSelector('.status', { state: 'hidden', timeout: 30000 });
 await toMainStreetAt30s(runPage);
 const dockState = () => runPage.locator('.dock').getAttribute('data-state');
-const clockText = () => runPage.locator('.clock').textContent();
+const clockText = () => runPage.locator('.countdown').textContent();
+/** Simulated seconds into the run, as the dock records it. */
+const clockSeconds = () => runPage.evaluate(() => Number(document.querySelector('.dock').dataset.clock));
 const settingsDisabled = () =>
   runPage.evaluate(() => {
-    const controls = [document.querySelector('.intensity input'), ...document.querySelectorAll('[data-duration]')];
+    const controls = [document.querySelector('.intensity input'), document.querySelector('.duration-trigger')];
     // Disabled, with the reason for screen readers but not shown on screen (P22: the owner dropped the text).
     const hint = document.querySelector('.lock-hint');
     return controls.every((c) => c.disabled) && !hint.hidden && hint.getBoundingClientRect().width <= 1;
   });
 const settingsEnabled = () =>
-  runPage.evaluate(() => [document.querySelector('.intensity input'), ...document.querySelectorAll('[data-duration]')].every((c) => !c.disabled));
+  runPage.evaluate(() => [document.querySelector('.intensity input'), document.querySelector('.duration-trigger')].every((c) => !c.disabled));
 const runChecks = {};
 let blockedAtEntries = null;
 let hoverTag = null;
@@ -177,26 +186,35 @@ runChecks.dockFloatsAtBottomCentre = await runPage.evaluate(() => {
 runChecks.sceneArrowsEnabledWhenReady = await runPage.evaluate(() => [...document.querySelectorAll('.pill-arrow')].every((a) => !a.disabled));
 runChecks.pillShowsMainStreet = (await runPage.locator('.scene-name').textContent())?.trim() === 'Main Street';
 runChecks.tipShownOnFirstVisit = await runPage.locator('.first-visit-tip').isVisible();
-runChecks.readyClock = (await clockText()) === '0:00 / 0:30' && (await dockState()) === 'ready' && (await settingsEnabled());
+runChecks.readyClock = (await clockText()) === '0:30 run' && (await dockState()) === 'ready' && (await settingsEnabled());
 await runPage.locator('.intensity input').fill('4');
 runChecks.intensityChangeShowsLabel = (await runPage.locator('.intensity-name').textContent()) === 'Congested';
 await runPage.locator('.intensity input').fill('2');
 await runPage.locator('.dock').screenshot({ path: `${outDir}/11-dock-ready.png` });
 await runPage.getByRole('button', { name: 'Play' }).click();
 runChecks.playRunsAndLocksSettings = (await dockState()) === 'running' && (await settingsDisabled());
+await runPage.waitForTimeout(400);
+await runPage.locator('.bottom-stack').screenshot({ path: `${outDir}/35-hud-running.png` });
 runChecks.sceneArrowsLockedDuringRun = await runPage
   .waitForFunction(() => [...document.querySelectorAll('.pill-arrow')].every((a) => a.disabled), null, { timeout: 2000 })
   .then(() => true, () => false);
 runChecks.tipGoneAfterPlay = (await runPage.locator('.first-visit-tip').count()) === 0;
 await runPage.waitForTimeout(300);
 await runPage.getByRole('button', { name: 'Pause' }).click();
-const pausedAt = await clockText();
+const pausedAt = await clockSeconds();
+const pausedRing = await runPage.evaluate(() => getComputedStyle(document.querySelector('.ring-fill')).strokeDashoffset);
 await runPage.waitForTimeout(600);
-runChecks.pauseHoldsClockAndKeepsLock = (await dockState()) === 'paused' && (await clockText()) === pausedAt && (await settingsDisabled());
+runChecks.pauseHoldsClockAndKeepsLock = (await dockState()) === 'paused' && (await clockSeconds()) === pausedAt && (await settingsDisabled());
+// P25: the countdown reads seconds left and the ring holds while paused.
+runChecks.pausedCountdownAndRingHold =
+  (await clockText()) === `${Math.ceil(30 - pausedAt)} s left` &&
+  (await runPage.evaluate(() => getComputedStyle(document.querySelector('.ring-fill')).strokeDashoffset)) === pausedRing &&
+  parseFloat(pausedRing) < 100;
 await runPage.locator('.bottom-stack').screenshot({ path: `${outDir}/12-dock-paused-locked.png` });
 await runPage.getByRole('button', { name: 'Play' }).click();
 await runPage.waitForFunction(() => document.querySelector('.dock')?.dataset.state === 'ended', null, { timeout: runEndTimeout });
-runChecks.endsExactlyAtDuration = (await clockText()) === '0:30 / 0:30' && (await settingsEnabled());
+runChecks.endsExactlyAtDuration = (await clockSeconds()) === 30 && (await clockText()) === 'Run complete' && (await settingsEnabled());
+runChecks.ringFullAtEnd = await runPage.evaluate(() => parseFloat(getComputedStyle(document.querySelector('.ring-fill')).strokeDashoffset) === 0);
 // Results card (T7): appears on Ended, labelled with scene, intensity and duration, with absolute numbers.
 runChecks.resultsCardOnEnd = await runPage.evaluate(() => {
   const card = document.querySelector('.results-card');
@@ -240,14 +258,17 @@ await runPage.locator('.dock').screenshot({ path: `${outDir}/13-dock-ended.png` 
 // Click Play and read the clock in the same task, so the check doesn't depend on timing.
 runChecks.playAfterEndContinuesFromZero = await runPage.evaluate(() => {
   document.querySelector('[data-action="play-pause"]').click();
-  return document.querySelector('.dock').dataset.state === 'running' && document.querySelector('.clock').textContent === '0:00 / 0:30';
+  return document.querySelector('.dock').dataset.state === 'running' && document.querySelector('.dock').dataset.clock === '0';
 });
-await runPage.getByRole('button', { name: 'Restart run' }).click();
-runChecks.restartReturnsToReady = (await dockState()) === 'ready' && (await clockText()) === '0:00 / 0:30' && (await settingsEnabled());
-await runPage.getByRole('button', { name: '60 s' }).click();
-runChecks.durationChangeShown = (await clockText()) === '0:00 / 1:00';
+await runPage.getByRole('button', { name: 'Reset run' }).click();
+runChecks.restartReturnsToReady = (await dockState()) === 'ready' && (await clockText()) === '0:30 run' && (await settingsEnabled());
+runChecks.ringEmptyAfterReset = await runPage.evaluate(() => parseFloat(getComputedStyle(document.querySelector('.ring-fill')).strokeDashoffset) === 100);
+await runPage.mouse.move(5, 5);
+await runPage.locator('.bottom-stack').screenshot({ path: `${outDir}/36-hud-reset.png` });
+await chooseDuration(runPage, 60);
+runChecks.durationChangeShown = (await clockText()) === '1:00 run';
 // A settings change after a run ends goes back to Ready (fresh start), not a half-full ended run.
-await runPage.getByRole('button', { name: '30 s' }).click();
+await chooseDuration(runPage, 30);
 await runPage.getByRole('button', { name: 'Play' }).click();
 await runPage.waitForFunction(() => document.querySelector('.dock')?.dataset.state === 'ended', null, { timeout: runEndTimeout });
 runChecks.resultsShowPreviousRun = await runPage.evaluate(() => {
@@ -259,7 +280,7 @@ runChecks.resultsHeadlinesCompare =
   (await runPage.locator('.results-headlines .change').count()) === 4 &&
   ((await runPage.locator('.results-caption').textContent()) ?? '').includes('compared with the previous run');
 await runPage.locator('.top-stack').screenshot({ path: `${outDir}/17-results-with-previous.png` });
-await runPage.getByRole('button', { name: '60 s' }).click();
+await chooseDuration(runPage, 60);
 runChecks.resultsHiddenAfterFreshStart = await runPage
   .waitForFunction(() => document.querySelector('.results-card')?.hidden === true, null, { timeout: 2000 })
   .then(() => true, () => false);
@@ -269,11 +290,11 @@ await runPage.waitForFunction(() => document.querySelector('.dock')?.dataset.sta
 runChecks.resultsNotComparedAcrossDurations =
   (await runPage.locator('.results-headlines .change').count()) === 0 &&
   ((await runPage.locator('.results-caption').textContent()) ?? '').includes('not compared: the previous run was Main Street · Medium · 30 s');
-await runPage.getByRole('button', { name: 'Restart run' }).click();
-runChecks.settingChangeAfterEndReturnsToReady = (await dockState()) === 'ready' && (await clockText()) === '0:00 / 1:00';
+await runPage.getByRole('button', { name: 'Reset run' }).click();
+runChecks.settingChangeAfterEndReturnsToReady = (await dockState()) === 'ready' && (await clockText()) === '1:00 run';
 // Traffic (T3): play for a while, pause, check vehicles queue at the red light and the hover tag explains them.
 if (isDevServer) {
-  await runPage.getByRole('button', { name: 'Restart run' }).click();
+  await runPage.getByRole('button', { name: 'Reset run' }).click();
   await runPage.getByRole('button', { name: 'Play' }).click();
   // Within one 30 s signal cycle (2 s here), some car must be waiting at the red light.
   const sawQueue = await runPage
@@ -303,7 +324,7 @@ if (isDevServer) {
   await runPage.getByRole('button', { name: 'Pause' }).click();
   blockedAtEntries = await runPage.evaluate(() => window.__trafficDebug.blocked());
   await runPage.screenshot({ path: `${outDir}/15-blocked-entry.png` });
-  await runPage.getByRole('button', { name: 'Restart run' }).click();
+  await runPage.getByRole('button', { name: 'Reset run' }).click();
 }
 await runPage.reload();
 await runPage.waitForSelector('.status', { state: 'hidden', timeout: 30000 });
@@ -376,7 +397,7 @@ if (isDevServer) {
   carouselChecks.saveWorksWhilePaused = await page2
     .waitForFunction(() => { const b = [...document.querySelectorAll('.pill-action')].find((x) => x.textContent === 'Save'); return b && !b.hidden && !b.disabled; }, null, { timeout: 2000 })
     .then(() => true, () => false);
-  await page2.getByRole('button', { name: 'Restart run' }).click();
+  await page2.getByRole('button', { name: 'Reset run' }).click();
   await page2.getByRole('button', { name: 'Next scene' }).click();
   await page2.getByRole('button', { name: 'Save and switch' }).click();
   await ready();
@@ -403,7 +424,7 @@ if (isDevServer) {
   await page3.evaluate(() => localStorage.clear());
   await page3.reload();
   await page3.waitForSelector('.status', { state: 'hidden', timeout: 30000 });
-  await page3.getByRole('button', { name: '30 s' }).click(); // the editor checks were written for 30 s runs
+  await chooseDuration(page3, 30); // the editor checks were written for 30 s runs
   await wholeBoardInView(page3);
   const pieces = () => page3.evaluate(() => window.__trafficDebug.scene().pieces.length);
   await page3.getByRole('button', { name: 'Customise' }).click();
@@ -666,11 +687,11 @@ const dockChecks = {};
     const run = document.querySelector('.dock-run');
     const has = (selector, ...names) => names.every((n) => document.querySelector(`${selector} .icon-${n}`));
     return (
-      !!run?.querySelector('.timeline') &&
-      !!run.querySelector('.duration') && // run length sits with Play and the progress bar
+      !!run?.querySelector('.play-ring .ring') &&
+      !document.querySelector('.timeline, .progress') && // P25: no horizontal timeline
       has('[data-action="play-pause"]', 'play') &&
       has('[data-action="restart"]', 'restart') &&
-      has('.duration', 'clock') &&
+      has('.duration-trigger', 'caret') &&
       has('.dock-traffic', 'gauge') &&
       has('.parts-toggle', 'wrench') &&
       has('[data-action="zoom-in"]', 'plus') &&
@@ -682,7 +703,7 @@ const dockChecks = {};
   await page.waitForTimeout(400); // let the hover fill fade back
   dockChecks.flatButtons = await page.evaluate(() =>
     [...document.querySelectorAll('.dock button, .scene-pill button, .camera-controls button')]
-      .filter((b) => b.offsetParent && !b.closest('.duration'))
+      .filter((b) => b.offsetParent && !b.closest('.dock')) // the HUD's buttons share its glass (P25): checked below
       .filter((b) => {
         const style = getComputedStyle(b);
         const alpha = Number((style.backgroundColor.match(/[\d.]+(?=\)$)/) ?? ['1'])[0]);
@@ -696,7 +717,7 @@ const dockChecks = {};
   dockChecks.hiddenMeansHidden = await page.evaluate(() =>
     [...document.querySelectorAll('[hidden]')].every((el) => getComputedStyle(el).display === 'none'),
   );
-  dockChecks.labelsUnchanged = (await page.getByRole('button', { name: 'Customise' }).count()) === 1 && (await page.getByRole('button', { name: 'Restart run' }).count()) === 1;
+  dockChecks.labelsUnchanged = (await page.getByRole('button', { name: 'Customise' }).count()) === 1 && (await page.getByRole('button', { name: 'Reset run' }).count()) === 1;
   // No Reset View button (removed from the dock at the owner's request); the camera panel is a slim strip of three icon buttons.
   dockChecks.noResetViewButton = await page.evaluate(() => {
     const resets = [...document.querySelectorAll('button')].filter((b) => (b.getAttribute('aria-label') ?? b.textContent ?? '').trim().toLowerCase() === 'reset view');
@@ -704,6 +725,67 @@ const dockChecks = {};
     return resets.length === 0 && panel.length === 3 && panel.every((b) => b.querySelector('svg.icon') && !b.textContent?.trim());
   });
   await page.locator('.dock').screenshot({ path: `${outDir}/30-dock-icons.png` });
+  // P25: one glass toolbar, laid out like tldraw's: Play ring · countdown · Reset | Duration | Traffic load | Customise.
+  dockChecks.hudOrder = await page.evaluate(() => {
+    const xs = ['[data-action="play-pause"]', '.countdown', '[data-action="restart"]', '.duration-trigger', '.intensity', '.parts-toggle'].map(
+      (sel) => document.querySelector(`.dock ${sel}`)?.getBoundingClientRect().x ?? NaN,
+    );
+    return xs.every((x, i) => i === 0 || x > xs[i - 1]) && document.querySelectorAll('.dock .dock-divider').length === 3;
+  });
+  dockChecks.hudSharedGlass = await page.evaluate(() => {
+    const dock = getComputedStyle(document.querySelector('.dock'));
+    const pill = getComputedStyle(document.querySelector('.scene-pill'));
+    const buttons = [...document.querySelectorAll('.dock button')].map((b) => getComputedStyle(b));
+    return (
+      dock.backdropFilter.includes('blur') &&
+      dock.backgroundColor === pill.backgroundColor && // the scene picker gets the same glass
+      dock.backdropFilter === pill.backdropFilter &&
+      buttons.every((b) => b.boxShadow === 'none' && b.borderTopColor === 'rgba(0, 0, 0, 0)') &&
+      // Clear at rest on the shared glass (Duration keeps a faint fill: it's a dropdown).
+      [...document.querySelectorAll('.dock button:not(.duration-trigger)')].every((b) => getComputedStyle(b).backgroundColor === 'rgba(0, 0, 0, 0)') &&
+      // One control height; Play is that plus its ring.
+      new Set([...document.querySelectorAll('.dock button:not(.play-button)')].map((b) => getComputedStyle(b).height)).size === 1
+    );
+  });
+  await page.mouse.move(5, 5);
+  await page.waitForTimeout(300);
+  await page.screenshot({ path: `${outDir}/33-hud-idle-over-map.png` });
+  const closedTriggerFill = await page.evaluate(() => getComputedStyle(document.querySelector('.duration-trigger')).backgroundColor);
+  // The Duration menu (this page is at 30 s): opens above its button, in the same glass, with 30 s marked; arrows and Enter pick another.
+  await page.getByRole('button', { name: 'Duration: 30 s' }).click();
+  await page.waitForTimeout(200);
+  dockChecks.durationMenuOpensAbove = await page.evaluate(() => {
+    const menu = document.querySelector('.duration-menu');
+    const trigger = document.querySelector('.duration-trigger').getBoundingClientRect();
+    const box = menu.getBoundingClientRect();
+    const selected = [...menu.querySelectorAll('[role="option"]')].filter((o) => o.ariaSelected === 'true').map((o) => o.textContent.trim());
+    return (
+      menu.matches(':popover-open') &&
+      box.bottom <= trigger.top &&
+      getComputedStyle(menu).backgroundColor === getComputedStyle(document.querySelector('.dock')).backgroundColor &&
+      selected.join() === '30 s' &&
+      document.activeElement?.textContent.trim() === '30 s' &&
+      document.querySelector('.duration-trigger').getAttribute('aria-expanded') === 'true'
+    );
+  });
+  // Open, the button shows the blue selected tint, not its resting fill.
+  dockChecks.durationOpenLooksSelected = (await page.evaluate(() => getComputedStyle(document.querySelector('.duration-trigger')).backgroundColor)) !== closedTriggerFill;
+  await page.screenshot({ path: `${outDir}/34-hud-duration-menu.png`, clip: { x: 220, y: 600, width: 1000, height: 300 } });
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  dockChecks.durationMenuByKeyboard =
+    (await page.getByRole('button', { name: 'Duration: 60 s' }).count()) === 1 &&
+    (await page.locator('.countdown').textContent()) === '1:00 run' &&
+    (await page.evaluate(() => !document.querySelector('.duration-menu').matches(':popover-open') && document.activeElement?.classList.contains('duration-trigger')));
+  await page.keyboard.press('ArrowUp');
+  await page.waitForTimeout(100);
+  await page.keyboard.press('Escape');
+  dockChecks.durationMenuEscapes = await page.evaluate(
+    () => !document.querySelector('.duration-menu').matches(':popover-open') && document.activeElement?.classList.contains('duration-trigger'),
+  );
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await page.waitForTimeout(300);
+  await page.screenshot({ path: `${outDir}/37-hud-dark.png`, clip: { x: 220, y: 600, width: 1000, height: 300 } });
   await page.close();
 }
 
@@ -915,12 +997,11 @@ const presetRunChecks = {};
       await page.getByRole('button', { name: 'Play' }).click();
       ran[name] = await page
         .waitForFunction(() => {
-          const [m, s] = (document.querySelector('.clock')?.textContent ?? '').split(' / ')[0].split(':').map(Number);
-          return m * 60 + s >= 1;
+          return Number(document.querySelector('.dock')?.dataset.clock) >= 1;
         }, null, { timeout: 8000 })
         .then(() => true, () => false);
       await page.getByRole('button', { name: 'Pause' }).click();
-      await page.getByRole('button', { name: 'Restart run' }).click();
+      await page.getByRole('button', { name: 'Reset run' }).click();
     }
     await page.getByRole('button', { name: 'Next scene' }).click();
     await page.waitForSelector('.status', { state: 'hidden', timeout: 60000 });
@@ -1014,7 +1095,7 @@ if (isDevServer) {
   scenarioChecks.roadsClearScenery = (await page.evaluate(() => window.__trafficDebug.scenery().items)) < sceneryBefore;
   await page.screenshot({ path: `${outDir}/26-blank-board-built.png` });
   // 90 s: in 30 s no trip has time to cross the 16-tile board through one default-timed light.
-  await page.getByRole('button', { name: '90 s' }).click();
+  await chooseDuration(page, 90);
   await page.getByRole('button', { name: 'Play' }).click();
   await finishRun();
   await page.waitForTimeout(200);

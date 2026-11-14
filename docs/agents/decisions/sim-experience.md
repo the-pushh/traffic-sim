@@ -481,3 +481,14 @@ Owner agreed the spec and the T1–T13 ticket breakdown and authorised implement
 ## Customise icon: a single wrench (2026-11-14)
 
 - The owner switched the Customise button's icon from the crossed wrench-and-hammer to Phosphor's single bold wrench, and confirmed it. The custom crossed-tools SVG is removed.
+
+## The HUD as one glass toolbar (P25, #92) — 2026-11-14
+
+- **Owner:** restyle the bottom HUD with tldraw's floating toolbar as the layout reference, keeping the rounded glass look: a pill shell of warm cream-tinted glass (`--hud-glass`, a dark warm ink in dark theme), a subtle blur, a soft border and shadow, and the blue accent. The scene pill gets the same glass.
+- **Order:** Play/Pause ring · countdown · Reset | Duration | Traffic load | Customise, with thin 24px separators between the groups.
+- **Shared surface:** the HUD's buttons are clear on the bar's glass, with a soft fill on hover and a blue tint when chosen (Duration open, Customise open). This differs from P24's 50% grey fill for buttons elsewhere, because the owner asked for "one shared glass surface". Buttons outside the HUD keep P24.
+- **Play ring:** a 48px button (a 36px blue-tinted disc inside a 2.5px ring). The ring is an SVG `role="progressbar"` beside the button, not inside it, so the button stays a button for screen readers. The ring shows `runProgress` (simulated time ÷ duration, full at the end, empty after Reset).
+- **Countdown** (`hudCountdown.ts`, tested): `1:00 run` in Ready, `N s left` while running or paused (whole seconds, rounded up), `Run complete` when ended. It has a fixed minimum width so the bar doesn't shift.
+- **Duration:** a pill button `Duration: 60 s ▾` that opens a popover listbox upwards. A popover sits in the top layer, so its glass blurs the map rather than the bar. Arrow keys, Home/End, Enter/Space and Escape work; the chosen option is blue with a check. It is disabled during a run, as before.
+- **Removed:** the horizontal progress bar and the `m:ss / m:ss` clock. Browser checks read the elapsed time from the dock's `data-clock`.
+- **Labels:** "Intensity" now reads **Traffic load**, and "Restart run" is **Reset run**, using the owner's words.

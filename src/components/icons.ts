@@ -10,8 +10,10 @@ import moon from '@phosphor-icons/core/assets/bold/moon-bold.svg?raw';
 import sun from '@phosphor-icons/core/assets/bold/sun-bold.svg?raw';
 import rotate from '@phosphor-icons/core/assets/bold/arrow-clockwise-bold.svg?raw';
 import wrench from '@phosphor-icons/core/assets/bold/wrench-bold.svg?raw';
+import caret from '@phosphor-icons/core/assets/bold/caret-down-bold.svg?raw';
+import check from '@phosphor-icons/core/assets/bold/check-bold.svg?raw';
 
-const SOURCES = { play, pause, restart, clock, gauge, plus, minus, moon, sun, rotate, wrench };
+const SOURCES = { play, pause, restart, clock, gauge, plus, minus, moon, sun, rotate, wrench, caret, check };
 
 export type IconName = keyof typeof SOURCES;
 
